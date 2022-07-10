@@ -5,7 +5,7 @@
         :target: https://pycomex.readthedocs.io/en/latest/?version=latest
         :alt: Documentation Status
 
-PyComex - *Py*thon *Com*putational *Ex*periments
+PyComex - Python Computational Experiments
 ================================================
 
 Microframework to improve the experience of running and managing records of computational experiments,
@@ -51,6 +51,7 @@ Upon entering the context, a new storage folder for the experiment run is create
 Storage of metadata, file artifacts and error handling is automatically managed on context exit.
 
 .. code-block:: python
+    :caption: experiment.py
 
     """
     This doc string will be saved as the "description" meta data of the experiment records
@@ -81,6 +82,19 @@ Storage of metadata, file artifacts and error handling is automatically managed 
         # e.commit_fig(file_name, fig)
         # e.commit_png(file_name, image)
         # ...
+
+This example would create the following folder structure:
+
+.. code-block:: text
+    :caption: experiment records: /tmp/results/example/000
+
+    tmp
+    |- results
+       |- example
+          |- 000
+             |+ experiment_log.txt
+             |+ experiment_data.json
+             |+ hello_world.txt
 
 For more information and more interesting examples visit the Documentation: https://pycomex.readthedocs.io !
 
