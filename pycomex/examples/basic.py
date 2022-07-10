@@ -14,7 +14,7 @@ import random
 import textwrap
 import urllib.request
 
-from pycomex.experiment import Experiment
+from pycomex import Experiment
 
 response = urllib.request.urlopen('https://www.mit.edu/~ecprice/wordlist.10000')
 
