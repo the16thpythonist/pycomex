@@ -51,6 +51,7 @@ Upon entering the context, a new storage folder for the experiment run is create
 Storage of metadata, file artifacts and error handling is automatically managed on context exit.
 
 .. code-block:: python
+
     :caption: experiment.py
 
     """
@@ -86,6 +87,7 @@ Storage of metadata, file artifacts and error handling is automatically managed 
 This example would create the following folder structure:
 
 .. code-block:: text
+
     :caption: experiment records: /tmp/results/example/000
 
     tmp
