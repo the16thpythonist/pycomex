@@ -1,12 +1,11 @@
-.. highlight:: shell
-
+Introduction
 ============
+
 Installation
-============
-
+------------
 
 Stable release
---------------
+~~~~~~~~~~~~~~
 
 To install pycomex, run this command in your terminal:
 
@@ -24,7 +23,7 @@ you through the process.
 
 
 From sources
-------------
+~~~~~~~~~~~~
 
 The sources for pycomex can be downloaded from the `Github repo`_.
 
@@ -34,17 +33,12 @@ You can either clone the public repository:
 
     $ git clone git://github.com/the16thpythonist/pycomex
 
-Or download the `tarball`_:
-
-.. code-block:: console
-
-    $ curl -OJL https://github.com/the16thpythonist/pycomex/tarball/master
-
 Once you have a copy of the source, you can install it with:
 
 .. code-block:: console
 
-    $ python setup.py install
+    $ cd pycomex
+    $ pip3 install .
 
 
 .. _Github repo: https://github.com/the16thpythonist/pycomex

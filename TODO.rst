@@ -1,6 +1,9 @@
 TODO's
 ======
 
-* Experiment has to create a new folder on startup
-* Logging and subsequent saving of the logs
-* Add optional neptune ai integration
+* Optional Neptune AI integration
+* Add command line invocation
+    * Add possibility to override the parameters
+* Automatically template
+* Possibility to dockerize / repeat a past experiment
+    * for that I would have to attach dependency information to an experiment

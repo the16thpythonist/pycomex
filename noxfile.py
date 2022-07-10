@@ -14,10 +14,11 @@ def docs(session: nox.Session) -> None:
     # ~ Installing the doc requirements
     session.install('-r', 'requirements.txt')
     session.install('-r', 'docs/requirements.txt')
+    session.install('.')
 
     # ~ Removing previous artifacts
     if os.path.exists('docs/modules.rst'):
-        session.run('rm', '-f', 'docs/modules.rst')
+        os.remove('docs/modules.rst')
 
     # ~ Building the docs
     session.run('sphinx-apidoc', '-o', 'docs', 'pycomex')

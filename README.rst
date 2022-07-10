@@ -46,49 +46,17 @@ Each computational experiment has to be bundled as a standalone python module. I
 parameters are placed at the top. Actual execution of the experiment is placed within the ``Experiment``
 context manager.
 
-Upon entering the context, a new storage folder for the experiment run is created automatically.
+Upon entering the context, a new storage folder for each run of the experiment is created.
 
 Storage of metadata, file artifacts and error handling is automatically managed on context exit.
 
-.. code-block:: python
+.. literalinclude:: pycomex/examples/quickstart.py
+    :language: python
 
-    :caption: experiment.py
-
-    """
-    This doc string will be saved as the "description" meta data of the experiment records
-    """
-    from pycomex.experiment import Experiment
-
-    # Experiment parameters can simply be defined as uppercase global variables.
-    # These are automatically detected and can possibly be overwritten in command line invocation
-    HELLO = 'hello '
-    WORLD = 'world!'
-
-    # Experiment context manager needs 3 positional arguments:
-    # - Path to an existing folder in which to store the results
-    # - A namespace name unique for each experiment
-    # - access to the local globals() dict
-    with Experiment('/tmp/results', 'example', globals()) as e:
-        e.prepare() # important!
-
-        # Internally saved into automatically created nested dict {'strings': {'hello_world': '...'}}
-        e['strings/hello_world'] = HELLO + WORLD
-
-        # Alternative to "print". Message is printed to stdout as well as recorded to log file
-        e.info('some debug message')
-
-        # Automatically saves text file artifact to the experiment record folder
-        file_name = 'hello_world.txt'
-        e.commit_raw(file_name, HELLO + WORLD)
-        # e.commit_fig(file_name, fig)
-        # e.commit_png(file_name, image)
-        # ...
 
 This example would create the following folder structure:
 
 .. code-block:: text
-
-    :caption: experiment records: /tmp/results/example/000
 
     tmp
     |- results
