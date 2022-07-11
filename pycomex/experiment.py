@@ -13,18 +13,95 @@ import time
 import json
 import shutil
 import logging
+import pathlib
+import argparse
+import tempfile
 import traceback
+import subprocess
 from datetime import datetime
+from typing import List, Type, Optional, Tuple, Dict
 
-from typing import List, Type, Optional
+import jinja2 as j2
 
+from pycomex.util import TEMPLATE_ENV
 from pycomex.work import AbstractWorkTracker
 from pycomex.work import NaiveWorkTracker
+
+
+def run_experiment(experiment_path: str,
+                   parameters_path: Optional[str] = None
+                   ) -> Tuple[str, subprocess.CompletedProcess]:
+    with tempfile.NamedTemporaryFile(mode='w+') as out_path:
+
+        command = f'{sys.executable} {experiment_path} -o {out_path.name}'
+        if parameters_path is not None:
+            command += f' -p {parameters_path}'
+
+        completed_process = subprocess.run(command, shell=True, stdout=subprocess.PIPE,
+                                           stderr=subprocess.PIPE)
+
+        with open(out_path.name) as file:
+            experiment_path = file.read()
+
+    return experiment_path, completed_process
 
 
 class NoExperimentExecution(Exception):
     def __call__(self):
         raise self
+
+
+class PrintDescriptionAction(argparse.Action):
+
+    def __init__(self, *args, description, **kwargs):
+        self.description = description
+        super(PrintDescriptionAction, self).__init__(*args, **kwargs, nargs=0)
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        print(self.description)
+        sys.exit(0)
+
+
+class ExperimentArgParser(argparse.ArgumentParser):
+
+    def __init__(self, name: str, path: str, description: str):
+        self.experiment_namespace = name
+        self.experiment_path = path
+        self.experiment_description = description
+
+        # fmt: off
+        _description = (f'This python module contains the code for a computational experiment. By executing '
+                        f'this module directly a new run of this experiment will be initiated. Please be '
+                        f'patient, the execution of the experiment will likely take a long time.\n \n'
+                        f'The results of the next run will be saved into this folder: \n'
+                        f'{self.experiment_path}\n')
+        super(ExperimentArgParser, self).__init__(
+            prog=self.experiment_namespace,
+            description=_description
+        )
+
+        self.add_argument('--description', dest='description', action=PrintDescriptionAction, required=False,
+                          description=self.experiment_description, help='Print the experiment description',)
+        self.add_argument('-o', '--out', dest='output_path', action='store', required=False, type=str,
+                          help='Optional file path, into which the experiment destination folder path '
+                               'should be written into')
+        self.add_argument('-p', '--parameters', dest='parameters_path', action='store', required=False,
+                          type=self.valid_params,
+                          help='Optional file path pointing to an existing file which contains parameters '
+                               'specifications that overwrite the experiment default parameters for the '
+                               'execution of the experiment. Has to be either .json or .py file')
+
+    @staticmethod
+    def valid_params(value: str) -> str:
+        if not os.path.exists(value):
+            raise ValueError(f'The given parameter file path "{value}" does not exist!')
+
+        param_suffixes = ['.json', '.py']
+        if not any(value.endswith(suffix) for suffix in param_suffixes):
+            raise ValueError(f'The given parameter file path "{value}" is none of the accepted file types: '
+                             f', '.join(param_suffixes))
+
+        return value
 
 
 class Experiment:
@@ -35,7 +112,6 @@ class Experiment:
     This is an example:
 
     .. code-block:: python
-        :caption: A cool example
 
         import click
         print('hello world')
@@ -46,6 +122,9 @@ class Experiment:
             which is really important
 
     """
+    DEFAULT_TEMPLATES = {
+        'analysis.py': TEMPLATE_ENV.get_template('analysis.j2')
+    }
 
     def __init__(
         self,
@@ -53,6 +132,7 @@ class Experiment:
         namespace: str,
         glob: dict,
         debug_mode: bool = False,
+        templates: Dict[str, j2.Template] = DEFAULT_TEMPLATES.copy(),
         work_tracker_class: Type[AbstractWorkTracker] = NaiveWorkTracker,
     ):
         self.base_path = base_path
@@ -60,6 +140,7 @@ class Experiment:
         self.glob = glob
         self.debug_mode = debug_mode
         self.work_tracker_class = work_tracker_class
+        self.templates = templates
 
         self.data = {}
         self.parameters = {}
@@ -71,12 +152,48 @@ class Experiment:
         self.path_list: List[str] = self.determine_path()
         self.path = os.path.join(self.base_path, *self.path_list)
 
-        self.data_path = os.path.join(self.path, "experiment_data.json")
-        self.error_path = os.path.join(self.path, "experiment_error.txt")
-        self.log_path = os.path.join(self.path, "experiment_log.txt")
-        self.logger: Optional[logging.Logger] = None
+        self.data_path = os.path.join(self.path, 'experiment_data.json')
+        self.error_path = os.path.join(self.path, 'experiment_error.txt')
+        self.log_path = os.path.join(self.path, 'experiment_log.txt')
 
+        self.code_name = 'snapshot'
+        self.code_path = os.path.join(self.path, f'{self.code_name}.py')
+
+        self.logger: Optional[logging.Logger] = None
         self.work_tracker = self.work_tracker_class(0)
+
+        # ~ Parsing command line arguments
+        # TODO: I could introduce abstract base class and dependency inject this
+        self.arg_parser = ExperimentArgParser(
+            name=self.namespace,
+            path=self.path,
+            description=self.description
+        )
+
+    def read_parameters(self, path: str) -> None:
+        with open(path, mode='r') as file:
+            content = file.read()
+
+        if path.endswith('.json'):
+            self.load_parameters_json(content)
+
+        if path.endswith('.py'):
+            self.load_parameters_py(content)
+
+    def load_parameters_json(self, content: str) -> None:
+        data = json.loads(content)
+        for key, value in data.items():
+            if key in self.parameters:
+                self.glob[key] = value
+                self.parameters[key] = value
+
+    def load_parameters_py(self, content: str) -> None:
+        locals_dict = {}
+        exec(content, self.glob, locals_dict)
+        for key, value in locals_dict.items():
+            if key in self.parameters:
+                self.glob[key] = value
+                self.parameters[key] = value
 
     def prepare_logger(self) -> None:
         self.logger = logging.Logger(self.namespace)
@@ -109,8 +226,11 @@ class Experiment:
                     indices.append(int(name))
                 except ValueError:
                     pass
+            if indices:
+                index = max(indices) + 1
+            else:
+                index = 0
 
-            index = max(indices) + 1
             path_list.append(f"{index:03d}")
 
         return path_list
@@ -172,14 +292,29 @@ class Experiment:
         file_path = os.path.join(self.path, name)
         return open(file_path, mode=mode)
 
-    def commit_raw(self, name: str, content: str):
+    def commit_raw(self, name: str, content: str) -> None:
         with self.open(name) as file:
             file.write(content)
 
-    def __enter__(self):
+    def write_path(self, path: str) -> None:
+        with open(path, mode='w') as file:
+            file.write(self.path)
+
+    def __enter__(self) -> 'Experiment':
         if self.glob["__name__"] != "__main__":
             self.prevent_execution = True
             return self
+
+        self.args = self.arg_parser.parse_args()
+
+        # If an output path is provided through the arguments then we create a new file at that path and
+        # as the content we simply write the string experiment path
+        if self.args.output_path:
+            self.write_path(self.args.output_path)
+
+        # If additional parameters are provided by the arguments then we try to parse those
+        if self.args.parameters_path:
+            self.read_parameters(self.args.parameters_path)
 
         self.prepare_path()
         self.prepare_logger()
@@ -216,6 +351,12 @@ class Experiment:
         # ~ Saving the metadata into file
         self.save_experiment_data()
 
+        # ~ Copy the actual code source file
+        self.copy_source()
+
+        # ~ Render all the templates
+        self.render_templates()
+
         # ~ logging the experiment end
         self.logger.info("=" * 80)
         self.logger.info("EXPERIMENT ENDED")
@@ -239,6 +380,17 @@ class Experiment:
 
         self.info(f"saved experiment error to: {self.error_path}")
         self.info("\n".join(tb))
+
+    def copy_source(self) -> None:
+        source_path = pathlib.Path(self.glob['__file__']).absolute()
+        shutil.copy(source_path, self.code_path)
+
+    def render_templates(self):
+        for file_name, template in self.templates.items():
+            path = os.path.join(self.path, file_name)
+            with open(path, mode='w') as file:
+                content = template.render(experiment=self)
+                file.write(content)
 
     @property
     def work(self) -> int:

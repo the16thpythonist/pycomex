@@ -1,3 +1,4 @@
+#! /usr/bin/env python3
 """
 This doc string will be saved as the "description" meta data of the experiment records
 """
@@ -13,7 +14,7 @@ WORLD = "world!"
 # - Path to an existing folder in which to store the results
 # - A namespace name unique for each experiment
 # - access to the local globals() dict
-with Experiment("/tmp/results", "example", globals()) as e:
+with Experiment("/tmp", "example/quickstart", globals()) as e:
     e.prepare()  # important!
 
     # Internally saved into automatically created nested dict

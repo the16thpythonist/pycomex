@@ -1,9 +1,175 @@
 import os
+import io
+import sys
 import time
 import json
+import tempfile
 import unittest
+import contextlib
 from tempfile import TemporaryDirectory
+from typing import Optional, List
+
 from pycomex.experiment import Experiment
+from pycomex.experiment import ExperimentArgParser
+from pycomex.experiment import run_experiment
+from pycomex.util import PATH
+
+VARIABLE = 10
+
+
+class ExperimentIsolation:
+
+    def __init__(self, argv: List[str] = [], glob_mod: dict = {}):
+        self.temporary_directory = TemporaryDirectory()
+        self.path: Optional[str] = None
+        self.glob: Optional[dict] = globals()
+
+        self.modified_globals = {
+            '__name__': '__main__',
+            **glob_mod
+        }
+        self.original_globals = {
+            **{k: globals()[k] for k in self.modified_globals.keys()},
+            **{k: v for k, v in globals().items() if k.isupper()}
+        }
+
+        self.modified_argv = argv
+        self.original_argv = sys.argv
+
+    def __enter__(self):
+        # ~ create temporary folder
+        self.path = self.temporary_directory.__enter__()
+
+        # ~ modify globals dictionary
+        for key, value in self.modified_globals.items():
+            globals()[key] = value
+
+        # ~ modify command line arguments
+        sys.argv = self.modified_argv
+
+        return self
+
+    def __exit__(self, *args):
+        # ~ clean up temp folder
+        self.temporary_directory.__exit__(*args)
+
+        # ~ reset the globals to the original values
+        for key, value in self.original_globals.items():
+            globals()[key] = value
+
+        # ~ reset the original argv
+        sys.argv = self.original_argv
+
+
+class TestExperimentIsolation(unittest.TestCase):
+
+    def test_basically_works(self):
+        # This is the original value defined above
+        self.assertEqual(VARIABLE, 10)
+        # argv should not be empty for pytest invocation
+        self.assertNotEqual(0, len(sys.argv))
+
+        with ExperimentIsolation(glob_mod={'VARIABLE': 20}) as iso:
+            # We modify the globals here
+            self.assertNotEqual(VARIABLE, 10)
+            self.assertEqual(VARIABLE, 20)
+            self.assertEqual(__name__, '__main__')
+
+            # We also modified argv to be completely empty now
+            self.assertEqual(0, len(sys.argv))
+
+            # The temp folder has to exist
+            self.assertTrue(os.path.exists(iso.path))
+            self.assertTrue(os.path.isdir(iso.path))
+
+        # Afterwards it should all have been reset to the original values though!
+        self.assertEqual(VARIABLE, 10)
+        self.assertNotEqual(0, len(sys.argv))
+
+
+class TestExperimentArgParser(unittest.TestCase):
+
+    def test_construction_basically_works(self):
+        p = ExperimentArgParser(name="test/experiment", path="/tmp/test/experiment/000",
+                                description="hello world!")
+        self.assertIsInstance(p, ExperimentArgParser)
+
+    def test_parsing_basically_works(self):
+        p = ExperimentArgParser(name="test/experiment", path="/tmp/test/experiment/000",
+                                description="hello world!")
+        # Testing with empty arguments
+        args = p.parse_args([])
+        self.assertIn("description", args)
+        self.assertEqual(None, args.description)
+
+    def test_printing_help_works(self):
+        """
+        The "--help" option is a special case which will print the help string of the command and then
+        actually terminate the execution without even touching the main experiment code
+        """
+        name = "test/experiment"
+        p = ExperimentArgParser(name=name, path="/tmp/test/experiment/000", description="hello world!")
+        with self.assertRaises(SystemExit):
+            with io.StringIO() as buf, contextlib.redirect_stdout(buf):
+                # https://stackoverflow.com/questions/30510282/reopening-a-closed-stringio-object-in-python-3
+                buf.close = lambda: None  # noqa
+                p.parse_args(["--help"])
+
+        self.assertIn(name, buf.getvalue())
+
+    def test_printing_description_works(self):
+        """
+        "--description" works much like help. It is only supposed to print the experiment description string
+        and then terminate the execution without actually executing the main experiment code.
+        """
+        description = "hello world!"
+        p = ExperimentArgParser(name="test/experiment", path="/tmp/test/experiment/000",
+                                description=description)
+        with self.assertRaises(SystemExit):
+            with io.StringIO() as buf, contextlib.redirect_stdout(buf):
+                # https://stackoverflow.com/questions/30510282/reopening-a-closed-stringio-object-in-python-3
+                buf.close = lambda: None  # noqa
+                p.parse_args(["--description"])
+
+        self.assertIn(description, buf.getvalue())
+
+    def test_out_path_works(self):
+        p = ExperimentArgParser(name="test/experiment", path="/tmp/test/experiment/000",
+                                description="hello world!")
+
+        # If the "--out" option is not given, the field should still exist, but the value should be None
+        args = p.parse_args([])
+        self.assertIn('output_path', args)
+        self.assertEqual(None, args.output_path)
+
+        # If it is given the correct value has to be in the returned args
+        out_path = 'tmp/.experiment_path'
+        args = p.parse_args(['--out', out_path])
+        self.assertEqual(out_path, args.output_path)
+
+    def test_param_path_works(self):
+        p = ExperimentArgParser(name="test/experiment", path="/tmp/test/experiment/000",
+                                description="hello world!")
+
+        # If the "--params" option is not given, the field should still exist, but the value should be None
+        args = p.parse_args([])
+        self.assertIn('parameters_path', args)
+        self.assertEqual(None, args.parameters_path)
+
+        # If the parameter is present but the file does not exist, that should cause an error
+        param_path = '/tmp/experiment_parameters'
+        with self.assertRaises(SystemExit):
+            p.parse_args(['--parameters', param_path])
+
+        # If the path exists everything should be fine
+        with tempfile.TemporaryDirectory() as path:
+            param_path = os.path.join(path, 'experiment_parameters.json')
+            with open(param_path, mode='w') as json_file:
+                json.dump({'hello': 'world'}, json_file)
+
+            args = p.parse_args(['--parameters', param_path])
+            self.assertIsInstance(args.parameters_path, str)
+            self.assertEqual(param_path, args.parameters_path)
 
 
 class TestExperiment(unittest.TestCase):
@@ -11,10 +177,7 @@ class TestExperiment(unittest.TestCase):
     This is a docstring
     """
 
-    def globals(self):
-        glob = globals()
-        glob["__name__"] = "__main__"
-        return glob
+    # -- misc tests
 
     def test_how_does_string_split_behave(self):
         string = "hello/world"
@@ -23,14 +186,45 @@ class TestExperiment(unittest.TestCase):
         string = "hello"
         self.assertListEqual(["hello"], string.split("/"))
 
-    def test_what_is_part_of_globals(self):
-        glob = self.globals()
-        self.assertIsInstance(glob, dict)
-        self.assertEqual("__main__", glob["__name__"])
+    def test_dynamic_code_execution(self):
+        variable = 10
+        exec('variable = 20', globals(), locals())
+        # Very interesting! exec() actually does not work the way I initially assumed. In this case I thought
+        # the dynamic code would change the value of the previously defined local variable but it does not!
+        self.assertNotEqual(20, variable)
+
+    def test_dynamic_code_eval(self):
+        d = eval('{"hello": "world"}')
+        self.assertIsInstance(d, dict)
+        self.assertEqual('world', d['hello'])
+
+    def test_multiline_complex_code_eval(self):
+        # Well, this also does not work! Either you cannot make import statements in an eval string or there
+        # cannot be eval strings, either way i cant use that either!
+        with self.assertRaises(SyntaxError):
+            d = eval(f'import random\n'
+                     f'random.randint(0, 100)\n')
+
+    def test_exec_workaround(self):
+        # https://stackoverflow.com/questions/1463306/how-to-get-local-variables-updated-when-using-the-exec-call
+        variable = None
+        local_dict = {}
+        exec('import random \n'
+             'variable = random.randint(0, 10)',
+             globals(), local_dict)
+
+        # The actual variable in our scope does not change!
+        self.assertEqual(None, variable)
+        # But the variable values from the other scope get saved to the second dict we pass it!
+        # This is actually even better for my use case :)
+        self.assertIn('variable', local_dict)
+        self.assertIsInstance(local_dict['variable'], int)
+
+    # -- class related tests
 
     def test_folder_creation_basically_works(self):
-        with TemporaryDirectory() as base_path:
-            with Experiment(base_path=base_path, namespace="test", glob=self.globals()) as e:
+        with ExperimentIsolation() as iso:
+            with Experiment(base_path=iso.path, namespace="test", glob=globals()) as e:
                 e.prepare()
 
             # After the construction, the folder path should already exist
@@ -39,8 +233,8 @@ class TestExperiment(unittest.TestCase):
             self.assertTrue(os.path.isdir(e.path))
 
     def test_folder_creation_nested_namespace_works(self):
-        with TemporaryDirectory() as base_path:
-            with Experiment(base_path=base_path, namespace="main/sub/test", glob=self.globals()) as e:
+        with ExperimentIsolation() as iso:
+            with Experiment(base_path=iso.path, namespace="main/sub/test", glob=globals()) as e:
                 e.prepare()
 
             # After the construction, the folder path should already exist
@@ -49,8 +243,8 @@ class TestExperiment(unittest.TestCase):
             self.assertTrue(os.path.isdir(e.path))
 
     def test_logger_basically_works(self):
-        with TemporaryDirectory() as base_path:
-            with Experiment(base_path=base_path, namespace="test", glob=self.globals()) as e:
+        with ExperimentIsolation() as iso:
+            with Experiment(base_path=iso.path, namespace="test", glob=globals()) as e:
                 e.prepare()
                 log_message = "hello world!"
                 e.info(log_message)
@@ -65,8 +259,8 @@ class TestExperiment(unittest.TestCase):
                 self.assertIn(log_message, content)
 
     def test_progress_tracking_basically_works(self):
-        with TemporaryDirectory() as base_path:
-            with Experiment(base_path=base_path, namespace="test", glob=self.globals()) as e:
+        with ExperimentIsolation() as iso:
+            with Experiment(base_path=iso.path, namespace="test", glob=globals()) as e:
                 e.prepare()
                 e.work = 5
                 for i in range(e.work - 1):
@@ -76,13 +270,11 @@ class TestExperiment(unittest.TestCase):
                     self.assertNotEqual(0, e.work_tracker.remaining_time)
 
     def test_not_executing_code_when_not_main(self):
-        with TemporaryDirectory() as base_path:
+        # Here we purposefully change the value of the __name__ field to NOT be __main__. This should
+        # prevent any of the code within the context manager from actually being executed!
+        with ExperimentIsolation(glob_mod={'__name__': 'test'}) as iso:
             flag = True
-            # Here we purposefully change the value of the __name__ field to NOT be __main__. This should
-            # prevent any of the code within the context manager from actually being executed!
-            glob = globals()
-            glob["__name__"] = "test"
-            with Experiment(base_path=base_path, namespace="test", glob=glob) as e:
+            with Experiment(base_path=iso.path, namespace="test", glob=globals()) as e:
                 e.prepare()
                 flag = False
 
@@ -90,8 +282,8 @@ class TestExperiment(unittest.TestCase):
             self.assertTrue(flag)
 
     def test_data_manipulation_basically_works(self):
-        with TemporaryDirectory() as base_path:
-            with Experiment(base_path=base_path, namespace="test", glob=self.globals()) as e:
+        with ExperimentIsolation() as iso:
+            with Experiment(base_path=iso.path, namespace="test", glob=globals()) as e:
                 e.prepare()
 
                 # Using dict style indexing to access the internal data dict should work:
@@ -118,23 +310,86 @@ class TestExperiment(unittest.TestCase):
                 d = json.load(json_file)
                 self.assertEqual(10, d["metrics"]["exp"]["loss"])
 
+            self.assertEqual(None, e.error)
+
     def test_discover_parameters_basically_works(self):
-        with TemporaryDirectory() as base_path:
-            PARAMETER = 10
-            glob = globals()
-            glob["__name__"] = "__main__"
-            with Experiment(base_path=base_path, namespace="test", glob=glob) as e:
+        with ExperimentIsolation() as iso:
+            with Experiment(base_path=iso.path, namespace="test", glob=globals()) as e:
                 e.prepare()
-                self.assertIn("PARAMETER", e.parameters)
-                self.assertEqual(10, e.parameters["PARAMETER"])
-                self.assertEqual(10, PARAMETER)
+                # This is actually a global variable at the top of the file and thus should have been
+                # automatically detected by the procedure
+                self.assertIn("VARIABLE", e.parameters)
+                self.assertEqual(10, e.parameters["VARIABLE"])
+                # This variable does not exists and should therefore also not be part of the parameters
+                self.assertNotIn('SOMETHING_WRONG', e.parameters)
+
+            self.assertEqual(None, e.error)
 
     def test_discover_description_works(self):
-        with TemporaryDirectory() as base_path:
-            glob = globals()
-            glob["__name__"] = "__main__"
-            glob["__doc__"] = "some description"
-            with Experiment(base_path=base_path, namespace="test", glob=glob) as e:
+        with ExperimentIsolation(glob_mod={'__doc__': 'some description'}) as iso:
+            with Experiment(base_path=iso.path, namespace="test", glob=globals()) as e:
                 e.prepare()
                 self.assertIn("description", e.data)
                 self.assertEqual("some description", e["description"])
+
+            self.assertEqual(None, e.error)
+
+    def test_load_parameters_json_works(self):
+
+        with ExperimentIsolation() as iso:
+            self.assertEqual(10, VARIABLE)
+            with Experiment(base_path=iso.path, namespace="test", glob=globals()) as e:
+                e.prepare()
+                # At this point the variable should still be the same
+                self.assertEqual(10, VARIABLE)
+                # This function indirectly modifies the globals() dict and thus should also modify the
+                # value of the variable.
+                # The lower case value also in the parameter update should not be reflected in the
+                # parameters since that key was not in there to begin with
+                e.load_parameters_json(json.dumps({'VARIABLE': 20, 'variable': 10}))
+
+                self.assertEqual(20, VARIABLE)
+                self.assertNotIn('variable', e.parameters)
+
+            self.assertEqual(None, e.error)
+
+        self.assertEqual(10, VARIABLE)
+
+    def test_load_parameters_py_works(self):
+
+        with ExperimentIsolation() as iso:
+            self.assertEqual(10, VARIABLE)
+            with Experiment(base_path=iso.path, namespace="test", glob=globals()) as e:
+                e.prepare()
+                # At this point the variable should still be the same
+                self.assertEqual(10, VARIABLE)
+                # This function indirectly modifies the globals() dict and thus should also modify the
+                # value of the variable.
+                # The lower case value also in the parameter update should not be reflected in the
+                # parameters since that key was not in there to begin with
+                code_string = (
+                    'import random\n\n'
+                    'VARIABLE = [10 for i in range(5)]\n'
+                    'variable = 10'
+                )
+                e.load_parameters_py(code_string)
+
+                self.assertIsInstance(VARIABLE, list)
+                self.assertNotIn('variable', e.parameters)
+
+            self.assertEqual(None, e.error)
+
+
+class TestRunExperiment(unittest.TestCase):
+    """
+    Tests for the function :meth:`pycomex.experiment.run_experiment`
+    """
+
+    def test_basically_works(self):
+        # We will use one of the simple examples here to check if it works
+        experiment_path = os.path.join(PATH, 'examples', 'quickstart.py')
+        path, proc = run_experiment(experiment_path)
+        self.assertIsInstance(path, str)
+        self.assertEqual(0, proc.returncode)
+        self.assertTrue(os.path.exists(path))
+        self.assertTrue(os.path.isdir(path))

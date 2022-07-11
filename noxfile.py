@@ -25,6 +25,7 @@ def get_requirements() -> List[str]:
 
 @nox.session
 def test(session: nox.Session) -> None:
+    session.run("poetry", "install")
     session.install("pytest")
     session.run("pytest")
 
@@ -93,10 +94,10 @@ def build(session: nox.Session) -> None:
 
 @nox.session
 def changelog(session: nox.Session) -> None:
-    with open('pycomex/VERSION') as file:
-        version = file.read().replace(' ', '').replace('\n', '')
+    with open("pycomex/VERSION") as file:
+        version = file.read().replace(" ", "").replace("\n", "")
 
-    with open('HISTORY.rst') as file:
+    with open("HISTORY.rst") as file:
         content = file.read()
         if version not in content:
-            raise ValueError('No entry to changelog for current version!')
+            raise ValueError("No entry to changelog for current version!")

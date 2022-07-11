@@ -1,3 +1,4 @@
+#! /usr/bin/env python3
 """
 This experiment will repeatedly create a text made of randomly sampled words.
 The words are assembled into a text file, which is supposed to be saved as an
@@ -24,9 +25,8 @@ response = urllib.request.urlopen("https://www.mit.edu/~ecprice/wordlist.10000")
 WORDS = response.read().decode("utf-8").splitlines()
 NUM_WORDS = 1000
 REPETITIONS = 10
-DEBUG = True
 
-with Experiment(base_path=tempfile.gettempdir(), namespace="example/simple", glob=globals()) as e:
+with Experiment(base_path=tempfile.gettempdir(), namespace="example/basic", glob=globals()) as e:
     e.prepare()  # Very important that this is called as the very first thing!
 
     # (5) It is possible to assign an integer value to "work" which is (estimated)
@@ -75,6 +75,7 @@ with Experiment(base_path=tempfile.gettempdir(), namespace="example/simple", glo
         e.update()
 
 # The metadata is saved to an actual json file upon the content manager __exit__'s
-print(f"\n FILES IN EXPERIMENT FOLDER: {e.path}")
-for path in sorted(os.listdir(e.path)):
-    print(os.path.basename(path))
+if os.path.exists(e.path):
+    print(f"\n FILES IN EXPERIMENT FOLDER: {e.path}")
+    for path in sorted(os.listdir(e.path)):
+        print(os.path.basename(path))

@@ -1,0 +1,25 @@
+import os
+import pathlib
+from pprint import pprint
+
+# Useful imports for conducting analysis
+import numpy as np
+import matplotlib.pyplot as plt
+
+# Importing all the experiment parameters
+{%- for key in experiment.parameters.keys() %}
+from {{ experiment.code_name }} import {{ key }}
+{%- endfor %}
+# Importing the experiment object itself
+from {{ experiment.code_name }} import e
+
+PATH = pathlib.Path(__file__).parent.absolute()
+DATA_PATH = os.path.join(PATH, 'experiment_data.json')
+
+# Load the raw data of the experiment
+with open(DATA_PATH, mode='r') as json_file:
+    DATA = json.load(json_file)
+
+
+if __name__ == '__main__':
+    pprint(DATA.keys())
