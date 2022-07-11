@@ -2,15 +2,19 @@
 import sys
 import click
 
+from pycomex.util import get_version
 
-@click.command()
-def main(args=None):
+
+@click.group(invoke_without_command=True)
+@click.option('-v', '--version', is_flag=True)
+@click.pass_context
+def main(ctx: click.Context, version: bool):
     """Console script for pycomex."""
-    click.echo("Replace this message by putting your code into "
-               "pycomex.cli.main")
-    click.echo("See click documentation at https://click.palletsprojects.com/")
-    return 0
+    if version:
+        version = get_version()
+        click.secho(version)
+        sys.exit(0)
 
 
 if __name__ == "__main__":
-    sys.exit(main())  # pragma: no cover
+    main()  # pragma: no cover
