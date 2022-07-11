@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "pycomex"
-version = "0.1.0"
+version = "0.1.1"
 description = "Python Computational Experiments"
 license = "MIT"
 authors = ["Jonas Teufel <jonseb1998@gmail.com>"]
@@ -26,7 +26,18 @@ click = "7.1.2"
 jinja2 = "2.11.2"
 
 [tool.poetry.dev-dependencies]
-flake8 = "3.7.8"
 nox = "2022.1.7"
 black = "21.7b0"
 sphinx = "1.8.5"
+
+[tool.poetry_bumpversion.file."pycomex/__init__.py"]
+search = "__version__ = '{current_version}'"
+replace = "__version__ = '{new_version}'"
+
+[tool.poetry_bumpversion.file."pycomex/VERSION"]
+search = "{current_version}"
+replace = "{new_version}"
+
+[tool.black]
+line-length = 120
+target-version = ['py38']
