@@ -202,8 +202,8 @@ class TestExperiment(unittest.TestCase):
         # Well, this also does not work! Either you cannot make import statements in an eval string or there
         # cannot be eval strings, either way i cant use that either!
         with self.assertRaises(SyntaxError):
-            d = eval(f'import random\n'
-                     f'random.randint(0, 100)\n')
+            eval('import random\n'
+                 'random.randint(0, 100)\n')
 
     def test_exec_workaround(self):
         # https://stackoverflow.com/questions/1463306/how-to-get-local-variables-updated-when-using-the-exec-call

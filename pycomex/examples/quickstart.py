@@ -2,7 +2,7 @@
 """
 This doc string will be saved as the "description" meta data of the experiment records
 """
-from pycomex import Experiment
+from pycomex.experiment import Experiment
 
 # Experiment parameters can simply be defined as uppercase global variables.
 # These are automatically detected and can possibly be overwritten in command

@@ -1,5 +1,4 @@
 import os
-import sys
 import unittest
 import subprocess
 from typing import Tuple

@@ -8,8 +8,6 @@ a quickstart code example.
 More detailed explanations of the various features of the package are provided as a series of annotated
 code :ref:`examples`.
 
-.. _examples: examples.rst
-
 Main Philosophy
 ---------------
 
@@ -106,7 +104,8 @@ the context manager, the experiment folder for this particular run is created. T
 manager also manages error handling (and saving to a file), storing and saving of the main associative
 data store among other things.
 
-For a more detailed introduction of the various features look at the series of examples in the next chapter!
+For a more detailed introduction of the various features look at the series of :ref:`examples`
+in the next chapter!
 
 .. literalinclude:: ../pycomex/examples/quickstart.py
     :language: python

@@ -23,6 +23,15 @@ def get_requirements() -> List[str]:
         return f.readlines()
 
 
+def get_wheel_path() -> str:
+    for name in os.listdir("dist"):
+        path = os.path.join("dist", name)
+        if path.endswith(".whl"):
+            return path
+    else:
+        raise FileNotFoundError("The wheel distributional was not correctly created by poetry!")
+
+
 @nox.session
 def test(session: nox.Session) -> None:
     session.run("poetry", "install")
@@ -41,7 +50,8 @@ def docs(session: nox.Session) -> None:
     # ~ Installing the doc requirements
     session.run("poetry", "install")
     session.install("-r", "docs/requirements.txt")
-    session.install(".")
+    #session.install(get_wheel_path())
+    session.run("python", "-m", "pycomex.cli", "--version")
 
     # ~ Removing previous artifacts
     if os.path.exists("docs/modules.rst"):
