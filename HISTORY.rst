@@ -15,7 +15,7 @@ History
 * Using "black" for code formatting
 * Using "flake9" for linting
 
-0.2.0 (2022-07-11)
+0.2.0 (2022-07-12)
 ------------------
 
 * Every experiment file now has a command line interface realized with ``argparse``
@@ -27,3 +27,11 @@ History
   experiment record folder
     * One default template which is rendered this way is "analysis.py" module, which provides a boilerplate
       starting point for further analysis on the experiment results.
+
+0.2.1 (2022-07-12)
+------------------
+
+* Now it is possible to commit matplotlib Figures directly to the experiment with ``Experiment.commit_fig``
+* File artifact paths are now automatically tracked as metadata
+* Added a default template ``annotations.rst`` to be rendered for each experiment which provides a
+  boilerplate starting point for additional thoughts to be added

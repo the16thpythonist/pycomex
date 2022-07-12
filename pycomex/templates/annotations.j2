@@ -1,0 +1,18 @@
+Description
+===========
+
+{{ experiment["description"] }}
+
+Artifacts
+=========
+
+A list of all the file artifacts created by this particular run of the experiment
+
+{%- for name, path in experiment["artifacts"].items() %}
+- *{{ name }}*
+{%- endfor %}
+
+Annotations
+===========
+
+insert thoughts here

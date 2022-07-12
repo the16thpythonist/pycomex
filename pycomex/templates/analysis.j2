@@ -1,6 +1,8 @@
 import os
+import json
 import pathlib
 from pprint import pprint
+from typing import Dict, Any
 
 # Useful imports for conducting analysis
 import numpy as np
@@ -16,10 +18,18 @@ from {{ experiment.code_name }} import e
 PATH = pathlib.Path(__file__).parent.absolute()
 DATA_PATH = os.path.join(PATH, 'experiment_data.json')
 
-# Load the raw data of the experiment
+# Load the all raw data of the experiment
 with open(DATA_PATH, mode='r') as json_file:
-    DATA = json.load(json_file)
+    DATA: Dict[str, Any] = json.load(json_file)
+
+# This is a dictionary whose keys are the artifact filenames and
+# the values are the corresponding absolute paths
+ARTIFACTS: Dict[str, str] = DATA['artifacts']
 
 
 if __name__ == '__main__':
-    pprint(DATA.keys())
+    print('RAW DATA:')
+    pprint(list(DATA.keys()))
+
+    print('FILE ARTIFACTS:')
+    pprint(list(ARTIFACTS.keys()))

@@ -123,7 +123,8 @@ class Experiment:
 
     """
     DEFAULT_TEMPLATES = {
-        'analysis.py': TEMPLATE_ENV.get_template('analysis.j2')
+        'analysis.py': TEMPLATE_ENV.get_template('analysis.j2'),
+        'annotations.rst': TEMPLATE_ENV.get_template('annotations.j2')
     }
 
     def __init__(
@@ -290,11 +291,17 @@ class Experiment:
 
     def open(self, name: str, mode: str = "w"):
         file_path = os.path.join(self.path, name)
+        self.data['artifacts'][name] = file_path
         return open(file_path, mode=mode)
 
     def commit_raw(self, name: str, content: str) -> None:
         with self.open(name) as file:
             file.write(content)
+
+    def commit_fig(self, name: str, fig: object, bbox_inches='tight', pad_inches=0.05) -> None:
+        with self.open(name, mode='wb') as file:
+            _, fig_format = name.split('.')
+            fig.savefig(file, format=fig_format, bbox_inches=bbox_inches, pad_inches=pad_inches)
 
     def write_path(self, path: str) -> None:
         with open(path, mode='w') as file:
