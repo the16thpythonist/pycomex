@@ -1,3 +1,7 @@
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
+
 [tool.poetry]
 name = "pycomex"
 version = "0.2.0"
@@ -18,6 +22,9 @@ include = [
     "README.rst",
     "CHANGLELOG.rst"
 ]
+
+[tool.poetry.build]
+generate-setup-file = true
 
 [tool.poetry.scripts]
 pycomex = 'pycomex.cli:main'

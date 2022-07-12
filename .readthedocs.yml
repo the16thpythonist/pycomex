@@ -12,4 +12,4 @@ python:
     install:
         - requirements: docs/requirments.txt
         - method: pip
-          path: ./dist/*.whl
+          path: .
