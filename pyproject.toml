@@ -1,6 +1,6 @@
 [build-system]
-requires = ["poetry-core>=1.0.0"]
-build-backend = "poetry.core.masonry.api"
+requires = ["poetry>=1.2.0b2"]
+build-backend = "poetry.masonry.api"
 
 [tool.poetry]
 name = "pycomex"
@@ -13,6 +13,7 @@ readme = "README.rst"
 documentation = "https://pycomex.readthedocs.io"
 keywords = ["computational experiments", "data science", "maschine learning", "academia"]
 packages = [
+    { include = "pycomex" },
     { include = "tests" },
 ]
 include = [
@@ -40,8 +41,8 @@ black = "21.7b0"
 sphinx = "5.0.2"
 
 [tool.poetry_bumpversion.file."pycomex/__init__.py"]
-search = "__version__ = '{current_version}'"
-replace = "__version__ = '{new_version}'"
+search = '__version__ = "{current_version}"'
+replace = '__version__ = "{new_version}"'
 
 [tool.poetry_bumpversion.file."pycomex/VERSION"]
 search = "{current_version}"

@@ -87,6 +87,7 @@ Once you have a copy of the source, you can install it with:
     $ cd pycomex
     $ pip3 install .
 
+.. command-output:: python -m pycomex.cli --version
 
 .. _Github repo: https://github.com/the16thpythonist/pycomex
 .. _tarball: https://github.com/the16thpythonist/pycomex/tarball/master
@@ -104,10 +105,9 @@ the context manager, the experiment folder for this particular run is created. T
 manager also manages error handling (and saving to a file), storing and saving of the main associative
 data store among other things.
 
-For a more detailed introduction of the various features look at the series of :ref:`examples`
-in the next chapter!
-
 .. literalinclude:: ../pycomex/examples/quickstart.py
     :language: python
 
+For a more detailed introduction of the various features look at the series of :ref:`examples`
+in the next chapter!
 

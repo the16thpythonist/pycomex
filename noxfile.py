@@ -48,14 +48,17 @@ def lint(session: nox.Session) -> None:
 @nox.session
 def docs(session: nox.Session) -> None:
     # ~ Installing the doc requirements
-    session.run("poetry", "install")
+    #session.run("poetry", "install")
+    session.install(".")
     session.install("-r", "docs/requirements.txt")
-    #session.install(get_wheel_path())
     session.run("python", "-m", "pycomex.cli", "--version")
 
     # ~ Removing previous artifacts
     if os.path.exists("docs/modules.rst"):
         os.remove("docs/modules.rst")
+
+    if os.path.exists("docs/pycomex.rst"):
+        os.remove("docs/pycomex.rst")
 
     if os.path.exists("docs/build"):
         shutil.rmtree("docs/build")
