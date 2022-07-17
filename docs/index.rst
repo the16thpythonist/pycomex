@@ -17,7 +17,7 @@ Features
    :caption: Contents:
 
    intro
-   examples
+   example
    modules
    authors
 

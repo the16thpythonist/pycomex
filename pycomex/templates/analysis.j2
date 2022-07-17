@@ -1,3 +1,4 @@
+#! /usr/bin/env python3
 import os
 import json
 import pathlib
@@ -8,28 +9,26 @@ from typing import Dict, Any
 import numpy as np
 import matplotlib.pyplot as plt
 
-# Importing all the experiment parameters
+# Importing the experiment
+from {{ experiment.code_name }} import *
+
+# List of experiment parameters
 {%- for key in experiment.parameters.keys() %}
-from {{ experiment.code_name }} import {{ key }}
+# - {{ key }}
 {%- endfor %}
-# Importing the experiment object itself
-from {{ experiment.code_name }} import e
 
 PATH = pathlib.Path(__file__).parent.absolute()
 DATA_PATH = os.path.join(PATH, 'experiment_data.json')
-
 # Load the all raw data of the experiment
 with open(DATA_PATH, mode='r') as json_file:
     DATA: Dict[str, Any] = json.load(json_file)
 
-# This is a dictionary whose keys are the artifact filenames and
-# the values are the corresponding absolute paths
-ARTIFACTS: Dict[str, str] = DATA['artifacts']
-
 
 if __name__ == '__main__':
-    print('RAW DATA:')
+    print('RAW DATA KEYS:')
     pprint(list(DATA.keys()))
 
-    print('FILE ARTIFACTS:')
-    pprint(list(ARTIFACTS.keys()))
+    # The analysis template from the experiment file
+    {%- for line in experiment.analysis.code_lines %}
+    {{ line.strip('\n') }}
+    {%- endfor %}

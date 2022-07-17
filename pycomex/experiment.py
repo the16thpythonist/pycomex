@@ -23,9 +23,20 @@ from typing import List, Type, Optional, Tuple, Dict
 
 import jinja2 as j2
 
-from pycomex.util import TEMPLATE_ENV
+from pycomex.util import TEMPLATE_ENV, EXAMPLES_PATH
+from pycomex.util import RecordCode
 from pycomex.work import AbstractWorkTracker
 from pycomex.work import NaiveWorkTracker
+
+
+def run_example(example_name: str,
+                parameters_path: Optional[str] = None
+                ) -> Tuple[str, subprocess.CompletedProcess]:
+    example_path = os.path.join(EXAMPLES_PATH, example_name)
+    return run_experiment(
+        experiment_path=example_path,
+        parameters_path=parameters_path,
+    )
 
 
 def run_experiment(experiment_path: str,
@@ -144,16 +155,17 @@ class Experiment:
         self.templates = templates
 
         self.data = {}
+        self.meta = {}
         self.parameters = {}
         self.error: Optional[Exception] = None
         self.prevent_execution = False
         self.description: Optional[str] = None
 
         self.discover_parameters()
-        self.path_list: List[str] = self.determine_path()
-        self.path = os.path.join(self.base_path, *self.path_list)
+        self.path = self.determine_path()
 
         self.data_path = os.path.join(self.path, 'experiment_data.json')
+        self.meta_path = os.path.join(self.path, 'experiment_meta.json')
         self.error_path = os.path.join(self.path, 'experiment_error.txt')
         self.log_path = os.path.join(self.path, 'experiment_log.txt')
 
@@ -162,6 +174,8 @@ class Experiment:
 
         self.logger: Optional[logging.Logger] = None
         self.work_tracker = self.work_tracker_class(0)
+
+        self.analysis = RecordCode()
 
         # ~ Parsing command line arguments
         # TODO: I could introduce abstract base class and dependency inject this
@@ -204,14 +218,30 @@ class Experiment:
             handler.setFormatter(formatter)
             self.logger.addHandler(handler)
 
-    def determine_path(self) -> List[str]:
+    def determine_path(self) -> str:
+        # ~ are we importing a snapshot file?
+        # The first thing we do is to check whether this invocation of the experiment is the import of a
+        # snapshot file (located in an already completed experiment record folder) or if this is actually
+        # a new experiment.
+        # We determine if it is a snapshot by checking if there is a "experiment_meta" file in the same
+        # folder (which will *always* be the case for a completed experiment).
+        folder_path = pathlib.Path(self.glob['__file__']).parent.absolute()
+        meta_path = os.path.join(folder_path, 'experiment_meta.json')
+        if os.path.exists(meta_path) and self.glob['__name__'] != '__main__':
+            # In that case we obviously want to return the folder path of the very record folder the
+            # snapshot file is inside of.
+            return str(folder_path)
+
         # ~ resolving the namespace
+        # ... otherwise, if it is a new experiment we need to determine the new record folder path that
+        # will have to be created to hold all the experiment results.
         # "self.namespace" is a string which uniquely characterizes this very experiment in the broader
         # scope of the base path. It may contain slashes to indicate a nested folder structure.
         names: List[str] = self.namespace.split("/")
 
         path_list = names
         namespace_path = os.path.join(self.base_path, *path_list)
+
         if self.debug_mode:
             path_list.append("debug")
 
@@ -234,13 +264,13 @@ class Experiment:
 
             path_list.append(f"{index:03d}")
 
-        return path_list
+        return os.path.join(self.base_path, *path_list)
 
     def prepare_path(self) -> None:
         # ~ Make sure the path exists
         # If the nested structure provided by "self.namespace" does not exist, we create it here
-        current_path = self.base_path
-        for name in self.path_list:
+        current_path = ''
+        for name in pathlib.Path(self.path).parts:
             current_path = os.path.join(current_path, name)
             if not os.path.exists(current_path):
                 os.mkdir(current_path)
@@ -303,11 +333,16 @@ class Experiment:
             _, fig_format = name.split('.')
             fig.savefig(file, format=fig_format, bbox_inches=bbox_inches, pad_inches=pad_inches)
 
+    def commit_json(self, name: str, data: dict, indent: int = 4) -> None:
+        with self.open(name, mode='w') as file:
+            json.dump(data, file, indent=4)
+
     def write_path(self, path: str) -> None:
         with open(path, mode='w') as file:
             file.write(self.path)
 
     def __enter__(self) -> 'Experiment':
+
         if self.glob["__name__"] != "__main__":
             self.prevent_execution = True
             return self
@@ -328,7 +363,8 @@ class Experiment:
 
         self.work_tracker.start()
 
-        self.data["start_time"] = time.time()
+        start_time = time.time()
+        self.data["start_time"] = start_time
         self.data["path"] = self.path
         self.data["artifacts"] = {}
 
@@ -341,11 +377,22 @@ class Experiment:
         self.logger.info(f"   debug mode: {self.debug_mode}")
         self.logger.info("=" * 80)
 
+        # ~ Creating meta file
+        self.meta['running'] = True
+        self.meta['start_time'] = start_time
+        self.save_experiment_meta()
+
         return self
 
     def __exit__(self, exc_type, exc_value, exc_tb):
 
         if isinstance(exc_value, NoExperimentExecution):
+            # "NoExperimentExecution" is a special exception which is always being risen if an experiment
+            # file is being accessed without it being "__main__" aka without the explicit intent of actually
+            # executing that experiment. In that case we check if we can load the artifacts of an already
+            # executed experiment. This would be the case if the "snapshot.py" artifact from the experiment
+            # records folder is being imported.
+            self.load_records()
             return True
 
         self.data["end_time"] = time.time()
@@ -355,14 +402,18 @@ class Experiment:
             self.save_experiment_error(exc_value, exc_tb)
             self.error = exc_value
 
-        # ~ Saving the metadata into file
-        self.save_experiment_data()
-
         # ~ Copy the actual code source file
         self.copy_source()
 
         # ~ Render all the templates
         self.render_templates()
+
+        # ~ Saving data into file
+        self.save_experiment_data()
+
+        # ~ Updating meta file
+        self.meta['running'] = False
+        self.save_experiment_meta()
 
         # ~ logging the experiment end
         self.logger.info("=" * 80)
@@ -373,6 +424,15 @@ class Experiment:
         self.logger.info("=" * 80)
 
         return True
+
+    def load_records(self) -> None:
+        if os.path.exists(self.data_path):
+            with open(self.data_path) as json_file:
+                self.data = json.load(json_file)
+
+    def save_experiment_meta(self):
+        with open(self.meta_path, mode="w") as json_file:
+            json.dump(self.meta, json_file)
 
     def save_experiment_data(self):
         with open(self.data_path, mode="w") as json_file:
@@ -389,12 +449,17 @@ class Experiment:
         self.info("\n".join(tb))
 
     def copy_source(self) -> None:
+        # Since we have the globals() dict from the experiment file, we can access the __file__ global
+        # value of that dict to get the file of the experiment code file.
         source_path = pathlib.Path(self.glob['__file__']).absolute()
+        self.data['artifacts']['source'] = str(source_path)
         shutil.copy(source_path, self.code_path)
 
     def render_templates(self):
+        self.data['artifacts']['templates'] = {}
         for file_name, template in self.templates.items():
             path = os.path.join(self.path, file_name)
+            self.data['artifacts']['templates'][file_name] = path
             with open(path, mode='w') as file:
                 content = template.render(experiment=self)
                 file.write(content)

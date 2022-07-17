@@ -7,4 +7,6 @@ All of these examples explain various features of ``pycomex``. It is recommended
 get the best overview.
 
 .. toctree::
-    ex_basic
+
+    examples/basic
+    examples/analysis

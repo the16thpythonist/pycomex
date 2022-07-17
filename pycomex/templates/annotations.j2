@@ -6,10 +6,12 @@ Description
 Artifacts
 =========
 
-A list of all the file artifacts created by this particular run of the experiment
+A list of all the file artifacts created by this particular run of the experiment:
 
-{%- for name, path in experiment["artifacts"].items() %}
+{%- for name, value in experiment["artifacts"].items() %}
+{%- if value is string %}
 - *{{ name }}*
+{%- endif %}
 {%- endfor %}
 
 Annotations

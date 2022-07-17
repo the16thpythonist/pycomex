@@ -35,3 +35,18 @@ History
 * File artifact paths are now automatically tracked as metadata
 * Added a default template ``annotations.rst`` to be rendered for each experiment which provides a
   boilerplate starting point for additional thoughts to be added
+
+0.3.0 (2022-07-17)
+------------------
+
+* Added ``Experiment.commit_json`` to directly store dict data as json file artifacts for the experiment
+  records
+* Improved the ``analysis.py`` templating for experiments
+    * Using the context manager ``Experiment.analysis`` within the experiment file can be used to not only
+      directly execute the analysis right after the experiment is completed but also all the code within
+      that context managers content block is copied into the analysis template of that run and it will
+      work as it is
+    * This is due to the fact, that ``Experiment`` now automatically realizes if it is being imported
+      from a ``snapshot.py`` within an existing record folder. In that case it populates internal fields
+      such as ``Experiment.data`` by loading the persistent file artifact.
+* Added ``examples/analysis.py`` which documents / explains the previously mentioned process

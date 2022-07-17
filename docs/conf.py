@@ -19,10 +19,15 @@
 #
 import os
 import sys
+import shutil
+import pathlib
 
+PATH = pathlib.Path(__file__).parent.absolute()
+ASSETS_PATH = os.path.join(PATH, 'assets')
 sys.path.insert(0, os.path.abspath(".."))
 
 import pycomex
+from pycomex.experiment import run_example
 
 # -- General configuration ---------------------------------------------
 
@@ -32,7 +37,11 @@ import pycomex
 
 # Add any Sphinx extension module names here, as strings. They can be
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom ones.
-extensions = ["sphinx.ext.autodoc", "sphinx.ext.viewcode", "sphinxcontrib.programoutput"]
+extensions = [
+    "sphinxcontrib.programoutput",
+    "sphinx.ext.autodoc",
+    "sphinx.ext.viewcode"
+]
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ["_templates"]
@@ -153,3 +162,12 @@ texinfo_documents = [
         "Miscellaneous",
     ),
 ]
+
+
+# -- Pre build tasks --
+
+path, p = run_example('analysis.py')
+shutil.copy(
+    os.path.join(path, 'analysis.py'),
+    os.path.join(ASSETS_PATH, 'analysis.py')
+)

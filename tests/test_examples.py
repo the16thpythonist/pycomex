@@ -1,6 +1,7 @@
 import os
 import unittest
 import subprocess
+import importlib.util
 from typing import Tuple
 
 from pycomex.util import PATH
@@ -39,3 +40,24 @@ class TestExamples(unittest.TestCase):
         path, p = self.run_example("basic.py")
         self.assertEqual(0, p.returncode)
         print(p.stdout.decode())
+
+    def test_experiment_can_be_imported_from_snapshot(self):
+        path, p = self.run_example('quickstart.py')
+        self.assertTrue(os.path.exists(path))
+
+        snapshot_path = os.path.join(path, 'snapshot.py')
+        self.assertTrue(os.path.exists(snapshot_path))
+
+        spec = importlib.util.spec_from_file_location('snapshot', snapshot_path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+
+        # It should be possible to import the 'e' object from the experiment snapshot. For this example it
+        # is the main Experiment object. If this experiment is imported rather than being executed, it
+        # should still populate the "data" property from the saved JSON file which is also located in the
+        # records folder
+        self.assertIsInstance(module.e, Experiment)
+        self.assertIn('artifacts', module.e.data)
+        # Thus querying with slashes (/) should also be possible to perform on it
+        self.assertIn('source', module.e['artifacts'])
+        # This is one of the experiment variables that should have been contained in
