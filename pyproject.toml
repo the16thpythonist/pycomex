@@ -4,7 +4,7 @@ build-backend = "poetry.masonry.api"
 
 [tool.poetry]
 name = "pycomex"
-version = "0.3.0"
+version = "0.3.1"
 description = "Python Computational Experiments"
 license = "MIT"
 authors = ["Jonas Teufel <jonseb1998@gmail.com>"]
@@ -31,9 +31,11 @@ generate-setup-file = true
 pycomex = 'pycomex.cli:main'
 
 [tool.poetry.dependencies]
-python = ">=3.6.2"
+python = ">=3.8"
 click = "7.1.2"
 jinja2 = "3.0.3"
+numpy = ">=1.23.2"
+matplotlib = ">=3.5.3"
 
 [tool.poetry.dev-dependencies]
 nox = "2022.1.7"

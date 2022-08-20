@@ -52,9 +52,9 @@ def run_experiment(experiment_path: str,
                                            stderr=subprocess.PIPE)
 
         with open(out_path.name) as file:
-            experiment_path = file.read()
+            archived_path = file.read()
 
-    return experiment_path, completed_process
+    return archived_path, completed_process
 
 
 class NoExperimentExecution(Exception):
@@ -134,8 +134,8 @@ class Experiment:
 
     """
     DEFAULT_TEMPLATES = {
-        'analysis.py': TEMPLATE_ENV.get_template('analysis.j2'),
-        'annotations.rst': TEMPLATE_ENV.get_template('annotations.j2')
+        'analysis.py': TEMPLATE_ENV.get_template('analysis.py.j2'),
+        'annotations.rst': TEMPLATE_ENV.get_template('annotations.py.j2')
     }
 
     def __init__(
@@ -211,9 +211,23 @@ class Experiment:
                 self.parameters[key] = value
 
     def prepare_logger(self) -> None:
+        """
+        Creates the internal logger instance and registers all the appropriate handlers.
+
+        Before this method :attr:`~.Experiment.logger` is ``None``. Only afterwards the logger is actually
+        initialized. Afterwards all the necessary handlers are also attached.
+        This method omits the file handler if the experiment is imported instead of executed.
+        """
         self.logger = logging.Logger(self.namespace)
         formatter = logging.Formatter("%(asctime)s - %(message)s")
-        handlers = [logging.FileHandler(self.log_path), logging.StreamHandler(sys.stdout)]
+
+        # We will always use the stdout handler, but if we the experiment object is not explicitly created
+        # for execution, we omit the file handler which would write to the log file, so that we dont
+        # overwrite the already existing log file of the actual experiment execution
+        handlers = [logging.StreamHandler(sys.stdout)]
+        if not self.prevent_execution:
+            handlers += [logging.FileHandler(self.log_path)]
+
         for handler in handlers:
             handler.setFormatter(formatter)
             self.logger.addHandler(handler)
@@ -316,7 +330,24 @@ class Experiment:
         current[keys[-1]] = value
 
     def prepare(self):
+        """
+        This method *has to be called* as the very first thing within the experiment context like this:
+
+        .. code-block:: python
+
+            with Experiment(base_path, 'my_namespace', glob=globals()) as e:
+                e.prepare()  # Very important!
+
+        Only through this method it can be ensured that the experiment module can later be safely imported
+        without actually causing the experiment to be executed again unintentionally.
+        """
         if self.prevent_execution:
+            # We need to call this or it would cause a bug
+            self.prepare_logger()
+
+            # By raising this special exception within the experiment context we are able to essentially
+            # silently skip the entire body of the context, because we simply ignore this exception in
+            # __exit__
             raise NoExperimentExecution()
 
     def open(self, name: str, mode: str = "w"):
@@ -343,7 +374,11 @@ class Experiment:
 
     def __enter__(self) -> 'Experiment':
 
+        # At this point we check if the experiment is created in "execution" mode or in "analysis" mode.
+        # The latter is always the case when the module is not explicitly directly executed.
         if self.glob["__name__"] != "__main__":
+            # Setting this flag will signal to the "prepare" method to take the necessary steps to skip
+            # the entire body of the experiment.
             self.prevent_execution = True
             return self
 
@@ -486,3 +521,9 @@ class Experiment:
 
         if monitor_resources:
             pass
+
+
+class ArchivedExperiment:
+
+    def __init__(self):
+        pass

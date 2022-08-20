@@ -6,6 +6,7 @@ import json
 import tempfile
 import unittest
 import contextlib
+import subprocess
 from tempfile import TemporaryDirectory
 from typing import Optional, List
 
@@ -174,7 +175,7 @@ class TestExperimentArgParser(unittest.TestCase):
 
 class TestExperiment(unittest.TestCase):
     """
-    This is a docstring
+    Mainly tests for the class :class:`pycomex.experiment.Experiment`
     """
 
     # -- misc tests
@@ -393,3 +394,114 @@ class TestRunExperiment(unittest.TestCase):
         self.assertEqual(0, proc.returncode)
         self.assertTrue(os.path.exists(path))
         self.assertTrue(os.path.isdir(path))
+
+        # One of the default artifacts is also supposed to be a "analysis.py" file, which contains
+        # boilerplate code necessary to analyze the results of the experiment.
+        analysis_path = os.path.join(path, 'analysis.py')
+        self.assertTrue(os.path.exists(analysis_path))
+        # It should also be possible to execute this python script as is without any errors
+        command = f'{sys.executable} {analysis_path}'
+        proc = subprocess.run(command, shell=True)
+        self.assertEqual(0, proc.returncode)
+
+
+class TestExperimentAnalysis(unittest.TestCase):
+    """
+    Tests related to the `analysis.py` file created by the execution of experiments
+    """
+
+    def test_analysis_file_is_created_by_default(self):
+        """
+        The `analysis.py` is default artifact for every experiment and should be created for every experiment
+        """
+        with ExperimentIsolation() as iso:
+            self.assertEqual(10, VARIABLE)
+            with Experiment(base_path=iso.path, namespace="test", glob=globals()) as e:
+                e.prepare()
+
+            self.assertEqual(None, e.error)
+            # The file should exist
+            analysis_path = os.path.join(e.path, 'analysis.py')
+            self.assertTrue(os.path.exists(analysis_path))
+            # And it should not be empty
+            with open(analysis_path) as file:
+                content = file.read()
+                self.assertTrue(len(content) > 10)
+
+    def test_default_analysis_file_is_executable_without_error(self):
+        with ExperimentIsolation() as iso:
+            self.assertEqual(10, VARIABLE)
+            with Experiment(base_path=iso.path, namespace="test", glob=globals()) as e:
+                e.prepare()
+
+            analysis_path = os.path.join(e.path, 'analysis.py')
+            command = f'{sys.executable} {analysis_path}'
+            proc = subprocess.run(command, shell=True)
+            self.assertEqual(0, proc.returncode)
+
+    def test_custom_code_is_added_to_analysis_file(self):
+        with ExperimentIsolation() as iso:
+            self.assertEqual(10, VARIABLE)
+            with Experiment(base_path=iso.path, namespace="test", glob=globals()) as e:
+                e.prepare()
+                e['value'] = 100
+
+                with e.analysis:
+                    # All of this code should be copied to the analysis file
+                    new_value = 200
+                    print(new_value)
+                    final_value = new_value ** 0.5
+                    print(final_value)
+
+            # The custom code should be inside the generated analysis file
+            analysis_path = os.path.join(e.path, 'analysis.py')
+            with open(analysis_path) as file:
+                content = file.read()
+                print(content)
+                self.assertIn('new_value', content)
+                self.assertIn('final_value', content)
+
+            # THe analysis file should still work.
+            # In fact, we know that that file should print "200" to stdout, which we will also check
+            command = f'{sys.executable} {analysis_path}'
+            proc = subprocess.run(command, shell=True, stdout=subprocess.PIPE)
+            self.assertEqual(0, proc.returncode)
+            self.assertIn('200\n', proc.stdout.decode())
+
+    def test_bug_it_is_not_possible_to_invoke_the_logger_in_analysis_file(self):
+        """
+        **20.08.2022** This bug causes an exception when trying to execute an `analysis.py` script which
+        for example contains a line `e.info("...")`. The logger cannot be invoked for the analysis version
+        of an experiment...
+        """
+        # We need to do a bit of a workaround here. The thing is we can fundamentally only invoke *any*
+        # function of the experiment object "e" from the analysis file, if the original experiment is it's
+        # own file, or rather if the experiment object/context is defined at the top level. This is
+        # obviously not given for such a unittest module. Thus we create some sample python code string here
+        # write that into a file, invoke that file as an experiment and then it should work
+        code_string = (
+            'import os\n'
+            'import pathlib\n'
+            'from pycomex.experiment import Experiment\n'
+            'PATH = pathlib.Path(__file__).parent.absolute()\n'
+            'with Experiment(base_path=PATH, namespace="test_bug", glob=globals()) as e:\n'
+            '   e.prepare()\n'
+            '   e["value"] = 10\n'
+            '   with e.analysis:\n'
+            '       e.info("starting analysis")\n'
+            '       e.info("experiment value: " + str(e["value"]))\n'
+        )
+        with tempfile.TemporaryDirectory() as path:
+            code_path = os.path.join(path, 'main.py')
+            with open(code_path, mode='w') as file:
+                file.write(code_string)
+
+            archive_path, proc = run_experiment(code_path)
+            self.assertEqual(0, proc.returncode)
+
+            analysis_path = os.path.join(archive_path, 'analysis.py')
+            command = f'{sys.executable} {analysis_path}'
+            proc = subprocess.run(command, shell=True, stdout=subprocess.PIPE)
+            # With the bug, this fails
+            self.assertEqual(0, proc.returncode)
+            self.assertIn('experiment value: 10', proc.stdout.decode())

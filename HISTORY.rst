@@ -50,3 +50,13 @@ History
       from a ``snapshot.py`` within an existing record folder. In that case it populates internal fields
       such as ``Experiment.data`` by loading the persistent file artifact.
 * Added ``examples/analysis.py`` which documents / explains the previously mentioned process
+
+0.3.1 (2022-08-20)
+------------------
+
+* Fixed bug that ``e.info()`` could not be used inside the ``analysis.py`` file
+* Decided to add ``numpy`` and ``matplotlib`` to the dependencies after all. Originally I did not want to
+  include them because I don't strictly need them and they are quite big packages. But honestly, what kind
+  of computational experiment works without those two nowadays?
+* Renamed the template files with better naming scheme
+* Updated readme

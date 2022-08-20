@@ -31,3 +31,13 @@ with Experiment("/tmp", "example/quickstart", globals()) as e:
     # e.commit_fig(file_name, fig)
     # e.commit_png(file_name, image)
     # ...
+
+    # All the code inside this context will be copied to the "analysis.py"
+    # file which will be created as an experiment artifact.
+    with e.analysis:
+        # And we can access all the internal fields of the experiment object
+        # and the experiment parameters here!
+        print(HELLO, WORLD)
+        print(e['strings/hello_world'])
+        # logging will print to stdout but not modify the log file
+        e.info('analysis done')

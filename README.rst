@@ -25,6 +25,8 @@ Features
   stored as JSON file
 * Easily attach file artifacts such as ``matplotlib`` figures to experiment records
 * Log messages to stdout as well as permanently store into log file
+* ready-to-use automatically generated boilerplate code for the analysis and post-processing of
+  experiment data after it terminates
 
 Installation
 ------------
@@ -49,9 +51,9 @@ Each computational experiment has to be bundled as a standalone python module. I
 parameters are placed at the top. Actual execution of the experiment is placed within the ``Experiment``
 context manager.
 
-Upon entering the context, a new storage folder for each run of the experiment is created.
+Upon entering the context, a new archive folder for each run of the experiment is created.
 
-Storage of metadata, file artifacts and error handling is automatically managed on context exit.
+Archiving of metadata, file artifacts and error handling is automatically managed on context exit.
 
 .. code-block:: python
 
@@ -63,43 +65,95 @@ Storage of metadata, file artifacts and error handling is automatically managed 
     # Experiment parameters can simply be defined as uppercase global variables.
     # These are automatically detected and can possibly be overwritten in command
     # line invocation
-    HELLO = 'hello '
-    WORLD = 'world!'
+    HELLO = "hello "
+    WORLD = "world!"
 
     # Experiment context manager needs 3 positional arguments:
     # - Path to an existing folder in which to store the results
     # - A namespace name unique for each experiment
     # - access to the local globals() dict
-    with Experiment('/tmp/results', 'example', globals()) as e:
-        e.prepare() # important!
+    with Experiment("/tmp", "example/quickstart", globals()) as e:
+        e.prepare()  # important!
 
         # Internally saved into automatically created nested dict
         # {'strings': {'hello_world': '...'}}
-        e['strings/hello_world'] = HELLO + WORLD
+        e["strings/hello_world"] = HELLO + WORLD
 
         # Alternative to "print". Message is printed to stdout as well as
         # recorded to log file
-        e.info('some debug message')
+        e.info("some debug message")
 
         # Automatically saves text file artifact to the experiment record folder
-        file_name = 'hello_world.txt'
+        file_name = "hello_world.txt"
         e.commit_raw(file_name, HELLO + WORLD)
         # e.commit_fig(file_name, fig)
         # e.commit_png(file_name, image)
         # ...
 
+        # All the code inside this context will be copied to the "analysis.py"
+        # file which will be created as an experiment artifact.
+        with e.analysis:
+            # And we can access all the internal fields of the experiment object
+            # and the experiment parameters here!
+            print(HELLO, WORLD)
+            print(e['strings/hello_world'])
+            # logging will print to stdout but not modify the log file
+            e.info('analysis done')
 
 This example would create the following folder structure:
 
-.. code-block:: text
+- tmp
+    - results
+        - example
+            - 000
+                - *experiment_log.txt*
+                - *experiment_meta.json*
+                - *experiment_data.json*
+                - *hello_world.txt**
+                - *snapshot.py*
+                - *analysis.py*
 
-    tmp
-    |- results
-       |- example
-          |- 000
-             |+ experiment_log.txt
-             |+ experiment_data.json
-             |+ hello_world.txt
+The ``analysis.py`` file is of special importance. It is created as a boilerplate starting
+place for additional code, which performs analysis or post processing on the results of the experiment.
+This can for example be used to transform data into a different format or create plots for visualization.
+
+Specifically note these two aspects:
+
+1. The analysis file contains all of the code which was defined in the ``e.analysis`` context of the
+   original experiment file! This code snippet is automatically transferred at the end of the experiment.
+2. The analysis file actually imports the snapshot copy of the original experiment file. This does not
+   trigger the experiment to be executed again! The ``Experiment`` instance automatically notices that it
+   is being imported and not explicitly executed. It will also populate all of it's internal attributes
+   from the persistently saved data in ``experiment_data.json``, which means it is still possible to access
+   all the data of the experiment without having to execute it again!
+
+.. code-block:: python
+
+    #! /usr/bin/env python3
+    # [...] imports omitted
+
+    # Importing the experiment
+    from snapshot import *
+
+    PATH = pathlib.Path(__file__).parent.absolute()
+    DATA_PATH = os.path.join(PATH, 'experiment_data.json')
+    # Load the all raw data of the experiment
+    with open(DATA_PATH, mode='r') as json_file:
+        DATA: Dict[str, Any] = json.load(json_file)
+
+
+    if __name__ == '__main__':
+        print('RAW DATA KEYS:')
+        pprint(list(DATA.keys()))
+
+        # The analysis template from the experiment file
+        # And we can access all the internal fields of the experiment object
+        # and the experiment parameters here!
+        print(HELLO, WORLD)
+        print(e['strings/hello_world'])
+        # logging will print to stdout but not modify the log file
+        e.info('analysis done')
+
 
 For more information and more interesting examples visit the Documentation: https://pycomex.readthedocs.io !
 
