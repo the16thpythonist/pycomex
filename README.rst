@@ -57,6 +57,7 @@ Archiving of metadata, file artifacts and error handling is automatically manage
 
 .. code-block:: python
 
+    # quickstart.py
     """
     This doc string will be saved as the "description" meta data of the experiment records
     """
@@ -102,16 +103,18 @@ Archiving of metadata, file artifacts and error handling is automatically manage
 
 This example would create the following folder structure:
 
-- tmp
-    - results
-        - example
-            - 000
-                - *experiment_log.txt*
-                - *experiment_meta.json*
-                - *experiment_data.json*
-                - *hello_world.txt**
-                - *snapshot.py*
-                - *analysis.py*
+.. code-block:: python
+
+    tmp
+    |- results
+       |- example
+          |- 000
+             |+ experiment_log.txt     # Contains all the log messages printed by experiment
+             |+ experiment_meta.txt    # Meta information about the experiment
+             |+ experiment_data.json   # All the data that was added to the internal exp. dict
+             |+ hello_world.txt        # Text artifact that was committed to the experiment
+             |+ snapshot.py            # Copy of the original experiment python module
+             |+ analysis.py            # boilerplate code to get started with analysis of results
 
 The ``analysis.py`` file is of special importance. It is created as a boilerplate starting
 place for additional code, which performs analysis or post processing on the results of the experiment.
@@ -129,10 +132,10 @@ Specifically note these two aspects:
 
 .. code-block:: python
 
-    #! /usr/bin/env python3
-    # [...] imports omitted
+    # analysis.py
 
-    # Importing the experiment
+    # [...] imports omitted
+    # Importing the experiment itself
     from snapshot import *
 
     PATH = pathlib.Path(__file__).parent.absolute()

@@ -18,10 +18,12 @@ import argparse
 import tempfile
 import traceback
 import subprocess
+import importlib.util
 from datetime import datetime
 from typing import List, Type, Optional, Tuple, Dict
 
 import jinja2 as j2
+import psutil
 
 from pycomex.util import TEMPLATE_ENV, EXAMPLES_PATH
 from pycomex.util import RecordCode
@@ -117,26 +119,14 @@ class ExperimentArgParser(argparse.ArgumentParser):
 
 class Experiment:
     """
-
-    **This has to be a heading**
-
-    This is an example:
-
-    .. code-block:: python
-
-        import click
-        print('hello world')
-
-    :ivar str base_path: The absolute path to the base folder.
-
-    :param str base_path: The thingy
-            which is really important
-
+    Context Manager to wrap the main business logic of a computational experiment.
     """
     DEFAULT_TEMPLATES = {
         'analysis.py': TEMPLATE_ENV.get_template('analysis.py.j2'),
         'annotations.rst': TEMPLATE_ENV.get_template('annotations.py.j2')
     }
+
+    DATETIME_FORMAT = '%A, %d %b %Y  at %H:%M'
 
     def __init__(
         self,
@@ -402,19 +392,16 @@ class Experiment:
         self.data["start_time"] = start_time
         self.data["path"] = self.path
         self.data["artifacts"] = {}
+        self.data["monitoring"] = {}
 
         # ~ logging the experiment start
-        self.logger.info("=" * 80)
-        self.logger.info("EXPERIMENT STARTED")
-        self.logger.info(f"   namespace: {self.namespace}")
-        self.logger.info(f'   start time: {datetime.fromtimestamp(self.data["start_time"])}')
-        self.logger.info(f'   path: {self.data["path"]}')
-        self.logger.info(f"   debug mode: {self.debug_mode}")
-        self.logger.info("=" * 80)
+        template = TEMPLATE_ENV.get_template('experiment_started.text.j2')
+        self.info_lines(template.render(experiment=self))
 
         # ~ Creating meta file
         self.meta['running'] = True
         self.meta['start_time'] = start_time
+        self.status(log=False)
         self.save_experiment_meta()
 
         return self
@@ -430,8 +417,9 @@ class Experiment:
             self.load_records()
             return True
 
-        self.data["end_time"] = time.time()
-        self.data["elapsed_time"] = self.data["end_time"] - self.data["start_time"]
+        self.data['end_time'] = time.time()
+        self.data['elapsed_time'] = self.data['end_time'] - self.data['start_time']
+        self.data['duration'] = self.data['elapsed_time']
 
         if isinstance(exc_value, Exception):
             self.save_experiment_error(exc_value, exc_tb)
@@ -448,15 +436,13 @@ class Experiment:
 
         # ~ Updating meta file
         self.meta['running'] = False
+        self.meta['end_time'] = self.data['end_time']
+        self.meta['duration'] = self.data['duration']
         self.save_experiment_meta()
 
         # ~ logging the experiment end
-        self.logger.info("=" * 80)
-        self.logger.info("EXPERIMENT ENDED")
-        self.logger.info(f'   end time: {datetime.fromtimestamp(self.data["end_time"])}')
-        self.logger.info(f'   elapsed time: {self.data["elapsed_time"]/3600:.2f}h')
-        self.logger.info(f"   error: {self.error}")
-        self.logger.info("=" * 80)
+        template = TEMPLATE_ENV.get_template('experiment_ended.text.j2')
+        self.info_lines(template.render(experiment=self))
 
         return True
 
@@ -499,6 +485,8 @@ class Experiment:
                 content = template.render(experiment=self)
                 file.write(content)
 
+    # -- EXPERIMENT STATUS --
+
     @property
     def work(self) -> int:
         return self.work_tracker.total_work
@@ -506,9 +494,6 @@ class Experiment:
     @work.setter
     def work(self, value: int) -> None:
         self.work_tracker.set_total_work(value)
-
-    def info(self, message: str):
-        self.logger.info(message)
 
     def update(self, n: int = 1, weight: float = 1.0, monitor_resources=True):
         self.work_tracker.update(n, weight)
@@ -522,8 +507,222 @@ class Experiment:
         if monitor_resources:
             pass
 
+    def update_monitoring(self) -> dict:
+        ts = time.time()
+        mem = psutil.virtual_memory()
+        store = psutil.disk_usage(self.path)
+        update = {
+            'ts': ts,
+            'cpu': psutil.cpu_percent(0.1),
+            'memory': {
+                'total': mem.total / 1024**3,
+                'free': mem.free / 1024**3,
+            },
+            'storage': {
+                'total': store.total / 1024**3,
+                'free': store.free / 1024**3,
+            }
+        }
+        self.data['monitoring'][ts] = update
+
+        return update
+
+    def status(self,
+               log: bool = True
+               ) -> None:
+        """
+        This function primarily updates the metadata of the experiment such as the total runtime up to
+        that point as well as some hardware information such as the CPU and RAM usage.
+
+        Optionally also prints this information as an INFO type log message
+
+        :returns: None
+        """
+        # Updating all the hardware monitoring
+        monitoring = self.update_monitoring()
+
+        self.meta['elapsed_time'] = time.time() - self.meta['start_time']
+        self.meta['monitoring'] = monitoring
+
+        if log:
+            template = TEMPLATE_ENV.get_template('experiment_status.text.j2')
+            self.info_lines(template.render(experiment=self))
+
+        self.save_experiment_meta()
+
+    # -- LOGGING --
+
+    def info(self, message: str) -> None:
+        """
+        Logs the given ``message`` string as an "INFO" level log message.
+
+        :param str message: The string message to be printed as a log.
+        :returns: None
+        """
+        self.logger.info(message)
+
+    def info_lines(self, message: str) -> None:
+        """
+        Logs each line of the given multiline ``message`` string as an "INFO" level log message.
+
+        :param str message: The string message to be printed as a log
+        :returns: None
+        """
+        lines = message.split('\n')
+        for line in lines:
+            self.logger.info(line)
+
+    # -- UTILITY --
+
+    @property
+    def start_time_pretty(self) -> str:
+        start_datetime = datetime.fromtimestamp(self.data['start_time'])
+        return start_datetime.strftime(self.DATETIME_FORMAT)
+
+    @property
+    def end_time_pretty(self) -> str:
+        if 'end_time' not in self.data:
+            raise AttributeError('The experiment appears to still be running, which means there is no '
+                                 '"end_time" that can be accessed yet!')
+
+        end_datetime = datetime.fromtimestamp(self.data['end_time'])
+        return end_datetime.strftime(self.DATETIME_FORMAT)
+
 
 class ArchivedExperiment:
 
-    def __init__(self):
+    def __init__(self,
+                 archive_path: str):
+        self.path = archive_path
+
+        self.module_path = os.path.join(self.path, 'snapshot.py')
+
+        self.spec = None
+        self.module = None
+
+    def import_experiment_module(self):
+        self.spec = importlib.util.spec_from_file_location('snapshot', self.module_path)
+        self.module = importlib.util.module_from_spec(self.spec)
+        self.spec.loader.exec_module(self.module)
+
+    def __enter__(self):
+        self.import_experiment_module()
+        for key in dir(self.module):
+            value = getattr(self.module, key)
+            if isinstance(value, Experiment):
+                return value
+
+    def __exit__(self, exc_type, exc_value, exc_tb):
         pass
+
+
+# == EXPERIMENT REGISTRY ====================================================================================
+
+
+class NamespaceFolder:
+
+    class MetaPlaceholder:
+        pass
+
+    def __init__(self,
+                 folder_path: str):
+        self.path = folder_path
+        self.experiments: Dict[str, str] = {}
+        self.experiment_metas: Dict[str, dict] = {}
+        self.experiment_index_map: Dict[int, str] = {}
+
+        self.meta = self.MetaPlaceholder()
+        self.MetaPlaceholder.__contains__ = self.__contains__
+        self.MetaPlaceholder.__getitem__ = self.meta_getitem
+
+        self.update()
+
+    def update(self):
+        for element_name in os.listdir(self.path):
+            element_path = os.path.join(self.path, element_name)
+            if os.path.isdir(element_path) and 'experiment_meta.json' in os.listdir(element_path):
+                self.experiments[element_name] = element_path
+
+                meta_path = os.path.join(element_path, 'experiment_meta.json')
+                with open(meta_path, mode='r') as file:
+                    self.experiment_metas[element_name] = json.loads(file.read())
+
+                if element_name.isdigit():
+                    element_index = int(element_name)
+                    self.experiment_index_map[element_index] = element_name
+
+    def __len__(self) -> int:
+        return len(self.experiments)
+
+    def __contains__(self, key) -> bool:
+        if isinstance(key, str):
+            return key in self.experiments.keys()
+        elif isinstance(key, int):
+            return key in self.experiment_index_map.keys()
+
+    def __getitem__(self, key) -> ArchivedExperiment:
+        if isinstance(key, str):
+            path = self.experiments[key]
+        elif isinstance(key, int):
+            name = self.experiment_index_map[key]
+            path = self.experiments[name]
+        else:
+            raise TypeError(f'type {type(key)} cannot be used to index {self.__class__.__name__}!')
+
+        archived_experiment = ArchivedExperiment(path)
+        return archived_experiment
+
+    def meta_getitem(self, key):
+        if isinstance(key, str):
+            meta = self.experiment_metas[key]
+        elif isinstance(key, int):
+            name = self.experiment_index_map[key]
+            meta = self.experiment_metas[name]
+        else:
+            raise TypeError(f'type {type(key)} cannot be used to index {self.__class__.__name__}!')
+
+        return meta
+
+
+class ExperimentRegistry:
+
+    def __init__(self,
+                 base_path: str,
+                 max_depth: int = 5):
+        self.path = base_path
+        self.max_depth = max_depth
+
+        self.namespaces = {}
+
+    def load(self):
+        self.traverse_folder([], 0)
+
+    def traverse_folder(self,
+                        path_elements: List[str],
+                        recursion_depth: int = 0):
+        if recursion_depth >= self.max_depth:
+            return
+
+        path = os.path.join(self.path, *path_elements)
+        for root, folders, files in os.walk(path):
+
+            for folder in folders:
+                folder_path = os.path.join(root, folder)
+                # For the folders there are only two cases: The first case is that the folder contains an
+                # "experiment_meta.json" which identifies it as an experiment archive. That would mean that
+                # the current folder is a namespace folder and needs to be added to the dict. Otherwise
+                # we recurse further into the folder
+                if 'experiment_meta.json' in os.listdir(folder_path):
+                    # The namespace name in this case is simply the combination of all the sub path sections
+                    # we needed to get here except the base path of the registry itself
+                    namespace = '/'.join(path_elements)
+                    self.namespaces[namespace] = NamespaceFolder(path)
+                    return
+
+                else:
+                    self.traverse_folder(path_elements.copy() + [folder], recursion_depth + 1)
+
+            return
+
+    def __contains__(self, key):
+        return key in self.namespaces.keys()

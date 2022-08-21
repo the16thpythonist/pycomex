@@ -10,10 +10,16 @@ import subprocess
 from tempfile import TemporaryDirectory
 from typing import Optional, List
 
+from pycomex.util import EXAMPLES_PATH
 from pycomex.experiment import Experiment
+from pycomex.experiment import ArchivedExperiment
 from pycomex.experiment import ExperimentArgParser
 from pycomex.experiment import run_experiment
-from pycomex.util import PATH
+from pycomex.experiment import ExperimentRegistry
+from pycomex.experiment import NamespaceFolder
+
+from .util import TEMPLATE_ENV, write_template
+
 
 VARIABLE = 10
 
@@ -178,7 +184,7 @@ class TestExperiment(unittest.TestCase):
     Mainly tests for the class :class:`pycomex.experiment.Experiment`
     """
 
-    # -- misc tests
+    # -- EXPLORATION --
 
     def test_how_does_string_split_behave(self):
         string = "hello/world"
@@ -221,7 +227,7 @@ class TestExperiment(unittest.TestCase):
         self.assertIn('variable', local_dict)
         self.assertIsInstance(local_dict['variable'], int)
 
-    # -- class related tests
+    # -- UNITTESTS --
 
     def test_folder_creation_basically_works(self):
         with ExperimentIsolation() as iso:
@@ -380,6 +386,83 @@ class TestExperiment(unittest.TestCase):
 
             self.assertEqual(None, e.error)
 
+    def test_start_and_end_time_pretty_properties(self):
+        """
+        Whether the :meth:``pycomex.Experiment.start_time_pretty`` and
+        :meth:``pycomex.Experiment.end_time_pretty`` properties for pretty datetime formatting work.
+        """
+        with ExperimentIsolation() as iso:
+            with Experiment(base_path=iso.path, namespace="test", glob=globals()) as e:
+                e.prepare()
+
+                self.assertIsInstance(e.start_time_pretty, str)
+                self.assertNotEqual(0, len(e.start_time_pretty))
+
+                # But during the execution of the experiment we expect "end_time_pretty" to fail because
+                # it does not exist yet
+                with self.assertRaises(AttributeError):
+                    print(e.end_time_pretty)
+
+            # But after the experiment is done, this should work
+            self.assertIsInstance(e.end_time_pretty, str)
+            self.assertNotEqual(0, len(e.end_time_pretty))
+
+    def test_update_monitoring(self):
+        with ExperimentIsolation() as iso:
+            with Experiment(base_path=iso.path, namespace="test", glob=globals()) as e:
+                e.prepare()
+
+                # At the beginning the monitoring dict should be empty
+                self.assertEqual(0, len(e.data['monitoring']))
+
+                # After the update process it should not be
+                data = e.update_monitoring()
+                self.assertIsInstance(data, dict)
+                self.assertNotEqual(0, len(data))
+                self.assertEqual(1, len(e.data['monitoring']))
+                first_ts = data['ts']
+
+                # Now if we do it again, another one should be added
+                e.update_monitoring()
+                self.assertEqual(2, len(e.data['monitoring']))
+                # It should be possible to get the most recent entry like this
+                most_recent = list(e.data['monitoring'].values())[-1]
+                self.assertTrue(most_recent['ts'] > first_ts)
+
+    def test_logging_experiment_status(self):
+        with ExperimentIsolation() as iso:
+            with Experiment(base_path=iso.path, namespace="test", glob=globals()) as e:
+                e.prepare()
+
+                e.status(log=True)
+
+            # Now the printed status should appear in the log file
+            log_path = os.path.join(e.path, 'experiment_log.txt')
+            with open(log_path) as file:
+                content = file.read()
+                self.assertIn('EXPERIMENT STATUS', content)
+
+            # Also the experiment should have more than 0 monitoring entries
+            self.assertNotEqual(0, len(e.data['monitoring']))
+
+    def test_bug_experiment_meta_file_does_not_have_monitoring_info_if_not_explicitly_called(self):
+        """
+        **21.08.2022** This bug causes an error when trying to access the "monitoring" field of the
+        experiment metadata json file if the experiment did not explicitly call "status" or
+        "update_monitoring" in the code at least once
+        """
+        with ExperimentIsolation() as iso:
+            with Experiment(base_path=iso.path, namespace="test", glob=globals()) as e:
+                e.prepare()
+
+            meta_path = os.path.join(e.path, 'experiment_meta.json')
+            with open(meta_path) as file:
+                data = json.loads(file.read())
+                # This fails with the bug
+                self.assertIn('monitoring', data)
+                self.assertIsInstance(data['monitoring'], dict)
+                self.assertNotEqual(0, len(data['monitoring']))
+
 
 class TestRunExperiment(unittest.TestCase):
     """
@@ -388,7 +471,7 @@ class TestRunExperiment(unittest.TestCase):
 
     def test_basically_works(self):
         # We will use one of the simple examples here to check if it works
-        experiment_path = os.path.join(PATH, 'examples', 'quickstart.py')
+        experiment_path = os.path.join(EXAMPLES_PATH, 'quickstart.py')
         path, proc = run_experiment(experiment_path)
         self.assertIsInstance(path, str)
         self.assertEqual(0, proc.returncode)
@@ -429,35 +512,36 @@ class TestExperimentAnalysis(unittest.TestCase):
                 self.assertTrue(len(content) > 10)
 
     def test_default_analysis_file_is_executable_without_error(self):
-        with ExperimentIsolation() as iso:
-            self.assertEqual(10, VARIABLE)
-            with Experiment(base_path=iso.path, namespace="test", glob=globals()) as e:
-                e.prepare()
+        template = TEMPLATE_ENV.get_template('test_experiment_analysis.py.j2')
+        code_string = template.render(analysis_code=['pass'])
+        with tempfile.TemporaryDirectory() as path:
+            code_path = os.path.join(path, 'main.py')
+            with open(code_path, mode='w') as file:
+                file.write(code_string)
 
-            analysis_path = os.path.join(e.path, 'analysis.py')
-            command = f'{sys.executable} {analysis_path}'
-            proc = subprocess.run(command, shell=True)
+            archive_path, proc = run_experiment(code_path)
             self.assertEqual(0, proc.returncode)
 
     def test_custom_code_is_added_to_analysis_file(self):
-        with ExperimentIsolation() as iso:
-            self.assertEqual(10, VARIABLE)
-            with Experiment(base_path=iso.path, namespace="test", glob=globals()) as e:
-                e.prepare()
-                e['value'] = 100
+        template = TEMPLATE_ENV.get_template('test_experiment_analysis.py.j2')
+        code_string = template.render(analysis_code=[
+            'new_value = 200',
+            'print(new_value)',
+            'final_value = new_value ** 0.5'
+        ])
+        print(code_string)
+        with tempfile.TemporaryDirectory() as path:
+            code_path = os.path.join(path, 'main.py')
+            with open(code_path, mode='w') as file:
+                file.write(code_string)
 
-                with e.analysis:
-                    # All of this code should be copied to the analysis file
-                    new_value = 200
-                    print(new_value)
-                    final_value = new_value ** 0.5
-                    print(final_value)
+            archive_path, proc = run_experiment(code_path)
+            self.assertEqual(0, proc.returncode)
 
             # The custom code should be inside the generated analysis file
-            analysis_path = os.path.join(e.path, 'analysis.py')
+            analysis_path = os.path.join(archive_path, 'analysis.py')
             with open(analysis_path) as file:
                 content = file.read()
-                print(content)
                 self.assertIn('new_value', content)
                 self.assertIn('final_value', content)
 
@@ -505,3 +589,157 @@ class TestExperimentAnalysis(unittest.TestCase):
             # With the bug, this fails
             self.assertEqual(0, proc.returncode)
             self.assertIn('experiment value: 10', proc.stdout.decode())
+
+
+class TestArchivedExperiment(unittest.TestCase):
+    """
+    Testing :class:`pycomex.experiment.ArchivedExperiment`, which can be used to load an already finished
+    experiment to access the persistent data records of that experiment.
+    """
+
+    def test_basically_works(self):
+        code_string = (
+            'import os\n'
+            'import pathlib\n'
+            'from pycomex.experiment import Experiment\n'
+            'PATH = pathlib.Path(__file__).parent.absolute()\n'
+            'DEBUG = True\n'
+            'with Experiment(base_path=PATH, namespace="test_bug", glob=globals()) as e:\n'
+            '   e.prepare()\n'
+            '   e["value"] = 10\n'
+            '   e["foo"] = "bar"\n'
+            '   with e.analysis:\n'
+            '       e.info("starting analysis")\n'
+            '       e.info("experiment value: " + str(e["value"]))\n'
+        )
+        with tempfile.TemporaryDirectory() as path:
+            code_path = os.path.join(path, 'main.py')
+            with open(code_path, mode='w') as file:
+                file.write(code_string)
+
+            archive_path, proc = run_experiment(code_path)
+            self.assertEqual(0, proc.returncode)
+
+            with ArchivedExperiment(archive_path) as e:
+                # this context manager should actually return the very Experiment object instance from which
+                # was dynamically imported from that experiment's snapshot module
+                self.assertIsInstance(e, Experiment)
+                # Trough this loaded object it should be possible to access the persisted values which were
+                # added to the experiment object during the execution of the experiment
+                self.assertEqual(10, e['value'])
+                self.assertEqual('bar', e['foo'])
+                # Also it should be possible to access the experiment parameters
+                self.assertTrue(e.parameters['DEBUG'])
+
+
+class TestExperimentRegistry(unittest.TestCase):
+
+    @classmethod
+    def setUpClass(cls):
+        """
+        To test :class:`pycomex.experiment.ExperimentRegistry` we actually need a registry in the first
+        place. That is a folder which contains multiple different archived experiments. Setting up such a
+        folder structure would be too much effort for every single unittest individually, which is why
+        we simply set it up once for the entire class and all of the unittests can work on this structure
+        then
+        """
+        cls.temp_directory = TemporaryDirectory()
+        cls.path = cls.temp_directory.__enter__()
+
+        # This template is very basic Experiment python code file, where we can put in a custom namespace.
+        # We will need that here since we want multiple different experiments in our experiment registry.
+        template = TEMPLATE_ENV.get_template('test_experiment_registry.py.j2')
+
+        experiment_1_path = os.path.join(cls.path, 'experiment1.py')
+        write_template(experiment_1_path, template, {'namespace': 'experiment1'})
+        archive_path, proc = run_experiment(experiment_1_path)
+
+        # Experiment 2 we will run multiple times so that there are multiple archives
+        experiment_2_path = os.path.join(cls.path, 'experiment2.py')
+        write_template(experiment_2_path, template, {'namespace': 'experiment2'})
+        run_experiment(experiment_2_path)
+        run_experiment(experiment_2_path)
+
+        # Experiment 3 will have a nested namespace
+        experiment_3_path = os.path.join(cls.path, 'experiment3.py')
+        write_template(experiment_3_path, template, {'namespace': 'nested/experiment3'})
+        run_experiment(experiment_3_path)
+
+        # Afterwards we need to get rid of all the original experiment files since we only want to have the
+        # archives in this main folder
+        os.remove(experiment_1_path)
+        os.remove(experiment_2_path)
+        os.remove(experiment_3_path)
+
+    @classmethod
+    def tearDownClass(cls) -> None:
+        cls.temp_directory.__exit__(None, None, None)
+
+    def test_temp_directory_exists(self):
+        self.assertTrue(os.path.exists(self.path))
+        self.assertTrue(os.path.isdir(self.path))
+
+        # Now we also want to check if there are in fact only the archive folders in this main folder
+        # now, like we set up in setUpClass
+        contents = os.listdir(self.path)
+        self.assertNotEqual(0, len(contents))
+        self.assertTrue(all([os.path.isdir(os.path.join(self.path, name)) for name in contents]))
+
+    # -- EXPLORATION --
+
+    def test_set_differences(self):
+        s1 = {1, 2, 3}
+        s2 = {1, 2, 4}
+        self.assertEqual({3}, s1.difference(s2))
+        self.assertEqual({4}, s2.difference(s1))
+
+    # -- UNITTESTS --
+
+    def test_basically_works(self):
+        reg = ExperimentRegistry(self.path)
+        reg.load()
+
+        # Looking into "setUpClass" we created 3 separate namespaces which should be discovered by the
+        # registry
+        self.assertEqual(3, len(reg.namespaces))
+
+        self.assertTrue('experiment1' in reg)
+        self.assertTrue('experiment2' in reg)
+        self.assertTrue('nested/experiment3' in reg)
+
+        # Testing the getting the namespace folders here
+        ex1_namespace = reg.namespaces['experiment1']
+        self.assertIsInstance(ex1_namespace, NamespaceFolder)
+
+    def test_namespace_folder_loading_experiments_properly(self):
+        reg = ExperimentRegistry(self.path)
+        reg.load()
+
+        # First experiment should only have a single archived run, while experiment 2 namespace should have
+        # two archived runs
+
+        ex1_namespace = reg.namespaces['experiment1']
+        self.assertEqual(1, len(ex1_namespace))
+        self.assertTrue(0 in ex1_namespace)
+        self.assertFalse(1 in ex1_namespace)
+
+        ex2_namespace = reg.namespaces['experiment2']
+        self.assertEqual(2, len(ex2_namespace))
+        self.assertTrue(0 in ex2_namespace)
+        self.assertTrue(1 in ex2_namespace)
+
+        # Accessing one of the experiments should return the ArchivedExperiment object instance directly
+        archived_experiment = ex2_namespace[1]
+        with archived_experiment as e:
+            self.assertEqual(10, e['value'])
+
+    def test_namespace_folder_accessing_meta_data(self):
+        reg = ExperimentRegistry(self.path)
+        reg.load()
+
+        ex1_namespace = reg.namespaces['experiment1']
+        self.assertTrue(0 in ex1_namespace)
+        self.assertTrue(0 in ex1_namespace.meta)
+        meta = ex1_namespace.meta[0]
+        self.assertIsInstance(meta, dict)
+        self.assertFalse(meta['running'])

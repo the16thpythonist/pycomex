@@ -1,6 +1,14 @@
 pycomex package
 ===============
 
+Subpackages
+-----------
+
+.. toctree::
+   :maxdepth: 4
+
+   pycomex.app
+
 Submodules
 ----------
 

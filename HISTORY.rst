@@ -60,3 +60,18 @@ History
   of computational experiment works without those two nowadays?
 * Renamed the template files with better naming scheme
 * Updated readme
+
+0.4.0 (2022-08-21)
+------------------
+
+* Added ``pycomex.experiment.ArchivedExperiment`` which makes it possible to load an arbitrary experiment
+  instance from the archived folder and use it much like it is possible from within ``analysis.py``
+* Added ``pycomex.experiment.ExperimentRegistry`` which can be used to load an experiment base path and
+  automatically discover all the (nested) namespace folders within which contain actual experiment run
+  archives.
+    * Added ``pycomex.experiment.NamespaceFolder`` which represents and allows to work with namespace
+      folders, for example by easily getting the ``ArchivedExperiment`` instance according to an experiment
+      run (numeric) index.
+* Added ``psutil`` to dependencies to implement hardware resource monitoring as an additional feature
+  when printing the intermediate status of the experiment run with ``Experiment.status()``
+

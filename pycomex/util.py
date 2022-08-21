@@ -71,3 +71,7 @@ class RecordCode:
         self.end_line = frame_info.lineno
 
         self.extract_code_string()
+
+
+class Empty:
+    pass

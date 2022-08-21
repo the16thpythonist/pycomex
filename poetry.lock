@@ -324,6 +324,17 @@ docs = ["furo (>=2021.7.5b38)", "proselint (>=0.10.2)", "sphinx-autodoc-typehint
 test = ["appdirs (==1.4.4)", "pytest-cov (>=2.7)", "pytest-mock (>=3.6)", "pytest (>=6)"]
 
 [[package]]
+name = "psutil"
+version = "5.9.1"
+description = "Cross-platform lib for process and system monitoring in Python."
+category = "main"
+optional = false
+python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*"
+
+[package.extras]
+test = ["wmi", "pywin32", "enum34", "mock", "ipaddress"]
+
+[[package]]
 name = "py"
 version = "1.11.0"
 description = "library with cross-python path, ini-parsing, io, code, log facilities"
@@ -400,7 +411,7 @@ use_chardet_on_py3 = ["chardet (>=3.0.2,<5)"]
 
 [[package]]
 name = "setuptools"
-version = "65.1.0"
+version = "65.1.1"
 description = "Easily download, build, install, upgrade, and uninstall Python packages"
 category = "main"
 optional = false
@@ -599,7 +610,7 @@ docs = ["jaraco.tidelift (>=1.4)", "rst.linker (>=1.9)", "jaraco.packaging (>=9)
 [metadata]
 lock-version = "1.1"
 python-versions = ">=3.8"
-content-hash = "c22011b100d3645c3a9548bf840bc46161fa709d8f457105a2726a6266bd75ac"
+content-hash = "1b007157a560e76e3b36a41174149a0859aef864b202f728dcf3fc561da98e4d"
 
 [metadata.files]
 alabaster = []
@@ -631,6 +642,7 @@ packaging = []
 pathspec = []
 pillow = []
 platformdirs = []
+psutil = []
 py = []
 pygments = []
 pyparsing = []

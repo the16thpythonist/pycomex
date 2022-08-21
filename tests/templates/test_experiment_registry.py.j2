@@ -1,0 +1,14 @@
+"""
+This is an example experiment file which is used for the unittests in ``TestExperimentRegistry``
+"""
+import pathlib
+from pycomex.experiment import Experiment
+
+DEBUG = False
+PATH = pathlib.Path(__file__).parent.absolute()
+
+with Experiment(base_path=PATH, namespace="{{ namespace }}", glob=globals()) as e:
+    e.prepare()
+
+    e['value'] = 10
+    e['foo'] = 'bar'

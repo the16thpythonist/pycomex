@@ -1,0 +1,20 @@
+"""
+This is an example experiment file which is used for the unittests in ``TestExperimentAnalysis``
+"""
+import pathlib
+from pycomex.experiment import Experiment
+
+DEBUG = False
+PATH = pathlib.Path(__file__).parent.absolute()
+
+with Experiment(base_path=PATH, namespace="test", glob=globals()) as e:
+    e.prepare()
+
+    e['value'] = 10
+    e['foo'] = 'bar'
+
+    with e.analysis:
+        # All of this code will be added to the analysis.py file as well
+        {% for line in analysis_code -%}
+        {{ line }}
+        {% endfor %}

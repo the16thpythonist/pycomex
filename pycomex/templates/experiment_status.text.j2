@@ -1,0 +1,11 @@
+{%- set duration = experiment.meta["elapsed_time"] -%}
+{%- set duration_hrs = duration/3600 -%}
+{%- set ram_percent = 100 * experiment.meta['monitoring']['memory']['free'] / experiment.meta['monitoring']['memory']['total'] -%}
+{%- set disk_percent = 100 * experiment.meta['monitoring']['storage']['free'] / experiment.meta['monitoring']['storage']['total'] -%}
+--------------------------------------------------------------------------------
+EXPERIMENT STATUS
+    elapsed time:       {{ "%.2f" % duration_hrs }} hrs ({{ "%.2f" % duration }} seconds)
+    CPU usage:          {{ experiment.meta['monitoring']['cpu'] }}%
+    RAM usage:          total: {{ "%.2f" % experiment.meta['monitoring']['memory']['total'] }} GB / free: {{ "%.2f" % experiment.meta['monitoring']['memory']['free'] }} GB ({{ "%.2f" % ram_percent }}%)
+    DISK usage:         total: {{ "%.2f" % experiment.meta['monitoring']['storage']['total'] }} GB / free: {{ "%.2f" % experiment.meta['monitoring']['storage']['free'] }} GB ({{ "%.2f" % disk_percent }}%)
+--------------------------------------------------------------------------------

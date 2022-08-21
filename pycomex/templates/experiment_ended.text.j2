@@ -1,0 +1,8 @@
+{%- set duration_hrs = experiment.data['duration']/3600 -%}
+================================================================================
+EXPERIMENT STARTED
+    start time:         {{ experiment.start_time_pretty }}
+    end time:           {{ experiment.end_time_pretty }}
+    duration:           {{ '%.3f' % duration_hrs|float }} hrs
+    error?              {{ experiment.error }}
+================================================================================
