@@ -44,31 +44,33 @@ with Experiment(base_path=tempfile.gettempdir(), namespace="example/analysis",
     # of characters. We also want to find out the average value for the
     # character count. We then store this information as additional character count.
 
-    # ALl of the code defined within this "Experiment.analyis" context manager will be
-    # copied to the analyis.py template of the record folder of this experiment run and
-    # it will work as it is.
-    # NOTE: As long as the analysis code is only using experiment data or experiment
-    #       variables
-    with e.analysis:
-        # (1) Note how the experiment path will be dynamically determined to be a *new*
-        #     folder when actually executing the experiment, but it will refer to the
-        #     already existing experiment record folder when imported from
-        #     "snapshot.py"
-        print(e.path)
 
-        index_min, count_min = min(e['metrics/length'].items(),
-                                   key=lambda item: item[1])
-        index_max, count_max = max(e['metrics/length'].items(),
-                                   key=lambda item: item[1])
-        count_mean = sum(e['metrics/length'].values()) / len(e['metrics/length'])
+# ALl of the code defined within this "Experiment.analyis" context manager will be
+# copied to the analyis.py template of the record folder of this experiment run and
+# it will work as it is.
+# NOTE: As long as the analysis code is only using experiment data or experiment
+#       variables
+with e.analysis:
+    # (1) Note how the experiment path will be dynamically determined to be a *new*
+    #     folder when actually executing the experiment, but it will refer to the
+    #     already existing experiment record folder when imported from
+    #     "snapshot.py"
+    print(e.path)
+    e.info('Starting analysis of experiment results')
 
-        analysis_results = {
-            'index_min': index_min,
-            'count_min': count_min,
-            'index_max': index_max,
-            'count_max': count_max,
-            'count_mean': count_mean
-        }
-        # (2) Committing new files to the already existing experiment record folder will
-        #     also work as usual, whether executed here directly or later in "analysis.py"
-        e.commit_json('analysis_results.json', analysis_results)
+    index_min, count_min = min(e['metrics/length'].items(),
+                               key=lambda item: item[1])
+    index_max, count_max = max(e['metrics/length'].items(),
+                               key=lambda item: item[1])
+    count_mean = sum(e['metrics/length'].values()) / len(e['metrics/length'])
+
+    analysis_results = {
+        'index_min': index_min,
+        'count_min': count_min,
+        'index_max': index_max,
+        'count_max': count_max,
+        'count_mean': count_mean
+    }
+    # (2) Committing new files to the already existing experiment record folder will
+    #     also work as usual, whether executed here directly or later in "analysis.py"
+    e.commit_json('analysis_results.json', analysis_results)

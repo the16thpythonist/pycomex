@@ -165,7 +165,8 @@ class Experiment:
         self.logger: Optional[logging.Logger] = None
         self.work_tracker = self.work_tracker_class(0)
 
-        self.analysis = RecordCode()
+        self.analysis = RecordCode(initial_stack_index=2)
+        self.analysis.exit_callbacks.append(lambda rc, i: self.render_template('analysis.py'))
 
         # ~ Parsing command line arguments
         # TODO: I could introduce abstract base class and dependency inject this
@@ -476,14 +477,18 @@ class Experiment:
         self.data['artifacts']['source'] = str(source_path)
         shutil.copy(source_path, self.code_path)
 
+    def render_template(self, file_name):
+        template = self.templates[file_name]
+        path = os.path.join(self.path, file_name)
+        self.data['artifacts']['templates'][file_name] = path
+        with open(path, mode='w') as file:
+            content = template.render(experiment=self)
+            file.write(content)
+
     def render_templates(self):
         self.data['artifacts']['templates'] = {}
-        for file_name, template in self.templates.items():
-            path = os.path.join(self.path, file_name)
-            self.data['artifacts']['templates'][file_name] = path
-            with open(path, mode='w') as file:
-                content = template.render(experiment=self)
-                file.write(content)
+        for file_name in self.templates.keys():
+            self.render_template(file_name)
 
     # -- EXPERIMENT STATUS --
 

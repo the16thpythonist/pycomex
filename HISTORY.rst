@@ -75,3 +75,11 @@ History
 * Added ``psutil`` to dependencies to implement hardware resource monitoring as an additional feature
   when printing the intermediate status of the experiment run with ``Experiment.status()``
 
+0.4.1 (2022-09-12)
+------------------
+
+* Fixed a bug which broke the ``with e.analysis:`` functionality in Python 3.10. Rewrote ``RecordCode``
+  such that it no longer uses the deprecated functionality and now also works for the new version.
+* ``with e.analysis:`` can now also be used on the indent level as the experiment context manager itself
+  which is more intuitive. Using it this way also solves some unwanted interaction with the error catching
+  behavior of the experiment context.

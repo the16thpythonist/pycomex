@@ -41,6 +41,15 @@ class TestExamples(unittest.TestCase):
         self.assertEqual(0, p.returncode)
         print(p.stdout.decode())
 
+    def test_example_analysis(self):
+        import pycomex.examples.basic as experiment
+
+        self.assertIsInstance(experiment.e, Experiment)
+        self.assertFalse(os.path.exists(experiment.e.path))
+
+        path, p = self.run_example("analysis.py")
+        self.assertEqual(0, p.returncode)
+
     def test_experiment_can_be_imported_from_snapshot(self):
         path, p = self.run_example('quickstart.py')
         self.assertTrue(os.path.exists(path))

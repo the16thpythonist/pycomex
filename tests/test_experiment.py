@@ -11,6 +11,7 @@ from tempfile import TemporaryDirectory
 from typing import Optional, List
 
 from pycomex.util import EXAMPLES_PATH
+from pycomex.experiment import run_example
 from pycomex.experiment import Experiment
 from pycomex.experiment import ArchivedExperiment
 from pycomex.experiment import ExperimentArgParser
@@ -445,6 +446,8 @@ class TestExperiment(unittest.TestCase):
             # Also the experiment should have more than 0 monitoring entries
             self.assertNotEqual(0, len(e.data['monitoring']))
 
+    # -- BUG TESTS --
+
     def test_bug_experiment_meta_file_does_not_have_monitoring_info_if_not_explicitly_called(self):
         """
         **21.08.2022** This bug causes an error when trying to access the "monitoring" field of the
@@ -462,6 +465,21 @@ class TestExperiment(unittest.TestCase):
                 self.assertIn('monitoring', data)
                 self.assertIsInstance(data['monitoring'], dict)
                 self.assertNotEqual(0, len(data['monitoring']))
+
+    def test_bug_experiment_analysis_from_experiment_file_is_not_copied(self):
+        """
+        **12.09.2022** This bug occurred when moving from Python 3.8 to 3.10. I have no idea why though. It
+        appears for every experiment file which has a "with experiment.analysis" block. It does get executed
+        but then it is not able to copy it to "analysis.py" supposedly because "detect_indent" fails.
+        """
+        path, p = run_example("analysis.py")
+        self.assertEqual(0, p.returncode)
+
+        analysis_path = os.path.join(path, 'analysis.py')
+        self.assertTrue(os.path.exists(analysis_path))
+        with open(analysis_path) as file:
+            content = file.read()
+            self.assertIn('e.commit_json', content)
 
 
 class TestRunExperiment(unittest.TestCase):
