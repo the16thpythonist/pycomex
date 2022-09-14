@@ -24,6 +24,7 @@ from typing import List, Type, Optional, Tuple, Dict
 
 import jinja2 as j2
 import psutil
+import numpy as np
 
 from pycomex.util import TEMPLATE_ENV, EXAMPLES_PATH
 from pycomex.util import RecordCode
@@ -311,6 +312,26 @@ class Experiment:
         return current
 
     def __setitem__(self, key, value):
+        """
+        This class implements custom behavior when using an index assignment operation. Only string keys
+        are supported, but these strings may describe nested structures by using the "/" character, as one
+        would do to define a nested folder structure. If the specified nested location does not already
+        exist within the internal data dict structure, it will be *automatically* created.
+
+        .. code-block:: python
+
+            with (e := Experiment('/tmp', 'name', globals()):
+                # This will be saved into e.data['metrics']['repetitions']['10']['metric']
+                # and if that nesting does not exist like this it will be created automatically, no matter
+                # how many of the intermediate steps are missing!
+                e['metrics/repetitions/10/metric'] = 10.23
+        """
+        if not isinstance(key, str):
+            raise ValueError('You are attempting to add to the internal experiment storage, by using a non '
+                             'string key. This is not possible! Please use a valid query string to identify '
+                             'the (nested) location where to save the value within the storage structure.')
+
+        # ~ Decoding the nesting and potentially creating it along the way if it does not exist
         keys = key.split("/")
         current = self.data
         for key in keys[:-1]:
@@ -318,6 +339,13 @@ class Experiment:
                 current[key] = {}
 
             current = current[key]
+
+        # ~ value pre-processing
+        # There are some convenience conversion which we would like this method to perform automatically
+        # for example numpy arrays should automatically be converted to lists so that they can be converted
+        # into json
+        if isinstance(value, np.ndarray):
+            value = value.tolist()
 
         current[keys[-1]] = value
 

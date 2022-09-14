@@ -94,3 +94,9 @@ History
   skippable, which I find so good that I moved the experiment context manager to use the same mechanism
   as well, which gets rid of the need for calling ``Experiment.prepare()``. But this means some
   backwards incompatible API changes.
+
+0.5.1 (2022-09-14)
+------------------
+
+* If numpy arrays are added to the internal data store, they are automatically converted to lists, so that
+  they can be json serialized later.

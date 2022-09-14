@@ -11,6 +11,8 @@ import subprocess
 from tempfile import TemporaryDirectory
 from typing import Optional, List
 
+import numpy as np
+
 from pycomex.util import EXAMPLES_PATH
 from pycomex.util import Skippable
 from pycomex.experiment import run_example
@@ -318,6 +320,16 @@ class TestExperiment(unittest.TestCase):
                 self.assertEqual(10, d["metrics"]["exp"]["loss"])
 
             self.assertEqual(None, e.error)
+
+    def test_data_conversion_on_set_works(self):
+        with ExperimentIsolation() as iso:
+            with Skippable(), (e := Experiment(base_path=iso.path, namespace="test", glob=globals())):
+                a = np.array([1, 1, 1])
+                e['value'] = a
+
+            e.load_records()
+
+            self.assertListEqual([1, 1, 1], e['value'])
 
     def test_discover_parameters_basically_works(self):
         with ExperimentIsolation() as iso:
