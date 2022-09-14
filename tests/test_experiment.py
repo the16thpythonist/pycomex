@@ -1,3 +1,4 @@
+import importlib.util
 import os
 import io
 import sys
@@ -11,6 +12,7 @@ from tempfile import TemporaryDirectory
 from typing import Optional, List
 
 from pycomex.util import EXAMPLES_PATH
+from pycomex.util import Skippable
 from pycomex.experiment import run_example
 from pycomex.experiment import Experiment
 from pycomex.experiment import ArchivedExperiment
@@ -232,8 +234,8 @@ class TestExperiment(unittest.TestCase):
 
     def test_folder_creation_basically_works(self):
         with ExperimentIsolation() as iso:
-            with Experiment(base_path=iso.path, namespace="test", glob=globals()) as e:
-                e.prepare()
+            with Skippable(), (e := Experiment(base_path=iso.path, namespace="test", glob=globals())):
+                pass
 
             # After the construction, the folder path should already exist
             self.assertIsInstance(e.path, str)
@@ -242,8 +244,9 @@ class TestExperiment(unittest.TestCase):
 
     def test_folder_creation_nested_namespace_works(self):
         with ExperimentIsolation() as iso:
-            with Experiment(base_path=iso.path, namespace="main/sub/test", glob=globals()) as e:
-                e.prepare()
+            with Skippable(), (e := Experiment(base_path=iso.path, namespace="main/sub/test",
+                                               glob=globals())):
+                pass
 
             # After the construction, the folder path should already exist
             self.assertIsInstance(e.path, str)
@@ -252,8 +255,7 @@ class TestExperiment(unittest.TestCase):
 
     def test_logger_basically_works(self):
         with ExperimentIsolation() as iso:
-            with Experiment(base_path=iso.path, namespace="test", glob=globals()) as e:
-                e.prepare()
+            with Skippable(), (e := Experiment(base_path=iso.path, namespace="test", glob=globals())):
                 log_message = "hello world!"
                 e.info(log_message)
 
@@ -268,8 +270,7 @@ class TestExperiment(unittest.TestCase):
 
     def test_progress_tracking_basically_works(self):
         with ExperimentIsolation() as iso:
-            with Experiment(base_path=iso.path, namespace="test", glob=globals()) as e:
-                e.prepare()
+            with Skippable(), (e := Experiment(base_path=iso.path, namespace="test", glob=globals())):
                 e.work = 5
                 for i in range(e.work - 1):
                     time.sleep(0.1)
@@ -280,10 +281,9 @@ class TestExperiment(unittest.TestCase):
     def test_not_executing_code_when_not_main(self):
         # Here we purposefully change the value of the __name__ field to NOT be __main__. This should
         # prevent any of the code within the context manager from actually being executed!
-        with ExperimentIsolation(glob_mod={'__name__': 'test'}) as iso:
+        with Skippable(), ExperimentIsolation(glob_mod={'__name__': 'test'}) as iso:
             flag = True
-            with Experiment(base_path=iso.path, namespace="test", glob=globals()) as e:
-                e.prepare()
+            with Experiment(base_path=iso.path, namespace="test", glob=globals()):
                 flag = False
 
             # Thus the flag should still be True
@@ -291,8 +291,7 @@ class TestExperiment(unittest.TestCase):
 
     def test_data_manipulation_basically_works(self):
         with ExperimentIsolation() as iso:
-            with Experiment(base_path=iso.path, namespace="test", glob=globals()) as e:
-                e.prepare()
+            with Skippable(), (e := Experiment(base_path=iso.path, namespace="test", glob=globals())):
 
                 # Using dict style indexing to access the internal data dict should work:
                 self.assertIsInstance(e["start_time"], float)
@@ -322,8 +321,7 @@ class TestExperiment(unittest.TestCase):
 
     def test_discover_parameters_basically_works(self):
         with ExperimentIsolation() as iso:
-            with Experiment(base_path=iso.path, namespace="test", glob=globals()) as e:
-                e.prepare()
+            with Skippable(), (e := Experiment(base_path=iso.path, namespace="test", glob=globals())):
                 # This is actually a global variable at the top of the file and thus should have been
                 # automatically detected by the procedure
                 self.assertIn("VARIABLE", e.parameters)
@@ -335,8 +333,7 @@ class TestExperiment(unittest.TestCase):
 
     def test_discover_description_works(self):
         with ExperimentIsolation(glob_mod={'__doc__': 'some description'}) as iso:
-            with Experiment(base_path=iso.path, namespace="test", glob=globals()) as e:
-                e.prepare()
+            with Skippable(), (e := Experiment(base_path=iso.path, namespace="test", glob=globals())):
                 self.assertIn("description", e.data)
                 self.assertEqual("some description", e["description"])
 
@@ -346,8 +343,7 @@ class TestExperiment(unittest.TestCase):
 
         with ExperimentIsolation() as iso:
             self.assertEqual(10, VARIABLE)
-            with Experiment(base_path=iso.path, namespace="test", glob=globals()) as e:
-                e.prepare()
+            with Skippable(), (e := Experiment(base_path=iso.path, namespace="test", glob=globals())):
                 # At this point the variable should still be the same
                 self.assertEqual(10, VARIABLE)
                 # This function indirectly modifies the globals() dict and thus should also modify the
@@ -367,8 +363,7 @@ class TestExperiment(unittest.TestCase):
 
         with ExperimentIsolation() as iso:
             self.assertEqual(10, VARIABLE)
-            with Experiment(base_path=iso.path, namespace="test", glob=globals()) as e:
-                e.prepare()
+            with Skippable(), (e := Experiment(base_path=iso.path, namespace="test", glob=globals())):
                 # At this point the variable should still be the same
                 self.assertEqual(10, VARIABLE)
                 # This function indirectly modifies the globals() dict and thus should also modify the
@@ -393,8 +388,7 @@ class TestExperiment(unittest.TestCase):
         :meth:``pycomex.Experiment.end_time_pretty`` properties for pretty datetime formatting work.
         """
         with ExperimentIsolation() as iso:
-            with Experiment(base_path=iso.path, namespace="test", glob=globals()) as e:
-                e.prepare()
+            with Skippable(), (e := Experiment(base_path=iso.path, namespace="test", glob=globals())):
 
                 self.assertIsInstance(e.start_time_pretty, str)
                 self.assertNotEqual(0, len(e.start_time_pretty))
@@ -410,8 +404,7 @@ class TestExperiment(unittest.TestCase):
 
     def test_update_monitoring(self):
         with ExperimentIsolation() as iso:
-            with Experiment(base_path=iso.path, namespace="test", glob=globals()) as e:
-                e.prepare()
+            with Skippable(), (e := Experiment(base_path=iso.path, namespace="test", glob=globals())):
 
                 # At the beginning the monitoring dict should be empty
                 self.assertEqual(0, len(e.data['monitoring']))
@@ -432,9 +425,7 @@ class TestExperiment(unittest.TestCase):
 
     def test_logging_experiment_status(self):
         with ExperimentIsolation() as iso:
-            with Experiment(base_path=iso.path, namespace="test", glob=globals()) as e:
-                e.prepare()
-
+            with Skippable(), (e := Experiment(base_path=iso.path, namespace="test", glob=globals())):
                 e.status(log=True)
 
             # Now the printed status should appear in the log file
@@ -455,8 +446,8 @@ class TestExperiment(unittest.TestCase):
         "update_monitoring" in the code at least once
         """
         with ExperimentIsolation() as iso:
-            with Experiment(base_path=iso.path, namespace="test", glob=globals()) as e:
-                e.prepare()
+            with Skippable(), (e := Experiment(base_path=iso.path, namespace="test", glob=globals())):
+                pass
 
             meta_path = os.path.join(e.path, 'experiment_meta.json')
             with open(meta_path) as file:
@@ -480,6 +471,29 @@ class TestExperiment(unittest.TestCase):
         with open(analysis_path) as file:
             content = file.read()
             self.assertIn('e.commit_json', content)
+
+    def test_experiment_analysis_gets_executed_when_experiment_is_imported(self):
+        """
+        **14.09.2022** By fixing the previous bug, I introduced a new one: The way how the experiment
+        analysis functionality is written now, it gets executed in the main experiment file, when the
+        experiment is just being imported by another file.
+        """
+        # First we execute this and get the modification date of one of the ANALYSIS artifacts. Then we try
+        # to merely import the SNAPSHOT file of that experiment and then we can compare the modification
+        # times of the analsyis artifacts, which should not have changed
+        path, p = run_example("analysis.py")
+        self.assertEqual(0, p.returncode)
+
+        artifact_path = os.path.join(path, 'analysis_results.json')
+        mod = os.path.getmtime(artifact_path)
+
+        snapshot_path = os.path.join(path, 'snapshot.py')
+        spec = importlib.util.spec_from_file_location('snapshot', snapshot_path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+
+        mod_new = os.path.getmtime(artifact_path)
+        self.assertEqual(mod, mod_new)
 
 
 class TestRunExperiment(unittest.TestCase):
@@ -517,8 +531,8 @@ class TestExperimentAnalysis(unittest.TestCase):
         """
         with ExperimentIsolation() as iso:
             self.assertEqual(10, VARIABLE)
-            with Experiment(base_path=iso.path, namespace="test", glob=globals()) as e:
-                e.prepare()
+            with Skippable(), (e := Experiment(base_path=iso.path, namespace="test", glob=globals())):
+                pass
 
             self.assertEqual(None, e.error)
             # The file should exist
@@ -585,9 +599,10 @@ class TestExperimentAnalysis(unittest.TestCase):
             'import os\n'
             'import pathlib\n'
             'from pycomex.experiment import Experiment\n'
+            'from pycomex.util import Skippable\n'
             'PATH = pathlib.Path(__file__).parent.absolute()\n'
-            'with Experiment(base_path=PATH, namespace="test_bug", glob=globals()) as e:\n'
-            '   e.prepare()\n'
+            'with Skippable(),'
+            '(e := Experiment(base_path=PATH, namespace="test_bug", glob=globals())):\n'
             '   e["value"] = 10\n'
             '   with e.analysis:\n'
             '       e.info("starting analysis")\n'
@@ -620,10 +635,10 @@ class TestArchivedExperiment(unittest.TestCase):
             'import os\n'
             'import pathlib\n'
             'from pycomex.experiment import Experiment\n'
+            'from pycomex.util import Skippable\n'
             'PATH = pathlib.Path(__file__).parent.absolute()\n'
             'DEBUG = True\n'
-            'with Experiment(base_path=PATH, namespace="test_bug", glob=globals()) as e:\n'
-            '   e.prepare()\n'
+            'with Skippable(), (e := Experiment(base_path=PATH, namespace="test_bug", glob=globals())):\n'
             '   e["value"] = 10\n'
             '   e["foo"] = "bar"\n'
             '   with e.analysis:\n'

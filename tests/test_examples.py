@@ -66,7 +66,3 @@ class TestExamples(unittest.TestCase):
         # should still populate the "data" property from the saved JSON file which is also located in the
         # records folder
         self.assertIsInstance(module.e, Experiment)
-        self.assertIn('artifacts', module.e.data)
-        # Thus querying with slashes (/) should also be possible to perform on it
-        self.assertIn('source', module.e['artifacts'])
-        # This is one of the experiment variables that should have been contained in

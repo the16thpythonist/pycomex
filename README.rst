@@ -62,6 +62,7 @@ Archiving of metadata, file artifacts and error handling is automatically manage
     This doc string will be saved as the "description" meta data of the experiment records
     """
     from pycomex.experiment import Experiment
+    from pycomex.util import Skippable
 
     # Experiment parameters can simply be defined as uppercase global variables.
     # These are automatically detected and can possibly be overwritten in command
@@ -73,8 +74,7 @@ Archiving of metadata, file artifacts and error handling is automatically manage
     # - Path to an existing folder in which to store the results
     # - A namespace name unique for each experiment
     # - access to the local globals() dict
-    with Experiment("/tmp", "example/quickstart", globals()) as e:
-        e.prepare()  # important!
+    with Skippable(), (e := Experiment("/tmp", "example/quickstart", globals())):
 
         # Internally saved into automatically created nested dict
         # {'strings': {'hello_world': '...'}}
@@ -93,7 +93,7 @@ Archiving of metadata, file artifacts and error handling is automatically manage
 
     # All the code inside this context will be copied to the "analysis.py"
     # file which will be created as an experiment artifact.
-    with e.analysis:
+    with Skippable(), e.analysis:
         # And we can access all the internal fields of the experiment object
         # and the experiment parameters here!
         print(HELLO, WORLD)
@@ -149,7 +149,7 @@ Specifically note these two aspects:
         print('RAW DATA KEYS:')
         pprint(list(DATA.keys()))
 
-        # The analysis template from the experiment file
+        # ~ The analysis template from the experiment file
         # And we can access all the internal fields of the experiment object
         # and the experiment parameters here!
         print(HELLO, WORLD)

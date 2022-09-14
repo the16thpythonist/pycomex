@@ -83,3 +83,14 @@ History
 * ``with e.analysis:`` can now also be used on the indent level as the experiment context manager itself
   which is more intuitive. Using it this way also solves some unwanted interaction with the error catching
   behavior of the experiment context.
+
+0.5.0 (2022-09-14)
+------------------
+
+* By fixing the previous bug, I introduced a new one: Essentially now that I moved the analysis context
+  manager to the same logical level as the experiment context manager I was facing the same problem: It got
+  executed when merely importing the module, which had all sorts of bad side effects. This bug is fixed now.
+* While fixing that bug, I accidentally stumbled on a much better method of how to make context managers
+  skippable, which I find so good that I moved the experiment context manager to use the same mechanism
+  as well, which gets rid of the need for calling ``Experiment.prepare()``. But this means some
+  backwards incompatible API changes.

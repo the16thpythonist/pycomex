@@ -4,6 +4,7 @@ from inspect import getframeinfo, stack
 
 from pycomex.util import get_version
 from pycomex.util import RecordCode
+from pycomex.util import Skippable
 
 
 class TestFunctions(unittest.TestCase):
@@ -65,3 +66,22 @@ class TestRecordCode(unittest.TestCase):
 
         with rc:
             rc.value = 20
+
+    def test_skip_flag(self):
+        """
+        A special flag can be set for the context manager, making it skip the execution of the content.
+        """
+        value = 10
+
+        with Skippable(), RecordCode(stack_index=2, skip=False):
+            value = 20
+
+        with Skippable(), (code := RecordCode(stack_index=2, skip=True)):
+            value = 30
+            # In the best case this will never be executed
+            self.assertTrue(False)
+
+        print(code)
+
+        self.assertTrue(True)
+        self.assertEqual(value, 20)

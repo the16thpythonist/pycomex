@@ -3,12 +3,11 @@ This is an example experiment file which is used for the unittests in ``TestExpe
 """
 import pathlib
 from pycomex.experiment import Experiment
+from pycomex.util import Skippable
 
 DEBUG = False
 PATH = pathlib.Path(__file__).parent.absolute()
 
-with Experiment(base_path=PATH, namespace="{{ namespace }}", glob=globals()) as e:
-    e.prepare()
-
+with Skippable(), (e := Experiment(base_path=PATH, namespace="{{ namespace }}", glob=globals())):
     e['value'] = 10
     e['foo'] = 'bar'

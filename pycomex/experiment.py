@@ -27,6 +27,7 @@ import psutil
 
 from pycomex.util import TEMPLATE_ENV, EXAMPLES_PATH
 from pycomex.util import RecordCode
+from pycomex.util import SkipExecution
 from pycomex.work import AbstractWorkTracker
 from pycomex.work import NaiveWorkTracker
 
@@ -320,27 +321,6 @@ class Experiment:
 
         current[keys[-1]] = value
 
-    def prepare(self):
-        """
-        This method *has to be called* as the very first thing within the experiment context like this:
-
-        .. code-block:: python
-
-            with Experiment(base_path, 'my_namespace', glob=globals()) as e:
-                e.prepare()  # Very important!
-
-        Only through this method it can be ensured that the experiment module can later be safely imported
-        without actually causing the experiment to be executed again unintentionally.
-        """
-        if self.prevent_execution:
-            # We need to call this or it would cause a bug
-            self.prepare_logger()
-
-            # By raising this special exception within the experiment context we are able to essentially
-            # silently skip the entire body of the context, because we simply ignore this exception in
-            # __exit__
-            raise NoExperimentExecution()
-
     def open(self, name: str, mode: str = "w"):
         file_path = os.path.join(self.path, name)
         self.data['artifacts'][name] = file_path
@@ -366,12 +346,27 @@ class Experiment:
     def __enter__(self) -> 'Experiment':
 
         # At this point we check if the experiment is created in "execution" mode or in "analysis" mode.
-        # The latter is always the case when the module is not explicitly directly executed.
+        # "execution" mode is only when the module is directly executed and analysis mode is if the module
+        # is imported by another module for example. In that case we want to skip the entire experiment
+        # content!
         if self.glob["__name__"] != "__main__":
-            # Setting this flag will signal to the "prepare" method to take the necessary steps to skip
-            # the entire body of the experiment.
             self.prevent_execution = True
-            return self
+            self.analysis.skip = True
+
+            # Even if we are in analysis mode, we still want to be able to log status messages through the
+            # experiment so we need to at least prepare the console logger.
+            self.prepare_logger()
+
+            # Here comes a bit of the magic: In analysis mode, we assume that the experiment is already done
+            # and an artifacts folder already exists. This method will load all of the experiment data,
+            # which is saved as a JSON file in that folder back into this object, so that even if this
+            # object is only imported we can still interact with it as if it was just at the end of the
+            # experiment execution!
+            self.load_records()
+
+            # This exception will be caught by the "Skippable" context manager which always has to precede
+            # the experiment manager, effectively skipping the entire context body.
+            raise SkipExecution()
 
         self.args = self.arg_parser.parse_args()
 

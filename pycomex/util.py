@@ -8,6 +8,7 @@ from inspect import getframeinfo, stack
 
 import jinja2 as j2
 
+
 PATH = pathlib.Path(__file__).parent.absolute()
 VERSION_PATH = os.path.join(PATH, 'VERSION')
 TEMPLATE_PATH = os.path.join(PATH, 'templates')
@@ -22,6 +23,26 @@ TEMPLATE_ENV = j2.Environment(
 def get_version():
     with open(VERSION_PATH) as file:
         return file.read().replace(' ', '').replace('\n', '')
+
+
+class SkipExecution(Exception):
+    pass
+
+
+class Skippable:
+
+    def __init__(self):
+        pass
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_value, exc_traceback) -> bool:
+        # We will simply ignore the SkipExecution exceptions completely
+        if isinstance(exc_value, SkipExecution):
+            return True
+        else:
+            return False
 
 
 # https://stackoverflow.com/questions/24438976
@@ -45,7 +66,8 @@ class RecordCode:
     """
     def __init__(self,
                  stack_index: int = 2,
-                 initial_stack_index: int = 1):
+                 initial_stack_index: int = 1,
+                 skip=False):
         self.stack_index = stack_index
 
         # Getting the filename and actually the content of the file in the constructor already is an
@@ -67,6 +89,10 @@ class RecordCode:
         self.code_lines: List[str] = []
         self.code_string: str = ''
 
+        # This is a flag, that if set to True signals this context manager to skip the execution of the
+        # entire content.
+        self.skip = skip
+
         # Callbacks can externally be added to these lists to have functions be executed at either the enter
         # or the exit. The first arg is this object itself, the second is the enter / end line index number
         # respectively
@@ -77,7 +103,10 @@ class RecordCode:
         frame_info = getframeinfo(stack()[self.stack_index][0])
         return frame_info
 
-    def __enter__(self) -> 'RecordCode':
+    def __enter__(self):
+        if self.skip:
+            raise SkipExecution()
+
         frame_info = self.get_frame_info()
         self.enter_line = frame_info.lineno
 
@@ -86,7 +115,8 @@ class RecordCode:
 
         return self
 
-    def __exit__(self, *args) -> bool:
+    def __exit__(self, exc_type, exc_value, exc_traceback) -> bool:
+        print(exc_type, exc_value)
         # First of all we have to find out the indentation of the line at which we enter
         enter_line = self.file_lines[self.enter_line - 1]
         self.enter_indent = len(enter_line) - len(enter_line.lstrip())
@@ -111,6 +141,8 @@ class RecordCode:
 
         for cb in self.exit_callbacks:
             cb(self, self.exit_line)
+
+        return True
 
 
 class Empty:

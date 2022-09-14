@@ -16,6 +16,7 @@ import textwrap
 import urllib.request
 
 from pycomex.experiment import Experiment
+from pycomex.util import Skippable
 
 response = urllib.request.urlopen("https://www.mit.edu/~ecprice/wordlist.10000")
 
@@ -26,8 +27,8 @@ WORDS = response.read().decode("utf-8").splitlines()
 NUM_WORDS = 1000
 REPETITIONS = 10
 
-with Experiment(base_path=tempfile.gettempdir(), namespace="example/basic", glob=globals()) as e:
-    e.prepare()  # Very important that this is called as the very first thing!
+with Skippable(), (e := Experiment(base_path=tempfile.gettempdir(),
+                                   namespace="example/basic", glob=globals())):
 
     # (5) It is possible to assign an integer value to "work" which is (estimated)
     #     number of work packages to be completed as part of the experiment.

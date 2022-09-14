@@ -15,6 +15,7 @@ import textwrap
 import urllib.request
 
 from pycomex.experiment import Experiment
+from pycomex.util import Skippable
 
 response = urllib.request.urlopen("https://www.mit.edu/~ecprice/wordlist.10000")
 
@@ -22,9 +23,8 @@ WORDS = response.read().decode("utf-8").splitlines()
 NUM_WORDS = 1000
 REPETITIONS = 10
 
-with Experiment(base_path=tempfile.gettempdir(), namespace="example/analysis",
-                glob=globals()) as e:
-    e.prepare()  # Very important that this is called as the very first thing!
+with Skippable(), (e := Experiment(base_path=tempfile.gettempdir(),
+                                   namespace="example/analysis", glob=globals())):
     e.work = REPETITIONS
 
     for i in range(e.parameters["REPETITIONS"]):
@@ -44,13 +44,13 @@ with Experiment(base_path=tempfile.gettempdir(), namespace="example/analysis",
     # of characters. We also want to find out the average value for the
     # character count. We then store this information as additional character count.
 
-
+print(e)
 # ALl of the code defined within this "Experiment.analyis" context manager will be
 # copied to the analyis.py template of the record folder of this experiment run and
 # it will work as it is.
 # NOTE: As long as the analysis code is only using experiment data or experiment
 #       variables
-with e.analysis:
+with Skippable(), e.analysis:
     # (1) Note how the experiment path will be dynamically determined to be a *new*
     #     folder when actually executing the experiment, but it will refer to the
     #     already existing experiment record folder when imported from
