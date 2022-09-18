@@ -39,7 +39,6 @@ class TestExamples(unittest.TestCase):
 
         path, p = self.run_example("basic.py")
         self.assertEqual(0, p.returncode)
-        print(p.stdout.decode())
 
     def test_example_analysis(self):
         import pycomex.examples.basic as experiment

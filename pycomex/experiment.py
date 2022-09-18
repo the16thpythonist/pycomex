@@ -44,21 +44,49 @@ def run_example(example_name: str,
 
 
 def run_experiment(experiment_path: str,
-                   parameters_path: Optional[str] = None
+                   parameters_path: Optional[str] = None,
+                   blocking: bool = True,
+                   print_output: bool = True,
                    ) -> Tuple[str, subprocess.CompletedProcess]:
+    """
+    Given the string absolute ``experiment_path`` to the python experiment module, this function will
+    execute that module as an experiment.
+
+    :param Optional[str] parameters_path: A string path to either a .JSON or a .PY file which specify
+        parameter overwrite for the execution of the experiment.
+    :param bool blocking: Whether to run the experiment in a blocking manner. If False, then the
+        experiment will be started in the background.
+    :param bool print_output: Whether to print the output of the subprocess to stdout
+
+    :returns: A tuple whose first element is the absolute string path ot the experiment archive folder which
+        was created by the experiment. The second element is the subprocess.Process object which was used
+        to execute the experiment.
+    """
     with tempfile.NamedTemporaryFile(mode='w+') as out_path:
 
         command = f'{sys.executable} {experiment_path} -o {out_path.name}'
         if parameters_path is not None:
             command += f' -p {parameters_path}'
 
-        completed_process = subprocess.run(command, shell=True, stdout=subprocess.PIPE,
-                                           stderr=subprocess.PIPE)
+        process = subprocess.Popen(
+            command,
+            shell=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE
+        )
+        if blocking:
+            for line in process.stdout:
+                if print_output:
+                    print(line.decode(), end='')
+
+            process.wait()
+        else:
+            time.sleep(0.1)
 
         with open(out_path.name) as file:
             archived_path = file.read()
 
-    return archived_path, completed_process
+    return archived_path, process
 
 
 class NoExperimentExecution(Exception):

@@ -100,3 +100,10 @@ History
 
 * If numpy arrays are added to the internal data store, they are automatically converted to lists, so that
   they can be json serialized later.
+
+0.5.2 (2022-09-18)
+------------------
+
+* Extended ``run_experiment`` such that it can be called in a non-blocking manner and such that it relays
+  the output of the experiment subprocess to stdout in the main process
+
