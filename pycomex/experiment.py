@@ -180,8 +180,10 @@ class Experiment:
         self.error: Optional[Exception] = None
         self.prevent_execution = False
         self.description: Optional[str] = None
+        self.short_description: Optional[str] = None
 
         self.discover_parameters()
+        self.namespace_path = os.path.join(self.base_path, self.namespace)
         self.path = self.determine_path()
 
         self.data_path = os.path.join(self.path, 'experiment_data.json')
@@ -324,9 +326,13 @@ class Experiment:
         # ~ Detecting special parameters
         if "__doc__" in self.glob and isinstance(self.glob["__doc__"], str):
             self.data["description"] = self.glob["__doc__"]
+            self.description = self.glob['__doc__']
 
         if "DEBUG" in self.glob and isinstance(self.glob["DEBUG"], bool):
             self.debug_mode = self.glob["DEBUG"]
+
+        if "SHORT_DESCRIPTION" in self.glob:
+            self.short_description = self.glob["SHORT_DESCRIPTION"]
 
     def __getitem__(self, key):
         keys = key.split("/")
@@ -400,6 +406,9 @@ class Experiment:
             file.write(self.path)
 
     def __enter__(self) -> 'Experiment':
+        # We are going to set this magic variable in the original experiment module. This can then be
+        # used to identify whether a module is actually an experiment or not
+        self.glob['__experiment__'] = self
 
         # At this point we check if the experiment is created in "execution" mode or in "analysis" mode.
         # "execution" mode is only when the module is directly executed and analysis mode is if the module

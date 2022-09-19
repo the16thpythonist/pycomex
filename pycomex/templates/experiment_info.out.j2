@@ -1,0 +1,28 @@
+{% set half_length = int((length - len(name)) / 2) - 2%}
+{% set rest = modulo(length - len(name), 2)  %}
+{{ section(name, length) }}
+
+{{ "\n".join(wrap(experiment.description, width=length)) }}
+
+namespace: {{ experiment.namespace }}
+base_path: {{ experiment.base_path }}
+
+{{ subsection("parameters: %s" % len(experiment.parameters), length) }}
+
+{% for parameter_name, value in experiment.parameters.items() -%}
+{{ parameter_name }}: {{ type(value) }}
+{% endfor %}
+{% if os.path.isdir(experiment.namespace_path) -%}
+{% set namespace_folder = NamespaceFolder(experiment.namespace_path) -%}
+{% set k = 10 -%}
+{{ subsection("archive: %s" % len(namespace_folder), length) }}
+
+{% for name, meta in namespace_folder.experiment_metas|dict_value_sort('start_time', reverse=True, k=k) -%}
+~ {{ name }} ~
+start:   {{ datetime.datetime.fromtimestamp(meta.start_time).strftime("%Y-%m-%d %H:%M") }}
+end:     {{ datetime.datetime.fromtimestamp(meta.end_time).strftime("%Y-%m-%d %H:%M") }}
+running: {{ meta.running }} ({{ "%.2f" % (meta.elapsed_time / 3600) }} hrs)
+
+{% endfor -%}
+[...]
+{% endif %}

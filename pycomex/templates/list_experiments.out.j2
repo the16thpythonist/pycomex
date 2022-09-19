@@ -1,0 +1,4 @@
+{% for name, experiment in experiments.items() %}
+[E] {{ name.upper() }}
+{% if experiment.short_description %}{{ experiment.short_description }}{% else %}No description available.{% endif %}
+{% endfor %}

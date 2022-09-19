@@ -1,4 +1,3 @@
-#! /usr/bin/env python3
 """
 This experiment will repeatedly create a text made of randomly sampled words.
 The words are assembled into a text file, which is supposed to be saved as an
@@ -18,14 +17,12 @@ import urllib.request
 from pycomex.experiment import Experiment
 from pycomex.util import Skippable
 
-response = urllib.request.urlopen("https://www.mit.edu/~ecprice/wordlist.10000")
-
 # (1) All variables defined in uppercase are automatically detected as experiment
 #     variables and can be overwritten when externally executing the experiment
 #     using "run_experiment" for example
-WORDS = response.read().decode("utf-8").splitlines()
 NUM_WORDS = 1000
 REPETITIONS = 10
+SHORT_DESCRIPTION = 'An example experiment, which shows all the basic features of the library'
 
 with Skippable(), (e := Experiment(base_path=tempfile.gettempdir(),
                                    namespace="example/basic", glob=globals())):
@@ -35,6 +32,8 @@ with Skippable(), (e := Experiment(base_path=tempfile.gettempdir(),
     #     This will be used to estimate the remaining time.
     e.work = REPETITIONS
 
+    response = urllib.request.urlopen("https://www.mit.edu/~ecprice/wordlist.10000")
+    WORDS = response.read().decode("utf-8").splitlines()
     # (1) The uppercase "experiment parameters" are stored in the "parameters"
     #     field of the experiment instance. Alternatively the variables can
     #     also just be used directly.

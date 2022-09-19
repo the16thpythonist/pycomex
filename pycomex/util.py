@@ -2,7 +2,9 @@
 Utility methods
 """
 import os
+import datetime
 import pathlib
+import textwrap
 from typing import Optional, List, Callable
 from inspect import getframeinfo, stack
 
@@ -18,6 +20,41 @@ TEMPLATE_ENV = j2.Environment(
     loader=j2.FileSystemLoader(TEMPLATE_PATH),
     autoescape=j2.select_autoescape()
 )
+TEMPLATE_ENV.globals.update({
+    'os': os,
+    'datetime': datetime,
+    'len': len,
+    'int': int,
+    'type': type,
+    'sorted': sorted,
+    'modulo': lambda a, b: a % b,
+    'key_sort': lambda k, v: k,
+    'wrap': textwrap.wrap,
+})
+
+
+def dict_value_sort(data: dict,
+                    key: Optional[str] = None,
+                    reverse: bool = False,
+                    k: Optional[int] = None):
+
+    def query_dict(current_dict: dict, query: Optional[str]):
+        if query is not None:
+            keys = query.split('/')
+            for current_key in keys:
+                current_dict = current_dict[current_key]
+
+        return current_dict
+
+    items_sorted = sorted(data.items(), key=lambda t: query_dict(t[1], key), reverse=reverse)
+    if k is not None:
+        k = min(k, len(items_sorted))
+        items_sorted = items_sorted[:k]
+
+    return items_sorted
+
+
+TEMPLATE_ENV.filters['dict_value_sort'] = dict_value_sort
 
 
 def get_version():

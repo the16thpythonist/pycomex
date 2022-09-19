@@ -107,3 +107,15 @@ History
 * Extended ``run_experiment`` such that it can be called in a non-blocking manner and such that it relays
   the output of the experiment subprocess to stdout in the main process
 
+0.6.0 (2022-09-19)
+------------------
+
+* Added ``pycomex.cli.ExperimentCLI`` class which can be used to automatically create a computational
+  experiment command line interface for a project by simply providing the folder path at which all the
+  experiment modules are located. They will automatically be discovered and the CLI will automatically
+  be built based on those experiments. Currently supported are ``list`` command which will
+  show an overview of experiments, ``info`` which will print more details and ``run`` which will prompt
+  the execution of an experiment.
+* Made some changes in the ``Experiment`` class. Most importantly it now sets ``__experiment__`` global
+  variable in the original module namespace, which makes it easier to detect whether any given
+  python module contains an experiment or not.

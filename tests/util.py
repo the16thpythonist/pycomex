@@ -1,5 +1,7 @@
 import os
+import sys
 import pathlib
+import logging
 
 import jinja2 as j2
 
@@ -8,6 +10,13 @@ TEMPLATE_PATH = os.path.join(PATH, 'templates')
 TEMPLATE_ENV = j2.Environment(
     loader=j2.FileSystemLoader(TEMPLATE_PATH)
 )
+
+DO_LOGGING = True
+LOG = logging.Logger('test')
+if DO_LOGGING:
+    LOG.addHandler(logging.StreamHandler(sys.stdout))
+else:
+    LOG.addHandler(logging.NullHandler())
 
 
 def write_template(path: str,
