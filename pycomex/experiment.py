@@ -24,11 +24,11 @@ from typing import List, Type, Optional, Tuple, Dict
 
 import jinja2 as j2
 import psutil
-import numpy as np
 
 from pycomex.util import TEMPLATE_ENV, EXAMPLES_PATH
 from pycomex.util import RecordCode
 from pycomex.util import SkipExecution
+from pycomex.util import CustomJsonEncoder
 from pycomex.work import AbstractWorkTracker
 from pycomex.work import NaiveWorkTracker
 
@@ -374,12 +374,14 @@ class Experiment:
 
             current = current[key]
 
-        # ~ value pre-processing
-        # There are some convenience conversion which we would like this method to perform automatically
-        # for example numpy arrays should automatically be converted to lists so that they can be converted
-        # into json
-        if isinstance(value, np.ndarray):
-            value = value.tolist()
+        # 28.11.2022
+        # At this point we were previously performing a value processing. For example if the value to be
+        # saved was a numpy array it was converted into a list. This was done to prevent an exception to
+        # arise from numpy arrays which are not naturally serializable.
+        # - I realized that this should be addressed by a custom JsonEncoder because there are other ways
+        #   for a numpy array to accidentally enter the experiment storage which are not caught here
+        # - This causes unwanted implicit behaviour, where the user for example thinks he has saved a numpy
+        #   array into the experiment storage & wants to retrieve it as such again during the same runtime.
 
         current[keys[-1]] = value
 
@@ -512,13 +514,28 @@ class Experiment:
             with open(self.data_path) as json_file:
                 self.data = json.load(json_file)
 
-    def save_experiment_meta(self):
-        with open(self.meta_path, mode="w") as json_file:
-            json.dump(self.meta, json_file)
+    def save_experiment_meta(self) -> None:
+        """
+        Saves the internal experiment metadata dictionary into as a json file with the already
+        pre-determined path ``self.meta_path``
 
-    def save_experiment_data(self):
+        :returns: None
+        """
+        with open(self.meta_path, mode="w") as json_file:
+            json.dump(self.meta, json_file, cls=CustomJsonEncoder)
+
+    def save_experiment_data(self) -> None:
+        """
+        Saves the internal experiment data dictionary as a JSON file with the already pre-determined path
+        ``self.data_path``.
+
+        :returns: None
+        """
         with open(self.data_path, mode="w") as json_file:
-            json.dump(self.data, json_file)
+            # 28.11.2022: Using a custom encoder now to prevent an error when numpy arrays are added to the
+            # internal data storage. This encoder will convert them to plain lists before json
+            # serialization.
+            json.dump(self.data, json_file, cls=CustomJsonEncoder)
 
     def save_experiment_error(self, exception_value, exception_traceback) -> None:
         with open(self.error_path, mode="w") as file:

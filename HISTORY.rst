@@ -119,3 +119,9 @@ History
 * Made some changes in the ``Experiment`` class. Most importantly it now sets ``__experiment__`` global
   variable in the original module namespace, which makes it easier to detect whether any given
   python module contains an experiment or not.
+
+0.6.1 (2022-11-28)
+------------------
+
+* Fixed a bug where numpy arrays within the storage would cause an exception during the serialization
+  process by using a custom json encoder class which first converts all numpy arrays to nested lists

@@ -484,7 +484,7 @@ class TestExperiment(unittest.TestCase):
             content = file.read()
             self.assertIn('e.commit_json', content)
 
-    def test_experiment_analysis_gets_executed_when_experiment_is_imported(self):
+    def test_bug_experiment_analysis_gets_executed_when_experiment_is_imported(self):
         """
         **14.09.2022** By fixing the previous bug, I introduced a new one: The way how the experiment
         analysis functionality is written now, it gets executed in the main experiment file, when the
@@ -506,6 +506,26 @@ class TestExperiment(unittest.TestCase):
 
         mod_new = os.path.getmtime(artifact_path)
         self.assertEqual(mod, mod_new)
+
+    def test_bug_saving_experiment_with_numpy_arrays_works(self):
+        """
+        **28.11.2022** Accidentally saving numpy arrays into the experiment storage breaks the program when
+        trying to save this experiment data as JSON file because numpy arrays are not naturally
+        json serializable.
+        """
+        with ExperimentIsolation() as iso:
+            with Skippable(), (e := Experiment(base_path=iso.path, namespace="test", glob=globals())):
+                # We are going to add a numpy array to the experiment storage and this breaks the program
+                # at the point where we are trying to save all the experiment data as a json file because
+                # numpy arrays are not json serializable by default
+                e['array'] = np.zeros(shape=(100, 100))
+
+                # The more difficult case is when the array doesn't enter the storage directly but wrapped
+                # in a different data structure
+                e['list'] = [np.zeros(shape=(100, 100))]
+
+            self.assertIn('array', e.data)
+            self.assertTrue(os.path.exists(e.data_path))
 
 
 class TestRunExperiment(unittest.TestCase):

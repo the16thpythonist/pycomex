@@ -2,6 +2,7 @@
 Utility methods
 """
 import os
+import json
 import datetime
 import pathlib
 import textwrap
@@ -9,6 +10,7 @@ from typing import Optional, List, Callable
 from inspect import getframeinfo, stack
 
 import jinja2 as j2
+import numpy as np
 
 
 PATH = pathlib.Path(__file__).parent.absolute()
@@ -31,6 +33,20 @@ TEMPLATE_ENV.globals.update({
     'key_sort': lambda k, v: k,
     'wrap': textwrap.wrap,
 })
+
+
+class CustomJsonEncoder(json.encoder.JSONEncoder):
+    """
+    custom json encoder class which is used when encoding the experiment data into a persistent json file.
+
+    This specific class implements the serialization of numpy arrays for example which makes it possible
+    to commit numpy arrays to the experiment storage without causing an exception.
+    """
+    def default(self, value):
+        if isinstance(value, np.ndarray):
+            return value.tolist()
+        elif isinstance(value, np.generic):
+            return value.data
 
 
 def dict_value_sort(data: dict,
