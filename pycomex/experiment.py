@@ -310,7 +310,10 @@ class AbstractExperiment:
 
     def initialize_paths(self):
         """
-        This method will
+        This method will calculate all the specific path attributes of the experiment instance from the
+        current values of ``self.base_path`` and ``self.namespace``.
+
+        :returns: None
         """
         # 02.01.2023
         # Previously the namespace was just joined to the path as a string, but that would have caused
@@ -463,11 +466,23 @@ class AbstractExperiment:
 
     def load_records(self) -> None:
         """
+        Loads the contents of the experiment's "experiment_data.json" file and updates the internal
+        ``self.data`` dict with those loaded values.
 
+        That data file must already exist for this method!
+
+        :raises FileNotFoundError: if the data file does not yet exists, which would indicate that the
+            experiment has not yet terminated.
         """
         if os.path.exists(self.data_path):
             with open(self.data_path) as json_file:
                 self.data = json.load(json_file)
+
+        else:
+            raise FileNotFoundError('You are attempting to load the "experiment_data.json" file to '
+                                    'populate the data dictionary of an Experiment instance, but the data '
+                                    'file was not found. Please make sure that this method is only called '
+                                    'for experiments that are already terminated!')
 
     # -- Logging --
 
@@ -524,10 +539,23 @@ class AbstractExperiment:
                    name: str,
                    default: t.Any = None,
                    **kwargs) -> t.Any:
+        """
+        This method can be used to call custom code injected from child experiments during the main context
+        body of an experiment. Each hook has to be identified by a unique string ``name``.
+
+        :param str name: A unique string name, which identifies the
+        :param default: This value is returned by the method, if no callback which could have a return value
+            is actually registered. This can be used to realize filter hooks.
+
+        :returns: This function returns the value of ``default`` if no hooks with the given name have been
+            registered. If multiple hooks have been registered, this function returns the return value of
+            the most recent hook callback.
+        """
         value = default
         for func in self.hooks[name]:
-            self.info(f'[@] hook: "{name}" - from: "{func.__name__}"')
+            self.info(f'[@] run hook: "{name}" - from: "{func.file_name}.{func.__name__}"')
             value = func(self, **kwargs)
+            self.info(f'    end hook: "{name}"')
 
         return value
 
@@ -535,6 +563,25 @@ class AbstractExperiment:
              name: str,
              replace: bool = False
              ) -> t.Callable[[t.Callable], t.Callable]:
+        """
+        This method will return a decorator, which can be used to register callbacks to certain hooks
+        identified by their unique string ``name``.
+
+        :param str name: The unique string name of the hook for which this callback should be registered.
+        :param bool replace: If this flag is True, the registered callback will replace any previously
+            registered callbacks for the same hook name. If False, the callback will be added to the
+            back of the execution chain.
+
+        :returns: A decorator callable
+        """
+        # This is not strictly necessary, but here we determine the file name of the currently active
+        # experiment file so that we can attach that information later on to the decorated callback function
+        # That information can then be used when that callback is actually executed to make a useful
+        # log message.
+        if '__file__' in self.glob:
+            file_name = os.path.basename(self.glob['__file__']).strip('.py')
+        else:
+            file_name = '__child__'  # generic name if we can't determine the experiment file name
 
         def decorator(func: t.Callable):
             if replace:
@@ -542,6 +589,7 @@ class AbstractExperiment:
             else:
                 self.hooks[name].append(func)
 
+            setattr(func, 'file_name', file_name)
             return func
 
         return decorator
@@ -598,7 +646,8 @@ class AbstractExperiment:
             # which is saved as a JSON file in that folder back into this object, so that even if this
             # object is only imported we can still interact with it as if it was just at the end of the
             # experiment execution!
-            self.load_records()
+            if os.path.exists(self.data_path):
+                self.load_records()
 
             # This exception will be caught by the "Skippable" context manager which always has to precede
             # the experiment manager, effectively skipping the entire context body!
