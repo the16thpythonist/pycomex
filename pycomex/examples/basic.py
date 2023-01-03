@@ -27,11 +27,6 @@ SHORT_DESCRIPTION = 'An example experiment, which shows all the basic features o
 with Skippable(), (e := Experiment(base_path=tempfile.gettempdir(),
                                    namespace="example/basic", glob=globals())):
 
-    # (5) It is possible to assign an integer value to "work" which is (estimated)
-    #     number of work packages to be completed as part of the experiment.
-    #     This will be used to estimate the remaining time.
-    e.work = REPETITIONS
-
     response = urllib.request.urlopen("https://www.mit.edu/~ecprice/wordlist.10000")
     WORDS = response.read().decode("utf-8").splitlines()
     # (1) The uppercase "experiment parameters" are stored in the "parameters"
@@ -67,12 +62,6 @@ with Skippable(), (e := Experiment(base_path=tempfile.gettempdir(),
         #     print them to stdout, but also save them to a log file which is
         #     also stored as an experiment artifact.
         e.info(f"saved text file with {text_length} characters")
-
-        # (5) Calling "update" signals the completion of one work package.
-        #     This method will trigger a new estimation of the remaining time
-        #     based on the time needed for previous work packages. This estimation
-        #     is printed / logged.
-        e.update()
 
 # The metadata is saved to an actual json file upon the content manager __exit__'s
 if os.path.exists(e.path):

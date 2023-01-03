@@ -1,11 +1,11 @@
 """
-This doc string will be saved as the "description" meta data of the experiment records
+This doc string will be saved as the "description" metadata of the experiment records
 """
 from pycomex.experiment import Experiment
 from pycomex.util import Skippable
 
-SHORT_DESCRIPTION = ('An example experiment describing the very first steps, which are needed to get '
-                     'started with the library')
+SHORT_DESCRIPTION = ('An example experiment describing the very first steps, '
+                     'which are needed to get started with the library')
 # Experiment parameters can simply be defined as uppercase global variables.
 # These are automatically detected and can possibly be overwritten in command
 # line invocation

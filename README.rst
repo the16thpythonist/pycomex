@@ -25,8 +25,10 @@ Features
   stored as JSON file
 * Easily attach file artifacts such as ``matplotlib`` figures to experiment records
 * Log messages to stdout as well as permanently store into log file
-* ready-to-use automatically generated boilerplate code for the analysis and post-processing of
-  experiment data after it terminates
+* Ready-to-use automatically generated boilerplate code for the analysis and post-processing of
+  experiment data after experiments have terminated.
+* Experiment inheritance: Experiment modules can inherit from other modules and extend their functionality
+  via parameter overwrites and hooks!
 
 Installation
 ------------

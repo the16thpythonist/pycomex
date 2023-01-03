@@ -2,12 +2,12 @@
 History
 =======
 
-0.1.0 (2022-07-09)
+0.1.0 (09.07.2022)
 ------------------
 
 * First release on PyPI.
 
-0.1.1 (2022-07-11)
+0.1.1 (11.07.2022)
 ------------------
 
 * Added the "poetry_bumpversion" plugin https://github.com/monim67/poetry-bumpversion to update the version
@@ -15,7 +15,7 @@ History
 * Using "black" for code formatting
 * Using "flake9" for linting
 
-0.2.0 (2022-07-12)
+0.2.0 (12.07.2022)
 ------------------
 
 * Every experiment file now has a command line interface realized with ``argparse``
@@ -28,7 +28,7 @@ History
     * One default template which is rendered this way is "analysis.py" module, which provides a boilerplate
       starting point for further analysis on the experiment results.
 
-0.2.1 (2022-07-12)
+0.2.1 (12.07.2022)
 ------------------
 
 * Now it is possible to commit matplotlib Figures directly to the experiment with ``Experiment.commit_fig``
@@ -36,7 +36,7 @@ History
 * Added a default template ``annotations.rst`` to be rendered for each experiment which provides a
   boilerplate starting point for additional thoughts to be added
 
-0.3.0 (2022-07-17)
+0.3.0 (17.07.2022)
 ------------------
 
 * Added ``Experiment.commit_json`` to directly store dict data as json file artifacts for the experiment
@@ -51,7 +51,7 @@ History
       such as ``Experiment.data`` by loading the persistent file artifact.
 * Added ``examples/analysis.py`` which documents / explains the previously mentioned process
 
-0.3.1 (2022-08-20)
+0.3.1 (20.08.2022)
 ------------------
 
 * Fixed bug that ``e.info()`` could not be used inside the ``analysis.py`` file
@@ -61,7 +61,7 @@ History
 * Renamed the template files with better naming scheme
 * Updated readme
 
-0.4.0 (2022-08-21)
+0.4.0 (21.08.2022)
 ------------------
 
 * Added ``pycomex.experiment.ArchivedExperiment`` which makes it possible to load an arbitrary experiment
@@ -75,7 +75,7 @@ History
 * Added ``psutil`` to dependencies to implement hardware resource monitoring as an additional feature
   when printing the intermediate status of the experiment run with ``Experiment.status()``
 
-0.4.1 (2022-09-12)
+0.4.1 (12.09.2022)
 ------------------
 
 * Fixed a bug which broke the ``with e.analysis:`` functionality in Python 3.10. Rewrote ``RecordCode``
@@ -84,7 +84,7 @@ History
   which is more intuitive. Using it this way also solves some unwanted interaction with the error catching
   behavior of the experiment context.
 
-0.5.0 (2022-09-14)
+0.5.0 (14.09.2022)
 ------------------
 
 * By fixing the previous bug, I introduced a new one: Essentially now that I moved the analysis context
@@ -95,19 +95,19 @@ History
   as well, which gets rid of the need for calling ``Experiment.prepare()``. But this means some
   backwards incompatible API changes.
 
-0.5.1 (2022-09-14)
+0.5.1 (14.09.2022)
 ------------------
 
 * If numpy arrays are added to the internal data store, they are automatically converted to lists, so that
   they can be json serialized later.
 
-0.5.2 (2022-09-18)
+0.5.2 (18.09.2022)
 ------------------
 
 * Extended ``run_experiment`` such that it can be called in a non-blocking manner and such that it relays
   the output of the experiment subprocess to stdout in the main process
 
-0.6.0 (2022-09-19)
+0.6.0 (19.09.2022)
 ------------------
 
 * Added ``pycomex.cli.ExperimentCLI`` class which can be used to automatically create a computational
@@ -120,8 +120,36 @@ History
   variable in the original module namespace, which makes it easier to detect whether any given
   python module contains an experiment or not.
 
-0.6.1 (2022-11-28)
+0.6.1 (28.11.2022)
 ------------------
 
 * Fixed a bug where numpy arrays within the storage would cause an exception during the serialization
   process by using a custom json encoder class which first converts all numpy arrays to nested lists
+
+0.7.0 (03.01.2022)
+------------------
+
+* Added the ``experiment.SubExperiment`` class which implements experiment inheritance! This class now
+  allows to refer to a different experiment module to run as parent experiment, but with parameter
+  modifications.
+* Added a hook system to experiments, which allows for parent experiment modules to define certain points
+  at which custom code from child experiments may be injected.
+
+* changed the datetime format in ``HISTORY.rst`` to the only sane option
+* Fixed a minor windows compatibility problem with the automatic pathing determining for experiments.
+* Added the module ``pycomex.testing`` to contain all of the utility functions and classes which are needed
+  to facilitate the unittests such as the ``ExperimentIsolation`` context manager.
+* Refactored most unittests to use ``pytest`` instead of ``unittest``
+* Fixed a bunch of unittests that were not updated for the new API
+* Fixed a rather serious bug in ``testing.ExperimentIsolation`` which left permanent modifications in
+  in the globals dict and thus introduced side-effects in between different unittests.
+
+**INTERFACE CHANGES**
+
+* changed functionality and signature of ``experiment.run_experiment``. Previously this function executed
+  an existing experiment module by using ``subprocessing.run`` and returned the completed process instance.
+  Now, this works by using ``experiment.SubExperiment`` and the function actually returns an experiment
+  instance.
+* Do to the change above, the same now applies to ``experiment.run_example``.
+
+

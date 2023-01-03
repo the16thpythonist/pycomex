@@ -146,13 +146,11 @@ class ExperimentCLI(click.Group):
         click.secho(section(experiment, length))
         click.secho()
 
-        path, process = run_experiment(
+        experiment = run_experiment(
             self.experiment_modules[experiment],
-            blocking=True,
-            print_output=True
         )
 
-        click.secho(f'archive: {path}')
+        click.secho(f'archive: {experiment.path}')
 
     def callback(self, version):
 

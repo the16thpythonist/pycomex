@@ -22,10 +22,17 @@ REPETITIONS = 10
 
 with Skippable(), (e := Experiment(base_path=tempfile.gettempdir(),
                                    namespace="example/analysis", glob=globals())):
-    e.work = REPETITIONS
 
     response = urllib.request.urlopen("https://www.mit.edu/~ecprice/wordlist.10000")
     WORDS = response.read().decode("utf-8").splitlines()
+
+    # With the "apply_hook" method it is possible to define special points
+    # during the main experiment runtime, where custom code of child experiments
+    # (which inherit from - and extend upon - this experiment) can be
+    # injected / executed. This will be further explained in later examples.
+    # Using the "default" argument defines a filter hook, where custom code
+    # of child experiments is able to modify the value of the WORDS variable
+    WORDS = e.apply_hook('filter_words', words=WORDS, default=WORDS)
 
     for i in range(e.parameters["REPETITIONS"]):
         sampled_words = random.sample(WORDS, k=NUM_WORDS)
@@ -36,26 +43,30 @@ with Skippable(), (e := Experiment(base_path=tempfile.gettempdir(),
         e[f"metrics/length/{i}"] = text_length
         e.info(f"saved text file with {text_length} characters")
 
-        e.update()
-
-    # ~ post-experiment analysis
-    # Suppose we want to conduct some sort of analysis on the results of the completed
-    # experiment. in this case we want to find the texts with the min and max number
-    # of characters. We also want to find out the average value for the
-    # character count. We then store this information as additional character count.
+    # This is a simple action hook, where custom code can be executed to
+    # potentially add more functionality to the end of the experiment.
+    e.apply_hook('after_experiment')
 
 
-# ALl of the code defined within this "Experiment.analyis" context manager will be
-# copied to the analyis.py template of the record folder of this experiment run and
-# it will work as it is.
-# NOTE: As long as the analysis code is only using experiment data or experiment
-#       variables
+# ~ post-experiment analysis
+# Suppose we want to conduct some sort of analysis on the results of the completed
+# experiment. in this case we want to find the texts with the min and max number
+# of characters. We also want to find out the average value for the
+# character count. We then store this information as additional character count.
+
+# All of the code defined within this "Experiment.analyis" context manager will be
+# copied to the "analyis.py" template inside the archive folder of this experiment
+# and that code will work as it is...
+# NOTE: ... As long as the analysis code defined here only accesses global variables
+#       or data that has been previously committed to the experiment instance via
+#       the indexing operation (e.g data['values'])
 with Skippable(), e.analysis:
     # (1) Note how the experiment path will be dynamically determined to be a *new*
     #     folder when actually executing the experiment, but it will refer to the
     #     already existing experiment record folder when imported from
     #     "snapshot.py"
     print(e.path)
+
     e.info('Starting analysis of experiment results')
 
     index_min, count_min = min(e['metrics/length'].items(),

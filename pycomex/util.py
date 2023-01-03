@@ -1,11 +1,13 @@
 """
 Utility methods
 """
+import logging
 import os
 import json
 import datetime
 import pathlib
 import textwrap
+import typing as t
 from typing import Optional, List, Callable
 from inspect import getframeinfo, stack
 
@@ -33,6 +35,9 @@ TEMPLATE_ENV.globals.update({
     'key_sort': lambda k, v: k,
     'wrap': textwrap.wrap,
 })
+
+NULL_LOGGER = logging.Logger('NULL')
+NULL_LOGGER.addHandler(logging.NullHandler())
 
 
 class CustomJsonEncoder(json.encoder.JSONEncoder):
@@ -200,3 +205,54 @@ class RecordCode:
 
 class Empty:
     pass
+
+
+class Singleton(type):
+    """
+    This is metaclass definition, which implements the singleton pattern. The objective is that whatever
+    class uses this as a metaclass does not work like a traditional class anymore, where upon calling the
+    constructor a NEW instance is returned. This class overwrites the constructor behavior to return the
+    same instance upon calling the constructor. This makes sure that always just a single instance
+    exists in the runtime!
+
+    **USAGE**
+    To implement a class as a singleton it simply has to use this class as the metaclass.
+    .. code-block:: python
+        class MySingleton(metaclass=Singleton):
+            def __init__(self):
+                # The constructor still works the same, after all it needs to be called ONCE to create the
+                # the first and only instance.
+                pass
+        # All of those actually return the same instance!
+        a = MySingleton()
+        b = MySingleton()
+        c = MySingleton()
+        print(a is b) # true
+    """
+    _instances = {}
+
+    def __call__(cls, *args, **kwargs):
+        if cls not in cls._instances:
+            cls._instances[cls] = super(Singleton, cls).__call__(*args, **kwargs)
+        return cls._instances[cls]
+
+
+def split_namespace(namespace: str) -> t.List[str]:
+    """
+    Given the namespace string of an experiment, this function will split that string into a list of
+    individual path segments.
+
+    :param str namespace: The string namespace definition for an experiment module
+    :returns: A list containing the split, individual path segments
+    """
+    # TODO: We could extend this to raise errors if an invalid format is detected.
+
+    if '/' in namespace:
+        return namespace.split('/')
+    # Technically we would discourage the usage of backslashes within the namespace specification, but there
+    # is the real possibility that a deranged windows user tries this, so we might as well make it a feature
+    # now already.
+    elif '\\' in namespace:
+        return namespace.split('\\')
+    else:
+        return [namespace]
