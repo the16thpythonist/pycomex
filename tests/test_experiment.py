@@ -451,15 +451,27 @@ class TestExperiment(unittest.TestCase):
 
 
 def test_run_experiment_basically_works_with_mock_experiment():
+    """
+    Runs the mock experiment and checks if that works properly
+    """
     experiment_path = os.path.join(ASSETS_PATH, 'mock_experiment.py')
     assert os.path.exists(experiment_path)
 
     # We actually need the experiment isolation here to fix the sys.argv!
     with ExperimentIsolation() as iso:
         experiment = run_experiment(experiment_path)
+
         assert isinstance(experiment, AbstractExperiment)
         assert experiment.error is None
 
+        # Just loosely checking if the automatic detection of the experiment parameters works
+        assert experiment.parameters['DEBUG'] is True
+        assert 'MEAN' in experiment.parameters
+        assert 'STANDARD_DEVIATION' in experiment.parameters
+
+        with open(experiment.log_path) as file:
+            log_content = file.read()
+            assert 'DEFAULT IMPLEMENTATION' in log_content
 
 # == EXPERIMENT ANALYSIS ==
 

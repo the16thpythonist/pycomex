@@ -126,7 +126,7 @@ History
 * Fixed a bug where numpy arrays within the storage would cause an exception during the serialization
   process by using a custom json encoder class which first converts all numpy arrays to nested lists
 
-0.7.0 (03.01.2022)
+0.7.0 (03.01.2023)
 ------------------
 
 * Added the ``experiment.SubExperiment`` class which implements experiment inheritance! This class now
@@ -152,4 +152,8 @@ History
   instance.
 * Do to the change above, the same now applies to ``experiment.run_example``.
 
+0.7.1 (17.01.2023)
+------------------
 
+* Slightly changed the hook mechanic to allow the possibility of defining overwritable default
+  implementations for hooks.

@@ -120,6 +120,11 @@ def test_mock_sub_experiment_works():
         assert experiment.parameters['NUM_VALUES'] == 200
         assert len(experiment['values']) == 200
 
+        with open(experiment.log_path) as file:
+            log_content = file.read()
+            assert 'SUB IMPLEMENTATION' in log_content
+            assert 'DEFAULT IMPLEMENTATION' not in log_content
+
 
 def test_stacking_sub_experiments_basically_works():
     """

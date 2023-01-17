@@ -34,6 +34,15 @@ with Skippable(), (e := Experiment(base_path=BASE_PATH, namespace=NAMESPACE, glo
         size=NUM_VALUES,
     )
     e['values'] = values
+
+    # This section here checks if default implementation of hooks works as I would imagine
+    # it should work. Doing it like this, the code in the function should get executed as a
+    # default implementation, but it should also be possible to override this code from
+    # any sub-experiments.
+    @e.hook('after_values', default=True)
+    def default_implementation(_e, values):
+        _e.info('DEFAULT IMPLEMENTATION')
+
     e.apply_hook('after_values', values=values)
 
 

@@ -22,8 +22,9 @@ NAMESPACE = 'experiment_results/mock_sub_experiment'
 DEBUG = True
 with Skippable(), (se := SubExperiment(EXPERIMENT_PATH, BASE_PATH, NAMESPACE, glob=globals())):
 
-    @se.hook('after_values')
+    @se.hook('after_values', replace=True)
     def offset_values(e, values):
+        e.info('SUB IMPLEMENTATION')
         e['values'] = values + OFFSET
 
 

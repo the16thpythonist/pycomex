@@ -561,7 +561,8 @@ class AbstractExperiment:
 
     def hook(self,
              name: str,
-             replace: bool = False
+             replace: bool = False,
+             default: bool = True,
              ) -> t.Callable[[t.Callable], t.Callable]:
         """
         This method will return a decorator, which can be used to register callbacks to certain hooks
@@ -571,6 +572,9 @@ class AbstractExperiment:
         :param bool replace: If this flag is True, the registered callback will replace any previously
             registered callbacks for the same hook name. If False, the callback will be added to the
             back of the execution chain.
+        :param bool default: If this flag is True, then the given callback will only be executed if
+            otherwise no other callbacks have been registered to that hook! Effectively declaring that
+            callback as the default implementation only!
 
         :returns: A decorator callable
         """
@@ -587,7 +591,12 @@ class AbstractExperiment:
             if replace:
                 self.hooks[name] = [func]
             else:
-                self.hooks[name].append(func)
+                # In the case default=True and non-empty hook list we DONT want to add the hook to the list
+                # because if the default flag is given then that means that this particular callback is
+                # supposed to be the default implementation only, which means that it should only be
+                # executed if there are no other hooks registered yet!
+                if not default or len(self.hooks[name]) == 0:
+                    self.hooks[name].append(func)
 
             setattr(func, 'file_name', file_name)
             return func
