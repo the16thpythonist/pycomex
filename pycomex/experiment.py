@@ -308,6 +308,12 @@ class AbstractExperiment:
         self.code_name: t.Optional[str] = None
         self.code_path: t.Optional[str] = None
 
+        # The keys of this dictionary are unique string names and the values will be absolute string paths
+        # of files or folders which have been added as a dependency for the execution of the experiment.
+        # Ultimately these files and folders wil be copied into each(!) created archive folder to ensure
+        # the reproducibility of the snapshots.
+        self.dependency_paths: t.Dict[str, str] = {}
+
     def initialize_paths(self):
         """
         This method will calculate all the specific path attributes of the experiment instance from the
@@ -417,6 +423,15 @@ class AbstractExperiment:
         if "DEBUG" in self.glob and isinstance(self.glob["DEBUG"], bool):
             self.debug_mode = self.glob["DEBUG"]
 
+        if 'DEPENDENCY_PATHS' in self.glob:
+            if isinstance(self.glob['DEPENDENCY_PATHS'], dict):
+                self.dependency_paths = self.glob['DEPENDENCY_PATHS']
+            else:
+                self.warning('it looks like you have defined "DEPENDENCY_PATH", but it is not a dictionary '
+                             'please make sure that this variable is a dictionary whose keys are unique '
+                             'string identifiers and the values are existing absolute string paths of '
+                             'files that are required for the working of the experiment.')
+
         # TODO: Default short description from __doc__ first line.
         if "SHORT_DESCRIPTION" in self.glob:
             self.short_description = self.glob["SHORT_DESCRIPTION"]
@@ -517,6 +532,15 @@ class AbstractExperiment:
         """
         self.logger.info(message)
 
+    def warning(self, message: str) -> None:
+        """
+        Logs the given ``message`` string as an "WARNING" level log message.
+
+        :param str message: The string message to be printed as a log.
+        :returns: None
+        """
+        self.logger.warning(message)
+
     def info_lines(self, message: str) -> None:
         """
         Logs each line of the given multiline ``message`` string as an "INFO" level log message.
@@ -553,9 +577,9 @@ class AbstractExperiment:
         """
         value = default
         for func in self.hooks[name]:
-            self.info(f'[@] run hook: "{name}" - from: "{func.file_name}.{func.__name__}"')
+            # self.info(f'[@] run hook: "{name}" - from: "{func.file_name}.{func.__name__}"')
             value = func(self, **kwargs)
-            self.info(f'    end hook: "{name}"')
+            # self.info(f'    end hook: "{name}"')
 
         return value
 
@@ -632,6 +656,7 @@ class AbstractExperiment:
         # The reason is that even after an experiment instance was constructed there are cases where
         # "base_path" and "name_space" might be modified and thus all the specific paths have to be
         # re-initialized. In that case it is easier to just have to call this single method.
+        self.discover_parameters()
         self.initialize_paths()
 
         # We are going to set this magic variable in the original experiment module. This can then be
@@ -657,6 +682,13 @@ class AbstractExperiment:
             # experiment execution!
             if os.path.exists(self.data_path):
                 self.load_records()
+
+            # 20.01.2023
+            # In analysis mode, we are going to use the dependency paths dict which was saved into the
+            # meta data of the current archive folder. This will make sure that we are now using the
+            # locally copied versions of these dependencies
+            if 'dependency_paths' in self.meta:
+                self.dependency_paths = self.meta['dependency_paths']
 
             # This exception will be caught by the "Skippable" context manager which always has to precede
             # the experiment manager, effectively skipping the entire context body!
@@ -877,6 +909,29 @@ class Experiment(AbstractExperiment):
         template = TEMPLATE_ENV.get_template('experiment_started.text.j2')
         self.info_lines(template.render(experiment=self))
 
+        # ~ Copying the file dependencies into the archive folder
+        # At the very end, we copy all the artifact dependencies (could be files but also folders) into the
+        # archive folder of the current experiment run. The purpose of those "dependency" files is the
+        # reproducibility of the "snapshot" within that archive folder. These files are potentially files
+        # which are needed by the folder.
+        self.meta['dependency_paths'] = {}
+        for name, dependency_path in self.dependency_paths.items():
+            if not os.path.exists(dependency_path):
+                raise FileNotFoundError(f'You have specified "{name}"("{dependency_path}") '
+                                        f'as a dependency for the experiment. '
+                                        f'That path does not exist! Please make sure that the '
+                                        f'path exists so it can be copied into the archive folder!')
+
+            file_name = os.path.basename(dependency_path)
+            destination_path = os.path.join(self.path, file_name)
+
+            if os.path.isfile(dependency_path):
+                shutil.copy(dependency_path, destination_path)
+            elif os.path.isdir(dependency_path):
+                shutil.copytree(dependency_path, destination_path)
+
+            self.meta['dependency_paths'][name] = destination_path
+
         # ~ Creating meta file
         self.meta['running'] = True
         self.meta['start_time'] = start_time
@@ -1064,8 +1119,10 @@ class SubExperiment(AbstractExperiment):
             glob=glob,
         )
         self.inherit_namespace = inherit_namespace
-        self.experiment_path = experiment_path
         self.experiment_exchange = ExperimentExchange()
+
+        self.experiment_path = experiment_path
+        self.experiment_name = os.path.basename(experiment_path)
 
         self.prevent_execution = True
 
@@ -1083,6 +1140,21 @@ class SubExperiment(AbstractExperiment):
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         super(SubExperiment, self).__exit__(exc_type, exc_val, exc_tb)
+
+        # 20.01.2023
+        # If the given experiment path does not exist, then we are first going to search for the base
+        # experiment in the current archive folder (It would be found there, if we are in fact currently
+        # executing the snapshot of an experiment from an archive folder!). If it is not found there
+        # either we produce a helpful error message.
+        if not os.path.exists(self.experiment_path):
+            experiment_path = self.experiment_path
+            self.experiment_path = os.path.join(self.path, self.experiment_name)
+
+            if not os.path.exists(self.experiment_path):
+                raise FileNotFoundError(f'The base experiment "{self.experiment_name}" defined for this '
+                                        f'sub experiment could not be found at the provided location '
+                                        f'{experiment_path}! Please make sure to provide a valid path to '
+                                        f'an existing base experiment module!')
 
         data = {
             'glob': self.get_clean_glob(),
@@ -1110,6 +1182,13 @@ class SubExperiment(AbstractExperiment):
         # was just executed.
         experiment = getattr(module, '__experiment__')
         self.update(experiment)
+
+        # 20.01.2023
+        # This fixes the issue where the snapshot of a sub experiment is not in fact executable, because
+        # the base experiment upon which it extends does not exist in the same folder. So here we copy that
+        # base experiment into the same folder as well!
+        destination_path = os.path.join(self.path, self.experiment_name)
+        shutil.copy(self.experiment_path, destination_path)
 
 
 def run_experiment(experiment_path: str,

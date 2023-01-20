@@ -126,6 +126,30 @@ def test_mock_sub_experiment_works():
             assert 'DEFAULT IMPLEMENTATION' not in log_content
 
 
+def test_bug_sub_experiment_snapshot_not_executable_because_base_experiment_missing():
+    """
+    20.01.2023 - In this bug, a snapshot.py file created by a SubExperiment was not actually executable
+    because it was missing the base experiment which was extending on, as that was not copied to the
+    archive folder and thus could not be discovered.
+    """
+    experiment_path = os.path.join(ASSETS_PATH, 'mock_sub_experiment.py')
+    assert os.path.exists(experiment_path)
+
+    with ExperimentIsolation() as iso:
+        experiment = run_experiment(experiment_path)
+
+        # Here we make sure that the base experiment is actually part of the archive folder as well, which
+        # is a prerequisite for the snapshot to be actually executable.
+        base_experiment_path = os.path.join(experiment.path, experiment.experiment_name)
+        assert os.path.exists(base_experiment_path)
+
+        # Here we try to actually execute the snapshot
+        snapshot_experiment = run_experiment(experiment.code_path)
+        assert isinstance(snapshot_experiment, AbstractExperiment)
+        assert os.path.exists(snapshot_experiment.path)
+        assert snapshot_experiment.error is None
+
+
 def test_stacking_sub_experiments_basically_works():
     """
     In this test we will try to call a SubExperiment of an experiment module, which itself is already a

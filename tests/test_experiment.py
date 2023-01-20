@@ -465,9 +465,16 @@ def test_run_experiment_basically_works_with_mock_experiment():
         assert experiment.error is None
 
         # Just loosely checking if the automatic detection of the experiment parameters works
+        assert 'debug' in experiment.path
         assert experiment.parameters['DEBUG'] is True
         assert 'MEAN' in experiment.parameters
         assert 'STANDARD_DEVIATION' in experiment.parameters
+
+        # 20.01.2023
+        # I have added the dependency mechanic and to the mock experiment, which means that in the
+        # experiment archive file, there should be a copied version of the "mock.txt" file which has
+        # been specified as a dependency
+        assert 'mock.txt' in os.listdir(experiment.path)
 
         with open(experiment.log_path) as file:
             log_content = file.read()

@@ -157,3 +157,13 @@ History
 
 * Slightly changed the hook mechanic to allow the possibility of defining overwritable default
   implementations for hooks.
+
+0.8.0 (20.01.2023)
+------------------
+
+* Removed the standard prints during the call of a hook, because they proved annoying in practice.
+* Fixed the bug, where a sub experiment snapshot would not be executable because it was missing the the
+  base experiment. The base experiment script is now copied into the archive folder as well.
+* Added the dependency system: It is now possible to define files which an experiment execution depends on
+  via the special ``DEPENDENCY_PATHS`` dict parameter. These files will be copied into the created archive
+  folders.

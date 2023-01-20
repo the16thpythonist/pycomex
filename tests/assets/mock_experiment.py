@@ -27,6 +27,11 @@ PATH = pathlib.Path(__file__).parent.absolute()
 BASE_PATH = os.path.join(os.path.dirname(PATH), 'artifacts')
 NAMESPACE = 'experiment_results/mock_experiment'
 DEBUG = True
+# This special "DEPENDENCY_PATHS" variable has to cause the experiment to copy the specified text
+# file into the archive folder!
+DEPENDENCY_PATHS = {
+    'text': os.path.join(PATH, 'mock.txt')
+}
 with Skippable(), (e := Experiment(base_path=BASE_PATH, namespace=NAMESPACE, glob=globals())):
     values = np.random.normal(
         loc=MEAN,
