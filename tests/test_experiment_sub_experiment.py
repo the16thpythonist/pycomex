@@ -140,8 +140,8 @@ def test_bug_sub_experiment_snapshot_not_executable_because_base_experiment_miss
 
         # Here we make sure that the base experiment is actually part of the archive folder as well, which
         # is a prerequisite for the snapshot to be actually executable.
-        base_experiment_path = os.path.join(experiment.path, experiment.experiment_name)
-        assert os.path.exists(base_experiment_path)
+        file_names = os.listdir(experiment.path)
+        assert 'mock_experiment.py' in file_names
 
         # Here we try to actually execute the snapshot
         snapshot_experiment = run_experiment(experiment.code_path)
@@ -178,3 +178,34 @@ def test_stacking_sub_experiments_basically_works():
         assert se.parameters['NUM_VALUES'] == 200
         assert len(se.data['values']) == 200
 
+
+def test_bug_sub_experiment_snapshot_file_is_the_base_experiment():
+    """
+    27.01.2022: I have noticed that the snapshot file which is created in the archive of a sub experiment
+    is actually not the code of the sub experiment but rather the code of the base experiment.
+    """
+    # We even use the double sub experiment here to see if it works with a deep stacking of experiments.
+    experiment_path = os.path.join(ASSETS_PATH, 'mock_sub_sub_experiment.py')
+    with open(experiment_path) as file:
+        experiment_content = file.read()
+
+    assert os.path.exists(experiment_path)
+
+    with ExperimentIsolation() as iso:
+        experiment = run_experiment(experiment_path)
+
+        assert isinstance(experiment, AbstractExperiment)
+        assert os.path.exists(experiment.path)
+        assert experiment.error is None
+
+        with open(experiment.code_path) as file:
+            snapshot_content = file.read()
+
+        # with the bug, this assertion fails
+        assert experiment_content == snapshot_content
+
+        # Now with the deep stacking in this example we also at the same time test if all the previous
+        # base experiment files are indeed also copied to the archive folder as expected
+        file_names = os.listdir(experiment.path)
+        assert 'mock_experiment.py' in file_names
+        assert 'mock_sub_experiment.py' in file_names

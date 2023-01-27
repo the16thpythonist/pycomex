@@ -1,6 +1,7 @@
 import tempfile
 import sys
 import typing as t
+from copy import deepcopy
 
 
 class ExperimentIsolation:

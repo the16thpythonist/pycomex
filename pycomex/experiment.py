@@ -314,6 +314,14 @@ class AbstractExperiment:
         # the reproducibility of the snapshots.
         self.dependency_paths: t.Dict[str, str] = {}
 
+    @property
+    def p(self):
+        """
+        This will simply act as a shorthand for the accessing the internal parameters dict, because my god
+        is it annoying to have to write "parameters" every time.
+        """
+        return self.parameters
+
     def initialize_paths(self):
         """
         This method will calculate all the specific path attributes of the experiment instance from the
@@ -498,6 +506,20 @@ class AbstractExperiment:
                                     'populate the data dictionary of an Experiment instance, but the data '
                                     'file was not found. Please make sure that this method is only called '
                                     'for experiments that are already terminated!')
+
+    def copy_source(self) -> None:
+        """
+        This method will copy the source file of the experiment that is currently executed into the
+        archive folder using the name which was determined by ``self.code_path``
+
+        :returns: None
+        """
+        if not os.path.exists(self.code_path):
+            # Since we have the globals() dict from the experiment file, we can access the __file__ global
+            # value of that dict to get the file of the experiment code file.
+            source_path = pathlib.Path(self.glob['__file__']).absolute()
+            self.data['artifacts']['source'] = str(source_path)
+            shutil.copy(source_path, self.code_path)
 
     # -- Logging --
 
@@ -1014,13 +1036,6 @@ class Experiment(AbstractExperiment):
         self.info(f"saved experiment error to: {self.error_path}")
         self.info("\n".join(tb))
 
-    def copy_source(self) -> None:
-        # Since we have the globals() dict from the experiment file, we can access the __file__ global
-        # value of that dict to get the file of the experiment code file.
-        source_path = pathlib.Path(self.glob['__file__']).absolute()
-        self.data['artifacts']['source'] = str(source_path)
-        shutil.copy(source_path, self.code_path)
-
     def render_template(self, file_name):
         template = self.templates[file_name]
         path = os.path.join(self.path, file_name)
@@ -1130,10 +1145,19 @@ class SubExperiment(AbstractExperiment):
         return super(SubExperiment, self).__enter__()
         pass
 
-    def get_clean_glob(self):
+    def get_clean_glob(self) -> t.Dict[str, t.Any]:
+        """
+        Returns the *cleaned* version of the current globals dictionary ``self.glob``.
+
+        The reason we need this is to update the
+        """
         cleaned = {}
         for key, value in self.glob.items():
-            if key == '__name__' or key.isupper():
+            # 27.01.2023
+            # Added __file__ to the list of special values we want to copy, because with that we fix the
+            # bug that the copied snapshot file is not actually indeed the sub experiment but the base
+            # experiment.
+            if key in ['__name__', '__file__'] or key.isupper():
                 cleaned[key] = value
 
         return cleaned
@@ -1192,7 +1216,7 @@ class SubExperiment(AbstractExperiment):
 
 
 def run_experiment(experiment_path: str,
-                   parameters: dict = {}
+                   parameters: dict = {},
                    ) -> AbstractExperiment:
     """
 

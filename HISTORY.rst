@@ -167,3 +167,11 @@ History
 * Added the dependency system: It is now possible to define files which an experiment execution depends on
   via the special ``DEPENDENCY_PATHS`` dict parameter. These files will be copied into the created archive
   folders.
+
+0.8.1 (27.01.2023)
+------------------
+
+* Added ``Experiment.p`` as a shorthand for ``Experiment.parameters`` because that got really annoying to
+  write so often.
+* Fixed a serious bug, where the ``snapshot.py`` file in the archive folder of an experiment was not in
+  fact the sub experiment but the lowest level base experiment!
