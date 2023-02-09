@@ -1,6 +1,7 @@
 """
 This doc string will be saved as the "description" metadata of the experiment records
 """
+import os
 from pycomex.experiment import Experiment
 from pycomex.util import Skippable
 
@@ -16,7 +17,7 @@ WORLD = "world!"
 # - Path to an existing folder in which to store the results
 # - A namespace name unique for each experiment
 # - access to the local globals() dict
-with Skippable(), (e := Experiment("/tmp", "example/quickstart", globals())):
+with Skippable(), (e := Experiment(os.getcwd(), "example/quickstart", globals())):
 
     # Internally saved into automatically created nested dict
     # {'strings': {'hello_world': '...'}}

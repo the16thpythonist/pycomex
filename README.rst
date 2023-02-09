@@ -5,9 +5,6 @@
         :target: https://pycomex.readthedocs.io/en/latest/?version=latest
         :alt: Documentation Status
 
-.. image:: https://img.shields.io/badge/code%20style-black-000000.svg
-   :target: https://github.com/psf/black
-
 PyComex - Python Computational Experiments
 ================================================
 
@@ -15,7 +12,6 @@ Microframework to improve the experience of running and managing records of comp
 such as machine learning and data science experiments, in Python.
 
 * Free software: MIT license
-* Documentation: https://pycomex.readthedocs.io.
 
 Features
 --------
@@ -63,6 +59,7 @@ Archiving of metadata, file artifacts and error handling is automatically manage
     """
     This doc string will be saved as the "description" meta data of the experiment records
     """
+    import os
     from pycomex.experiment import Experiment
     from pycomex.util import Skippable
 
@@ -76,7 +73,7 @@ Archiving of metadata, file artifacts and error handling is automatically manage
     # - Path to an existing folder in which to store the results
     # - A namespace name unique for each experiment
     # - access to the local globals() dict
-    with Skippable(), (e := Experiment("/tmp", "example/quickstart", globals())):
+    with Skippable(), (e := Experiment(os.getcwd(), "results/example/quickstart", globals())):
 
         # Internally saved into automatically created nested dict
         # {'strings': {'hello_world': '...'}}
@@ -107,7 +104,7 @@ This example would create the following folder structure:
 
 .. code-block:: python
 
-    tmp
+    cwd
     |- results
        |- example
           |- 000
@@ -160,7 +157,8 @@ Specifically note these two aspects:
         e.info('analysis done')
 
 
-For more information and more interesting examples visit the Documentation: https://pycomex.readthedocs.io !
+For an introduction to more advanced features take a look at the examples in
+``pycomex/examples`` ( https://github.com/the16thpythonist/pycomex/tree/master/pycomex/examples )
 
 Credits
 -------

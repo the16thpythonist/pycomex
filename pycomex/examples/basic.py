@@ -24,7 +24,7 @@ NUM_WORDS = 1000
 REPETITIONS = 10
 SHORT_DESCRIPTION = 'An example experiment, which shows all the basic features of the library'
 
-with Skippable(), (e := Experiment(base_path=tempfile.gettempdir(),
+with Skippable(), (e := Experiment(base_path=os.getcwd(),
                                    namespace="example/basic", glob=globals())):
 
     response = urllib.request.urlopen("https://www.mit.edu/~ecprice/wordlist.10000")

@@ -175,3 +175,8 @@ History
   write so often.
 * Fixed a serious bug, where the ``snapshot.py`` file in the archive folder of an experiment was not in
   fact the sub experiment but the lowest level base experiment!
+
+0.8.2 (09.02.2023)
+------------------
+
+* Updated Readme file

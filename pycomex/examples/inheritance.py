@@ -35,7 +35,7 @@ PARENT_PATH = os.path.join(PATH, 'analysis.py')
 # Other than that, SubExperiment takes the same arguments as regular ones.
 # These values here will actually overwrite the configuration in the parent
 # experiment
-BASE_PATH = tempfile.gettempdir()
+BASE_PATH = os.getcwd()
 NAMESPACE = 'example/inheritance'
 DEBUG = True
 with Skippable(), (se := SubExperiment(PARENT_PATH, BASE_PATH, NAMESPACE, glob=globals())):

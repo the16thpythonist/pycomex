@@ -8,6 +8,7 @@ metadata.
 This is the same experiment content, which is also featured in the "basic.py"
 example.
 """
+import os
 import tempfile
 import random
 import textwrap
@@ -20,7 +21,7 @@ from pycomex.util import Skippable
 NUM_WORDS = 1000
 REPETITIONS = 10
 
-with Skippable(), (e := Experiment(base_path=tempfile.gettempdir(),
+with Skippable(), (e := Experiment(base_path=os.getcwd(),
                                    namespace="example/analysis", glob=globals())):
 
     response = urllib.request.urlopen("https://www.mit.edu/~ecprice/wordlist.10000")

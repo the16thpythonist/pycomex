@@ -10,6 +10,6 @@ It is recommended to review the examples in the following order:
 2. ``basics.py``: More detailed explanations of the concepts already indicated in the previous example.
 3. ``analysis.py``: More in-depth explanations for the "analysis" feature of the library, where a
    separate "analysis.py" boilerplate file is created in the archive folder of every experiment run.
-4. ``inheritance.py``: Explains how the SubExperiment class can be used to inherit main functionality from
+4. ``inheritance.py``: Explains how the "SubExperiment" class can be used to inherit main functionality from
    other "parent" experiments, but overwrite certain parameters and inject custom code via filter and
    action hooks.
