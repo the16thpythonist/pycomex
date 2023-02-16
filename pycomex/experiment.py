@@ -686,6 +686,37 @@ class AbstractExperiment:
 
         return decorator
 
+    def set_parameter(self, parameter_name: str, parameter_value: t.Any) -> None:
+        """
+        This function sets the parameter with the string ``parameter_name`` to ``parameter_value``
+
+        Whenever a parameter should be modified at runtime, it is strongly recommended that this method is
+        used because it will apply the changes to the internal parameters dict as well as the globals
+        dictionary!
+
+        :param parameter_name: The string name of the parameter variable to be modified
+        :param parameter_value: The new value to be assigned to that experiment parameter
+
+        :returns: None
+        """
+        self.parameters[parameter_name] = parameter_value
+        self.glob[parameter_name] = parameter_value
+
+    def apply_parameter_hooks(self) -> None:
+        """
+        This method applies *all* the parameter hooks for the experiment.
+
+        What is a parameter hook?
+
+        Besides the custom user-added hooks, there are default hooks which can be defined which are
+        filter hooks for all the variables which the experiment recognizes as "parameters" (upper case
+        global variables). Inside these default filter hooks it is for example possible to *modify*
+        instead of overwrite the default value provided by the parent experiment!
+        """
+        for parameter_name, parameter_value in self.parameters.items():
+            parameter_value = self.apply_hook(parameter_name, value=parameter_value, default=parameter_value)
+            self.set_parameter(parameter_name, parameter_value)
+
     # -- Magic Methods --
 
     def check_experiment_exchange(self):
@@ -720,6 +751,12 @@ class AbstractExperiment:
         # re-initialized. In that case it is easier to just have to call this single method.
         self.discover_parameters()
         self.initialize_paths()
+
+        # 16.02.2023
+        # This method will apply all the hooks for the parameters. Essentially it is possible to register
+        # hooks with the exact names of parameters and these hooks will then be executed here at the very
+        # beginning of the experiment.
+        self.apply_parameter_hooks()
 
         # We are going to set this magic variable in the original experiment module. This can then be
         # used to identify whether a module is actually an experiment or not

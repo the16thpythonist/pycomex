@@ -193,3 +193,9 @@ History
 * SubExperiments can now also define analysis context and those will be additive, meaning that the code
   from those will be added to he end of all the analysis code that was previously created by the parent
   experiment
+
+0.8.4 (16.02.2023)
+------------------
+
+* Added the feature of "parameter hooks". Now it is possible to register a hook with the name of a parameter
+  in a sub experiment to modify that parameter before the start of the experiment...

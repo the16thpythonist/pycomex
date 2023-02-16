@@ -25,7 +25,6 @@ from pycomex.util import Skippable
 #     values will automatically be injected into the runtime of the parent
 #     experiment and the experiment will execute with these values instead!
 NUM_WORDS = 500
-REPETITIONS = 3
 
 # SubExperiment requires one additional positional argument, which is the
 # absolute string path to the experiment module which is to be used as
@@ -64,13 +63,42 @@ with Skippable(), (se := SubExperiment(PARENT_PATH, BASE_PATH, NAMESPACE, glob=g
         # value of the words variable.
         return words
 
+    # (3) Parameter Hooks:
+    #     Besides the user-defined custom hooks, there are also default hooks which can be registered. For
+    #     example it is possible to register a hook for every experiment "parameter" (upper-case global
+    #     variables) from the parent experiment.
+    #     These hooks are filter hooks, which means as their only argument "value" they receive the original
+    #     value of that parameter defined in the parent experiment. This provides the possibility to
+    #     *modify* these values instead of straight-up overwriting them...
+
+    @se.hook('REPETITIONS')
+    def repetitions(e, value):
+        """
+        This hook for example modifies the REPETITIONS parameter to use only half of the originally defined
+        value, whatever that was defined as in the parent experiment.
+        """
+        print(e.p['REPETITIONS'])
+        return int(value / 2)
+
+    # This is another example of a hook available by default. This hook will be executed at the very end
+    # of the experiment. This can be useful when additional functionality should be added to the end of
+    # an existing parent experiment!
     @se.hook('after_experiment')
     def after_experiment(e):
         e.info('We can even use the logging here!')
+        e.info(f'For example we can print the value of the REPETITIONS parameter: {e.p["REPETITIONS"]}')
+        e.info('The original value was 10, but remember that we modified this with a parameter hook!')
+
         # And we can assign / modify the contents of the experiment data store
         e['message'] = 'hello from sub experiment!'
 
 
+# (4) Analysis extensions:
+#     We can even define an analysis section for sub experiments as well. These are additive, which means
+#     that the analysis of a sub experiment is run after the analysis of the parent experiment and that
+#     is even the case for the code that is copied to the analysis.py file!
+#     The code which is copied there is a concatenation of all the individual analysis code snippets in the
+#     order in which they are executed.
 with Skippable(), se.analysis:
 
     # We can also add additional analysis in the sub experiments!
