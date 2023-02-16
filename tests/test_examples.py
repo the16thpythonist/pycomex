@@ -50,7 +50,7 @@ def test_example_analysis():
     assert isinstance(module.e, Experiment)
 
     with ArgumentIsolation():
-        experiment = run_example("analysis.py")
+        experiment = run_example("analysing.py")
         assert experiment.error is None
         assert os.path.exists(experiment.path)
 

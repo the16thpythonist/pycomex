@@ -393,7 +393,7 @@ class TestExperiment(unittest.TestCase):
         but then it is not able to copy it to "analysis.py" supposedly because "detect_indent" fails.
         """
         with ArgumentIsolation():
-            experiment = run_example("analysis.py")
+            experiment = run_example("analysing.py")
             assert experiment.error is None
             assert os.path.exists(experiment.path)
 
@@ -414,7 +414,7 @@ class TestExperiment(unittest.TestCase):
         # to merely import the SNAPSHOT file of that experiment and then we can compare the modification
         # times of the analsyis artifacts, which should NOT have changed!
         with ArgumentIsolation():
-            experiment = run_example("analysis.py")
+            experiment = run_example("analysing.py")
             assert experiment.error is None
             assert os.path.exists(experiment.path)
 

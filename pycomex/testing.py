@@ -65,10 +65,11 @@ class ExperimentIsolation:
         # experiment inheritance.
         globals_keys = list(globals().keys())
         for key in globals_keys:
-            if key in self.original_globals:
-                globals()[key] = self.original_globals[key]
-            else:
-                del globals()[key]
+            if key not in ['__experiment__']:
+                if key in self.original_globals:
+                    globals()[key] = self.original_globals[key]
+                else:
+                    del globals()[key]
 
         # ~ reset the original argv
         sys.argv = self.original_argv

@@ -180,3 +180,16 @@ History
 ------------------
 
 * Updated Readme file
+
+0.8.3 (13.02.2023)
+------------------
+
+* Fixed the problem that when an exception occurs within the RecordCode context manager that this is not
+  properly printed. Now the entire traceback for every error is printed to the logger stream
+* Moved the entire analysis RecordCode functionality from Experiment to AbstractExperiment so that it
+  can also be used in SubExperiment
+* Fixed the bug that the analysis.py file within the archive folder would not work at all for
+  SubExperiment runs
+* SubExperiments can now also define analysis context and those will be additive, meaning that the code
+  from those will be added to he end of all the analysis code that was previously created by the parent
+  experiment

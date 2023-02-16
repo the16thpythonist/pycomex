@@ -22,7 +22,7 @@ NUM_WORDS = 1000
 REPETITIONS = 10
 
 with Skippable(), (e := Experiment(base_path=os.getcwd(),
-                                   namespace="example/analysis", glob=globals())):
+                                   namespace="example/analysing", glob=globals())):
 
     response = urllib.request.urlopen("https://www.mit.edu/~ecprice/wordlist.10000")
     WORDS = response.read().decode("utf-8").splitlines()
@@ -69,7 +69,6 @@ with Skippable(), e.analysis:
     print(e.path)
 
     e.info('Starting analysis of experiment results')
-
     index_min, count_min = min(e['metrics/length'].items(),
                                key=lambda item: item[1])
     index_max, count_max = max(e['metrics/length'].items(),
@@ -86,3 +85,4 @@ with Skippable(), e.analysis:
     # (2) Committing new files to the already existing experiment record folder will
     #     also work as usual, whether executed here directly or later in "analysis.py"
     e.commit_json('analysis_results.json', analysis_results)
+    e.info(f'saved analysis results')

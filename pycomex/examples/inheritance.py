@@ -31,7 +31,7 @@ REPETITIONS = 3
 # absolute string path to the experiment module which is to be used as
 # the parent experiment - this module will then actually be executed.
 PATH = pathlib.Path(__file__).parent.absolute()
-PARENT_PATH = os.path.join(PATH, 'analysis.py')
+PARENT_PATH = os.path.join(PATH, 'analysing.py')
 # Other than that, SubExperiment takes the same arguments as regular ones.
 # These values here will actually overwrite the configuration in the parent
 # experiment
@@ -49,6 +49,8 @@ with Skippable(), (se := SubExperiment(PARENT_PATH, BASE_PATH, NAMESPACE, glob=g
 
     # NOTE: The first argument of every hook is always the experiment instance of the
     #       parent experiment!
+    #       after that the names of additional parameters, if there are any at all, depend
+    #       on how the individual hooks were set up in the parent experiment.
 
     @se.hook('filter_words')
     def remove_random_words(e, words):
@@ -67,3 +69,10 @@ with Skippable(), (se := SubExperiment(PARENT_PATH, BASE_PATH, NAMESPACE, glob=g
         e.info('We can even use the logging here!')
         # And we can assign / modify the contents of the experiment data store
         e['message'] = 'hello from sub experiment!'
+
+
+with Skippable(), se.analysis:
+
+    # We can also add additional analysis in the sub experiments!
+    se.info('hello from sub experiment')
+

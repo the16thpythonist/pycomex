@@ -9,6 +9,30 @@ from pycomex.util import Skippable
 
 class TestFunctions(unittest.TestCase):
 
+    def test_context_manager_exception(self):
+        """
+        This is just to find out what exactly happens when an exception is raised within a context manager
+        """
+
+        class Context:
+
+            def __init__(self):
+                self.exc_type = None
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc_value, exc_traceback):
+                print(exc_type, exc_value, exc_traceback)
+                self.exc_type = exc_type
+                return True
+
+        with Context() as c:
+            raise ValueError()
+
+        assert c.exc_type is not None
+        assert c.exc_type == ValueError
+
     def test_get_version(self):
         version = get_version()
         self.assertIsInstance(version, str)

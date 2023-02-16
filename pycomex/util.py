@@ -1,6 +1,7 @@
 """
 Utility methods
 """
+import traceback
 import logging
 import os
 import json
@@ -111,7 +112,9 @@ class RecordCode:
     """
     This class can be used as a context manager to record code.
 
-    **CHANGES 12.09.2022**
+    **CHANGELOG**
+
+    12.09.2022
 
     Previously this class worked like this: In the __enter__ method a frameinfo supplied the line number at
     which the context starts and then the same was done in __exit__ and with Python 3.8 this actually worked
@@ -121,12 +124,19 @@ class RecordCode:
     But since we can still get the start line reliably, we just have to extract the code with some string
     processing now: With the starting line we know the indent of this context manager and can then record
     all the code which follows it in one level of indent deeper.
+
+    13.02.2023
+
+    Added a logger as optional argument for the constructor. Also now if an error occurs inside the context
+    the actual complete stack trace will be printed to the stream of that logger.
     """
     def __init__(self,
                  stack_index: int = 2,
                  initial_stack_index: int = 1,
-                 skip=False):
+                 skip: bool = False,
+                 logger: logging.Logger = NULL_LOGGER):
         self.stack_index = stack_index
+        self.logger = logger
 
         # Getting the filename and actually the content of the file in the constructor already is an
         # improvement towards the previous version. Back then it was done in time when the enter method was
@@ -135,6 +145,7 @@ class RecordCode:
         # process would fail.
         frame_info = getframeinfo(stack()[initial_stack_index][0])
         self.file_path = frame_info.filename
+        print(self.file_path)
         with open(self.file_path, mode='r') as file:
             self.file_lines = file.readlines()
 
@@ -174,7 +185,17 @@ class RecordCode:
         return self
 
     def __exit__(self, exc_type, exc_value, exc_traceback) -> bool:
-        print(exc_type, exc_value)
+        # 13.02.2022
+        # This fixes a big annoyance, where an error inside a code record is almost unfixable
+        # because it doesn't actually show the stack trace.
+        # Now, if an exception occurred within the code record, that exception with it's entire
+        # stack trace will be printed to the logger.
+        if exc_type is not None:
+            exception_lines = traceback.format_exception(exc_type, exc_value, exc_traceback)
+            exception_string = ''.join(exception_lines)
+            self.logger.error(f'[!] ERROR occurred within a {self.__class__.__name__} context')
+            self.logger.error(exception_string)
+
         # First of all we have to find out the indentation of the line at which we enter
         enter_line = self.file_lines[self.enter_line - 1]
         self.enter_indent = len(enter_line) - len(enter_line.lstrip())
