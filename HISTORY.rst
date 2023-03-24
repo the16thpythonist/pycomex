@@ -199,3 +199,8 @@ History
 
 * Added the feature of "parameter hooks". Now it is possible to register a hook with the name of a parameter
   in a sub experiment to modify that parameter before the start of the experiment...
+
+0.8.5 (24.03.2023)
+------------------
+
+* Fixed a bug where the inspect module would not be working correctly in executions of SubExperiment

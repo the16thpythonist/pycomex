@@ -1233,9 +1233,8 @@ class SubExperiment(AbstractExperiment):
             data = {'glob': {'__name__': '__import__'}}
             self.experiment_exchange.request(self.experiment_path, data=data)
 
-            spec = importlib.util.spec_from_file_location('experiment', self.experiment_path)
-            module = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(module)
+            # This method will dynamically import the experiment given by self.experiment_path
+            module = self.dynamic_import_experiment()
 
             experiment = getattr(module, '__experiment__')
             self.update(experiment)
@@ -1294,9 +1293,8 @@ class SubExperiment(AbstractExperiment):
         # path, so that the parent experiment can access that data during it's __enter__ operation.
         self.experiment_exchange.request(self.experiment_path, data=data)
 
-        spec = importlib.util.spec_from_file_location('experiment', self.experiment_path)
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
+        # This method will dynamically import the experiment given by self.experiment_path
+        module = self.dynamic_import_experiment()
 
         # At experiment __enter__ EVERY experiment will save a reference to itself into it own module's
         # global variable called __experiment__. We access the experiment like that and use it to update
@@ -1319,6 +1317,24 @@ class SubExperiment(AbstractExperiment):
         # base experiment into the same folder as well!
         destination_path = os.path.join(self.path, self.experiment_name)
         shutil.copy(self.experiment_path, destination_path)
+
+    def dynamic_import_experiment(self) -> 'ModuleType':
+        """
+        This method dynamically imports the base experiment file which is identified by the absolute path
+        given by ``self.experiment_path``. This also means that the top-level code of that module is
+        also EXECUTED within this method!
+        Returns the imported module object instance.
+        """
+        # 24.03.2023 - Added the derivation of the module name, and now we also add that uniquely named
+        # module to the sys.modules directory. This is NECESSARY to fix a bug where the "inspect"
+        # functionality would not work properly in SubExperiments!
+        module_name = os.path.basename(self.experiment_path).strip('.py')
+        spec = importlib.util.spec_from_file_location(module_name, self.experiment_path)
+        module = importlib.util.module_from_spec(spec)
+        sys.modules[module_name] = module
+        spec.loader.exec_module(module)
+
+        return module
 
 
 def run_experiment(experiment_path: str,
