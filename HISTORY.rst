@@ -200,7 +200,22 @@ History
 * Added the feature of "parameter hooks". Now it is possible to register a hook with the name of a parameter
   in a sub experiment to modify that parameter before the start of the experiment...
 
-0.8.5 (24.03.2023)
+0.8.7 (27.03.2023)
 ------------------
 
 * Fixed a bug where the inspect module would not be working correctly in executions of SubExperiment
+* Fixed the version dependency for "click"
+* Fixed the version dependency for "numpy"
+
+
+0.9.0 (27.04.2023)
+------------------
+
+Introduced the new **functional API**. This is a completely new way to use the pycomex framework which
+will slowly replace the old way. In this new method the whole thing is implemented with decorators instead
+of context managers, which makes the entire implementation approximately 100x easier and less riddled with
+side effects and bugs.
+
+- Already changed the README example to use the functional API
+- Slowly started replacing the examples with the functional API
+

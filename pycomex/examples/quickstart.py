@@ -1,31 +1,43 @@
 """
-This doc string will be saved as the "description" metadata of the experiment records
+This doc string will be saved as the "description" meta data of the experiment records
 """
 import os
-from pycomex.experiment import Experiment
-from pycomex.util import Skippable
+from pycomex.functional.experiment import Experiment
+from pycomex.utils import folder_path, file_namespace
 
-SHORT_DESCRIPTION = ('An example experiment describing the very first steps, '
-                     'which are needed to get started with the library')
 # Experiment parameters can simply be defined as uppercase global variables.
 # These are automatically detected and can possibly be overwritten in command
 # line invocation
 HELLO = "hello "
 WORLD = "world!"
 
-# Experiment context manager needs 3 positional arguments:
-# - Path to an existing folder in which to store the results
-# - A namespace name unique for each experiment
-# - access to the local globals() dict
-with Skippable(), (e := Experiment(os.getcwd(), "example/quickstart", globals())):
+# There are certain special parameters which will be detected by the experiment
+# such as this, which will put the experiment into debug mode.
+# That means instead of creating a new archive for every execution, it will always
+# create/overwrite the "debug" archive folder.
+__DEBUG__ = True
 
+# An experiment is essentially a function. All of the code that constitutes
+# one experiment should ultimately be called from this one function...
+
+# The main experiment function has to be decorated with the "Experiment"
+# decorator, which needs three main arguments:
+# - base_path: The absolute string path to an existing FOLDER, where the
+#   archive structure should be created
+# - namespace: This is a relative path which defines the concrete folder
+#   structure of the specific archive folder for this specific experiment
+# - glob: The globals() dictionary for the current file
+@Experiment(base_path=os.getcwd(),
+            namespace='results/quickstart',
+            glob=globals())
+def experiment(e: Experiment):
     # Internally saved into automatically created nested dict
     # {'strings': {'hello_world': '...'}}
     e["strings/hello_world"] = HELLO + WORLD
 
     # Alternative to "print". Message is printed to stdout as well as
     # recorded to log file
-    e.info("some debug message")
+    e.log("some debug message")
 
     # Automatically saves text file artifact to the experiment record folder
     file_name = "hello_world.txt"
@@ -34,12 +46,22 @@ with Skippable(), (e := Experiment(os.getcwd(), "example/quickstart", globals())
     # e.commit_png(file_name, image)
     # ...
 
-# All the code inside this context will be copied to the "analysis.py"
-# file which will be created as an experiment artifact.
-with Skippable(), e.analysis:
+
+@experiment.analysis
+def analysis(e: Experiment):
     # And we can access all the internal fields of the experiment object
     # and the experiment parameters here!
     print(HELLO, WORLD)
     print(e['strings/hello_world'])
     # logging will print to stdout but not modify the log file
-    e.info('analysis done')
+    e.log('analysis done')
+
+
+# This needs to be put at the end of the experiment. This method will
+# then actually execute the main experiment code defined in the function
+# above.
+# NOTE: The experiment will only be run if this module is directly
+# executed (__name__ == '__main__'). Otherwise the experiment will NOT
+# be executed, which implies that the experiment module can be imported
+# from somewhere else without triggering experiment execution!
+experiment.run_if_main()

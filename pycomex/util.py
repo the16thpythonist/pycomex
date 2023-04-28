@@ -1,6 +1,8 @@
 """
 Utility methods
 """
+import random
+import string
 import traceback
 import logging
 import os
@@ -8,6 +10,7 @@ import json
 import datetime
 import pathlib
 import textwrap
+import importlib.util
 import typing as t
 from typing import Optional, List, Callable
 from inspect import getframeinfo, stack
@@ -55,6 +58,8 @@ class CustomJsonEncoder(json.encoder.JSONEncoder):
             return value.data
 
 
+# == CUSTOM JINJA FILTERS ==
+
 def dict_value_sort(data: dict,
                     key: Optional[str] = None,
                     reverse: bool = False,
@@ -77,6 +82,29 @@ def dict_value_sort(data: dict,
 
 
 TEMPLATE_ENV.filters['dict_value_sort'] = dict_value_sort
+
+
+def pretty_time(value: int) -> str:
+    date_time = datetime.datetime.fromtimestamp(value)
+    return date_time.strftime('%A, %B %d, %Y at %I:%M %p')
+
+
+TEMPLATE_ENV.filters['pretty_time'] = pretty_time
+
+
+def file_size(value: str, unit: str = 'MB'):
+    unit_factor_map = {
+        'KB': 1 / (1024 ** 1),
+        'MB': 1 / (1024 ** 2),
+        'GB': 1 / (1024 ** 3),
+    }
+
+    size_b = os.path.getsize(value)
+    size = size_b * unit_factor_map[unit]
+    return f'{size:.3f} {unit}'
+
+
+TEMPLATE_ENV.filters['file_size'] = file_size
 
 
 def get_version():
@@ -277,3 +305,31 @@ def split_namespace(namespace: str) -> t.List[str]:
         return namespace.split('\\')
     else:
         return [namespace]
+
+
+def dynamic_import(path: str):
+    module_name = path.split('.')[-2]
+    module_spec = importlib.util.spec_from_file_location(module_name, path)
+    module = importlib.util.module_from_spec(module_spec)
+    module_spec.loader.exec_module(module)
+    return module
+
+
+def folder_path(file_path: str,):
+    return pathlib.Path(file_path).parent.absolute()
+
+
+def file_namespace(file_path: str,
+                   prefix: str = 'results'
+                   ) -> str:
+    file_name = os.path.basename(file_path)
+    if '.' in file_name:
+        file_name = os.path.splitext(file_name)[0]
+
+    return os.path.join(prefix, file_name)
+
+
+def random_string(length: int = 4,
+                  characters=string.ascii_lowercase + string.ascii_uppercase + string.digits
+                  ) -> str:
+    return ''.join(random.choices(characters, k=length))

@@ -1,0 +1,10 @@
+{%- set duration_hrs = experiment.metadata['duration']/3600 -%}
+================================================================================
+EXPERIMENT ENDED
+    duration:           {{ '%.3f' % duration_hrs|float }} hrs
+    start time:         {{ experiment.metadata['start_time'] | pretty_time }}
+    end time:           {{ experiment.metadata['end_time'] | pretty_time }}
+    error?              {{ experiment.error }}
+    n/o parameters:     {{ len(experiment.parameters) }}
+    data size:          {{ experiment.data_path | file_size }}
+================================================================================
