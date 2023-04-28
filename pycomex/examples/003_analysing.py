@@ -14,15 +14,17 @@ import random
 import textwrap
 import urllib.request
 
-from pycomex.experiment import Experiment
-from pycomex.util import Skippable
-
+from pycomex.functional.experiment import Experiment
+from pycomex.utils import folder_path, file_namespace
 
 NUM_WORDS = 1000
 REPETITIONS = 10
 
-with Skippable(), (e := Experiment(base_path=os.getcwd(),
-                                   namespace="example/analysing", glob=globals())):
+
+@Experiment(base_path=folder_path(__file__),
+            namespace=file_namespace(__file__),
+            glob=globals())
+def experiment(e):
 
     response = urllib.request.urlopen("https://www.mit.edu/~ecprice/wordlist.10000")
     WORDS = response.read().decode("utf-8").splitlines()
@@ -42,7 +44,7 @@ with Skippable(), (e := Experiment(base_path=os.getcwd(),
 
         text_length = len(text)
         e[f"metrics/length/{i}"] = text_length
-        e.info(f"saved text file with {text_length} characters")
+        e.log(f"saved text file with {text_length} characters")
 
     # This is a simple action hook, where custom code can be executed to
     # potentially add more functionality to the end of the experiment.
@@ -55,20 +57,21 @@ with Skippable(), (e := Experiment(base_path=os.getcwd(),
 # of characters. We also want to find out the average value for the
 # character count. We then store this information as additional character count.
 
-# All of the code defined within this "Experiment.analyis" context manager will be
-# copied to the "analyis.py" template inside the archive folder of this experiment
+# All the code defined within this "Experiment.analyis" decorator will be
+# copied to the "analysis.py" template inside the archive folder of this experiment
 # and that code will work as it is...
-# NOTE: ... As long as the analysis code defined here only accesses global variables
-#       or data that has been previously committed to the experiment instance via
-#       the indexing operation (e.g data['values'])
-with Skippable(), e.analysis:
+# ...as long as the analysis code defined here only accesses global variables
+# or data that has been previously committed to the experiment instance via
+# the indexing operation (e.g data['values'])
+@experiment.analysis
+def analysis(e):
     # (1) Note how the experiment path will be dynamically determined to be a *new*
     #     folder when actually executing the experiment, but it will refer to the
     #     already existing experiment record folder when imported from
     #     "snapshot.py"
     print(e.path)
 
-    e.info('Starting analysis of experiment results')
+    e.log('Starting analysis of experiment results')
     index_min, count_min = min(e['metrics/length'].items(),
                                key=lambda item: item[1])
     index_max, count_max = max(e['metrics/length'].items(),
@@ -85,4 +88,7 @@ with Skippable(), e.analysis:
     # (2) Committing new files to the already existing experiment record folder will
     #     also work as usual, whether executed here directly or later in "analysis.py"
     e.commit_json('analysis_results.json', analysis_results)
-    e.info(f'saved analysis results')
+    e.log(f'saved analysis results')
+
+
+experiment.run_if_main()

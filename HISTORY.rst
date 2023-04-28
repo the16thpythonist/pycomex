@@ -219,3 +219,12 @@ side effects and bugs.
 - Already changed the README example to use the functional API
 - Slowly started replacing the examples with the functional API
 
+0.9.1 (28.04.2023)
+------------------
+
+CRITICAL FIX: The prevsious package did not actually contain the "functional" sub package, but this one
+does now!
+
+- Added some more functionalities to ``functional.Experiment``
+- Changed all the example files to use the functional interface now
+- Some more code documentation

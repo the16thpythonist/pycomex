@@ -28,7 +28,7 @@ __DEBUG__ = True
 #   structure of the specific archive folder for this specific experiment
 # - glob: The globals() dictionary for the current file
 @Experiment(base_path=os.getcwd(),
-            namespace='results/quickstart',
+            namespace='results/001_quickstart',
             glob=globals())
 def experiment(e: Experiment):
     # Internally saved into automatically created nested dict

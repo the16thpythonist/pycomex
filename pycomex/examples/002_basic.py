@@ -1,5 +1,6 @@
 """
 This experiment will repeatedly create a text made of randomly sampled words.
+
 The words are assembled into a text file, which is supposed to be saved as an
 artifact of the computational experiment. Additionally, information such as the
 total text length / run time of the calculations are to be saved as experiment
@@ -14,8 +15,8 @@ import random
 import textwrap
 import urllib.request
 
-from pycomex.experiment import Experiment
-from pycomex.util import Skippable
+from pycomex.functional.experiment import Experiment
+from pycomex.utils import folder_path, file_namespace
 
 # (1) All variables defined in uppercase are automatically detected as experiment
 #     variables and can be overwritten when externally executing the experiment
@@ -24,8 +25,16 @@ NUM_WORDS = 1000
 REPETITIONS = 10
 SHORT_DESCRIPTION = 'An example experiment, which shows all the basic features of the library'
 
-with Skippable(), (e := Experiment(base_path=os.getcwd(),
-                                   namespace="example/basic", glob=globals())):
+
+# There are some utility functions which simplify the setup of the experiment decorator.
+# - folder_path(path: str): This function will return the absolute parent folder path for any given path.
+#   In most cases this can be used to supply the base_path relative to the current file
+# - file_namespace(path: str): This function will return a namespace string which is structured in the
+#   following way: "results/{{ name of file }}"
+@Experiment(base_path=folder_path(__file__),
+            namespace=file_namespace(__file__),
+            glob=globals())
+def experiment(e: Experiment):
 
     response = urllib.request.urlopen("https://www.mit.edu/~ecprice/wordlist.10000")
     WORDS = response.read().decode("utf-8").splitlines()
@@ -57,14 +66,11 @@ with Skippable(), (e := Experiment(base_path=os.getcwd(),
         e[f"metrics/length/{i}"] = text_length
         # >> e.data['metric']['length']['0'] = text_length
 
-        # (4) The "info" message should be used as an alternative to "print".
+        # (4) The "log" message should be used as an alternative to "print".
         #     These messages will be relayed to a Logger instance, which will
         #     print them to stdout, but also save them to a log file which is
         #     also stored as an experiment artifact.
-        e.info(f"saved text file with {text_length} characters")
+        e.log(f"saved text file with {text_length} characters")
 
-# The metadata is saved to an actual json file upon the content manager __exit__'s
-if os.path.exists(e.path):
-    print(f"\n FILES IN EXPERIMENT FOLDER: {e.path}")
-    for path in sorted(os.listdir(e.path)):
-        print(os.path.basename(path))
+
+experiment.run_if_main()

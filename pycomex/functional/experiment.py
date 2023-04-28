@@ -11,6 +11,7 @@ import datetime
 from collections import defaultdict
 from pycomex.utils import random_string, dynamic_import
 from pycomex.utils import TEMPLATE_ENV
+from pycomex.utils import CustomJsonEncoder
 
 
 class Experiment:
@@ -287,7 +288,7 @@ class Experiment:
 
     def save_data(self) -> None:
         with open(self.data_path, mode='w') as file:
-            content = json.dumps(self.data)
+            content = json.dumps(self.data, cls=CustomJsonEncoder)
             file.write(content)
 
     def save_code(self) -> None:
@@ -394,6 +395,31 @@ class Experiment:
 
     # ~ File Handling Utility
 
+    def open(self, file_name: str, *args, **kwargs):
+        path = os.path.join(self.path, file_name)
+        return open(path, *args, **kwargs)
+
+    def commit_json(self,
+                    file_name: str,
+                    data: t.Union[t.Dict, t.List],
+                    encoder_cls=CustomJsonEncoder
+                    ) -> None:
+        """
+        Given the name ``file_name`` for a file and some json encodable data structure ``data``, this method
+        will write that data into a new JSON file in the archive folder.
+
+        :param file_name: The name that the file should have, including the .json extension.
+        :param data: Either a dict or list which can be json encoded, meaning no custom data structures
+        :param encoder_cls: A Json EncoderClass when custom objects need to be encoded. Default is the
+            pycomex.CustomJsonEncoder, which is able to encode numpy data by default.
+
+        :returns: None
+        """
+        path = os.path.join(self.path, file_name)
+        with open(path, mode='w') as file:
+            content = json.dumps(data, cls=encoder_cls)
+            file.write(content)
+
     def commit_raw(self, file_name: str, content: str) -> None:
         """
         Given the name ``file_name`` for a file and the string ``content``, this method will save the
@@ -416,13 +442,50 @@ class Experiment:
                base_path: str,
                namespace: str,
                glob: dict):
+        """
+        This method can be used to extend an experiment through experiment inheritance by providing the
+        path ``experiment_path`` to the base experiment module. It will return the ``Experiment`` instance
+        which can subsequently be extended by defining hook implementations and modifying parameters.
+
+        ..code-block: python
+
+            experiment = Experiment.extend(
+                experiment_path='base_experiment.py',
+                base_path=os.getcwd(),
+                namespace='results/sub_experiment',
+                glob=globals(),
+            )
+
+            experiment.PARAMETER = 2 * experiment.PARAMETER
+
+            experiment.hook('hook')
+            def hook(e):
+                e.log('hook implementation')
+
+        :param experiment_path: Either a relative or an absolute path to the python module which contains
+            the base experiment code to be extended.
+        :param base_path: An absolute path to the folder to act as the base path for the archive structure
+        :param namespace: A namespace string that defines the archive structure of the experiment
+        :param glob: The globals() dictionary
+
+        :returns: Experiment instance
+        """
+        # First of all we need to import that module to access the Experiment instance that is
+        # defined there. That is the experiment which we need to extend.
         module = dynamic_import(experiment_path)
+        # TODO: Make this agnostic of the specific name and rather search for type
         experiment = module.experiment
 
+        # Then we need to push the path of that file to the dependencies.
         experiment.dependencies.append(experiment.glob['__file__'])
 
+        # Finally we need to replace all the archive-specific parameters like the base path
+        # and the namespace
         experiment.base_path = base_path
         experiment.namespace = namespace
+        # The globals we merely want to update and not replace since we probably won't define
+        # all of the parameters new in the sub experiment module.
+        # TODO: nested updates!
         experiment.glob.update(glob)
         experiment.update_parameters()
 
