@@ -1,6 +1,7 @@
 """
 Utility methods
 """
+import sys
 import random
 import string
 import traceback
@@ -311,6 +312,7 @@ def dynamic_import(path: str):
     module_name = path.split('.')[-2]
     module_spec = importlib.util.spec_from_file_location(module_name, path)
     module = importlib.util.module_from_spec(module_spec)
+    sys.modules[module_name] = module
     module_spec.loader.exec_module(module)
     return module
 

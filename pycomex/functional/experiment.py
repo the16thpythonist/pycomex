@@ -38,7 +38,7 @@ class Experiment:
         self.logger = logging.Logger(name='experiment')
         self.logger.addHandler(stream_handler)
 
-        self.path: t.Optional[t.Callable] = None
+        self.path: t.Optional[str] = None
         self.func: t.Optional[t.Callable] = None
         self.parameters: dict = {}
         self.data: dict = {}
@@ -62,6 +62,8 @@ class Experiment:
         self.hook_map: t.Dict[str, t.List[t.Callable]] = defaultdict(list)
 
         self.update_parameters()
+
+        self.glob['__experiment__'] = self
 
     def update_parameters_special(self):
         if '__DEBUG__' in self.parameters:
@@ -195,6 +197,7 @@ class Experiment:
         return self
 
     def run_if_main(self):
+
         if self.is_main():
             self.execute()
             self.execute_analyses()
@@ -472,9 +475,25 @@ class Experiment:
         """
         # First of all we need to import that module to access the Experiment instance that is
         # defined there. That is the experiment which we need to extend.
-        module = dynamic_import(experiment_path)
-        # TODO: Make this agnostic of the specific name and rather search for type
-        experiment = module.experiment
+
+        # 28.04.23 - this fixes a bug, where the relative import would only work the current working
+        # directory is exactly the folder that also contains. Previously if the working directory was
+        # a different one, it would not work.
+        try:
+            module = dynamic_import(experiment_path)
+        except (FileNotFoundError, ImportError):
+            parent_path = os.path.dirname(glob['__file__'])
+            experiment_path = os.path.join(parent_path, *os.path.split(experiment_path))
+            module = dynamic_import(experiment_path)
+
+        # 28.04.23 - before this was implemented over a hardcoded variable name for an experiment, but
+        # strictly speaking we can't assume that the experiment instance will always be called the same
+        # this is just a soft suggestion.
+        experiment = None
+        for key in dir(module):
+            value = getattr(module, key)
+            if isinstance(value, Experiment):
+                experiment = value
 
         # Then we need to push the path of that file to the dependencies.
         experiment.dependencies.append(experiment.glob['__file__'])
@@ -488,6 +507,9 @@ class Experiment:
         # TODO: nested updates!
         experiment.glob.update(glob)
         experiment.update_parameters()
+
+        # This line is necessary so that the experiments can be discovered by the CLI
+        glob['__experiment__'] = experiment
 
         return experiment
 

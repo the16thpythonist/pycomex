@@ -228,3 +228,15 @@ does now!
 - Added some more functionalities to ``functional.Experiment``
 - Changed all the example files to use the functional interface now
 - Some more code documentation
+
+0.9.2 (28.04.2023)
+------------------
+
+- Fixed a bug that sub experiment modules with relative paths to base experiments would cause errors when
+  the current working directory was not their parent directory
+
+0.9.3 (05.05.2023)
+------------------
+
+- Fixed an important bug in ``dynamic_import`` which prevented ``inspect`` from working properly in the
+  imported modules
