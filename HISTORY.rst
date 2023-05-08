@@ -240,3 +240,9 @@ does now!
 
 - Fixed an important bug in ``dynamic_import`` which prevented ``inspect`` from working properly in the
   imported modules
+
+0.9.4 (08.05.2023)
+------------------
+
+- In the functional interface, added the crucial feature of default hook implementations
+- Fixed an important bug to make analysis.py files work with sub experiments

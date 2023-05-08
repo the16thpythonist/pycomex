@@ -56,6 +56,9 @@ class Experiment:
         self.error = None
         self.tb = None
 
+        # This list will contain the absolute string paths to all the python module files, which this
+        # experiment depends on (for example in the case that this experiment is a sub experiment that was
+        # created with the "extend" constructor)
         self.dependencies: t.List[str] = []
 
         self.analyses: t.List[t.Callable] = []
@@ -64,6 +67,19 @@ class Experiment:
         self.update_parameters()
 
         self.glob['__experiment__'] = self
+
+    @property
+    def dependency_names(self) -> t.List[str]:
+        """
+        A list of all the names of the python dependency modules, without the file extensions.
+        """
+        names = []
+        for path in self.dependencies:
+            name = os.path.basename(path)
+            name = os.path.splitext(name)[0]
+            names.append(name)
+
+        return names
 
     def update_parameters_special(self):
         if '__DEBUG__' in self.parameters:
@@ -93,9 +109,13 @@ class Experiment:
 
     # ~ Hook System
 
-    def hook(self, name: str, replace: bool = True):
+    def hook(self, name: str, replace: bool = True, default: bool = True):
 
         def decorator(func, *args, **kwargs):
+            # 07.05.23 - The thingy
+            if default and name in self.hook_map:
+                return
+
             if replace:
                 self.hook_map[name] = [func]
             else:
@@ -399,8 +419,24 @@ class Experiment:
     # ~ File Handling Utility
 
     def open(self, file_name: str, *args, **kwargs):
+        """
+        This is an alternative file context for the default python ``open`` implementation.
+        """
         path = os.path.join(self.path, file_name)
         return open(path, *args, **kwargs)
+
+    def commit_fig(self,
+                   file_name: str,
+                   fig: t.Any,
+                   ) -> None:
+        """
+        Given the name ``file_name`` for a file and matplotlib Figure instance, this method will save the
+        figure into a new image file in the archive folder.
+
+        :returns: None
+        """
+        path = os.path.join(self.path, file_name)
+        fig.savefig(path)
 
     def commit_json(self,
                     file_name: str,
