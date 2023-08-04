@@ -246,3 +246,10 @@ does now!
 
 - In the functional interface, added the crucial feature of default hook implementations
 - Fixed an important bug to make analysis.py files work with sub experiments
+
+0.9.5 (04.07.2023)
+------------------
+
+- I had to change the name of the experiment file copy that is placed in the artifacts folder from "code.py" 
+  to "experiment_code.py" because there was a very weird naming collision with tensorflow internals
+- Also adjusted the anylsis file template accordingly.

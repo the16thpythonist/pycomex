@@ -110,16 +110,25 @@ class Experiment:
     # ~ Hook System
 
     def hook(self, name: str, replace: bool = True, default: bool = True):
-
+        """
+        This method can be used to register functions as hook candidates for the experiment object to use 
+        whenver the corresponding call of the "apply_hook" method is issued with a matching string identifier.
+        """
         def decorator(func, *args, **kwargs):
-            # 07.05.23 - The thingy
+            # 07.05.23 - The default flag should only be used for any default implementations used within the 
+            # base experiment file or in any case were the hook is defined for the first time. When that flag 
+            # is active it will only be used as a fallback option if sub experiment hasn't provided any more 
+            # relevant implementation.
             if default and name in self.hook_map:
                 return
 
             if replace:
                 self.hook_map[name] = [func]
             else:
-                self.hook_map[name].append(func)
+                # We need to PREPEND the function here because we are actually building the hooks up backwards 
+                # through the inheritance hierarchy. So the prepending here is actually needed to make it work 
+                # in the way that a user would intuitively expect.
+                self.hook_map[name] = self.hook_map[name] + [func]
 
         return decorator
 
@@ -243,7 +252,13 @@ class Experiment:
     @property
     def code_path(self) -> str:
         self.check_path()
-        return os.path.join(str(self.path), 'code.py')
+        # 04.07.2023 - This is one of those super weird bugs. Previously the path of the code file was just 
+        # "code.py", but this naming has actually resulted in a bug - namely that it was not possible to 
+        # use tensorflow any longer from either within that code file or the analysis file within an experiment 
+        # archive folder. This is because tensorflow is doing some very weird dynamic shenanigans where at some 
+        # point they execute the line "import code" which then referenced to our python module causing a 
+        # circular import and thus an error!
+        return os.path.join(str(self.path), 'experiment_code.py')
 
     @property
     def log_path(self) -> str:
@@ -552,7 +567,15 @@ class Experiment:
     @classmethod
     def load(cls, path: str):
         module = dynamic_import(path)
-        experiment = module.experiment
+        
+        # 28.04.23 - before this was implemented over a hardcoded variable name for an experiment, but
+        # strictly speaking we can't assume that the experiment instance will always be called the same
+        # this is just a soft suggestion.
+        experiment = None
+        for key in dir(module):
+            value = getattr(module, key)
+            if isinstance(value, Experiment):
+                experiment = value
 
         folder_path = os.path.dirname(path)
         experiment.path = folder_path

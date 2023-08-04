@@ -21,10 +21,10 @@ from pycomex.functional.experiment import Experiment
 {% for name in experiment.dependency_names %}
 from {{ name }} import *
 {% endfor %}
-from code import *
+from experiment_code import *
 
 PATH = pathlib.Path(__file__).parent.absolute()
-CODE_PATH = os.path.join(PATH, 'code.py')
+CODE_PATH = os.path.join(PATH, 'experiment_code.py')
 experiment = Experiment.load(CODE_PATH)
 experiment.analyses = []
 {% set analysis_map = experiment.get_analysis_code_map() %}
