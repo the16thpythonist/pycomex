@@ -259,8 +259,9 @@ does now!
 
 Added the "testing" functionality as it's own feature to the Experiment class
 
-- it is now possible to define the hook with the necessary code to put the experiment into testing mode using
-- Added a dedicated example that illustrates the testing mode
+- it is now possible to define the hook with the necessary code to put the experiment into testing mode using 
+  the ``Experiment.testing`` function and the ``__TESTING__`` magic parameter.
+- Added a dedicated example that illustrates the testing mode ``05_testing_mode.py``
 
 Other changes
 

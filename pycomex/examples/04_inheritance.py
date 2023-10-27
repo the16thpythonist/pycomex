@@ -32,7 +32,7 @@ NUM_WORDS = 500
 #     The first parameter will have to be either an absolute or a relative
 #     path to another, existing, experiment module that will be used as
 #     the basis
-experiment = Experiment.extend('003_analysing.py',
+experiment = Experiment.extend('03_analysing.py',
                                base_path=folder_path(__file__),
                                namespace=file_namespace(__file__),
                                glob=globals())

@@ -2,7 +2,7 @@
 This module tests the command line interface (CLI) of pycomex, which is mainly contained within the
 class ``pycomex.cli.ExperimentCLI``
 """
-import unittest
+import os
 
 from pycomex.util import EXAMPLES_PATH
 from pycomex.cli import ExperimentCLI
@@ -16,6 +16,7 @@ def test_construction_works():
     """
     If a new instance of ExperimentCLI can be constructed without issues
     """
+    assert os.path.exists(EXAMPLES_PATH)
     cli = ExperimentCLI(name='exp', experiments_path=EXAMPLES_PATH)
     LOG.info(cli.experiment_modules.keys())
 
