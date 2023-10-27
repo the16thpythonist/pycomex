@@ -5,16 +5,17 @@
         :target: https://pycomex.readthedocs.io/en/latest/?version=latest
         :alt: Documentation Status
 
-PyComex - Python Computational Experiments
-================================================
+============================================
+☄️ PyComex - Python Computational Experiments
+============================================
 
 Microframework to improve the experience of running and managing archival records of computational
 experiments, such as machine learning and data science experiments, in Python.
 
-* Free software: MIT license
 
-Features
---------
+===========
+🔥 Features
+===========
 
 * Automatically create (nested) folder structure for results of each run of an experiment
 * Simply attach metadata such as performance metrics to experiment object and they will be automatically
@@ -26,24 +27,43 @@ Features
 * Experiment inheritance: Experiment modules can inherit from other modules and extend their functionality
   via parameter overwrites and hooks!
 
-Installation
-------------
+==========================
+📦 Installation by Package
+==========================
 
-Install stable version with ``pip``
+Install the stable version with ``pip``
 
-.. code-block:: console
+.. code-block:: bash
 
     pip3 install pycomex
 
-Or the most recent development version
+=========================
+📦 Installation by Source
+=========================
 
-.. code-block:: console
+Or the most recent development version by cloning the source:
+
+.. code-block:: bash
 
     git clone https://github.com/the16thpythonist/pycomex.git
-    cd pycomex ; pip3 install .
 
-Quickstart
-----------
+and then installing with either pip 
+
+.. code-block:: bash
+
+    cd pycomex
+    pip3 install -e .
+
+or poetry
+
+.. code-block:: bash
+
+    cd pycomex
+    poetry install
+
+=============
+🚀 Quickstart
+=============
 
 Each computational experiment has to be bundled as a standalone python module. Important experiment
 parameters are placed at the top of this module. All variable names written in upper case will automatically
@@ -198,8 +218,19 @@ Specifically note these two aspects:
 For an introduction to more advanced features take a look at the examples in
 ``pycomex/examples`` ( https://github.com/the16thpythonist/pycomex/tree/master/pycomex/examples )
 
-Credits
--------
+================
+📖 Documentation
+================
+
+Unfortunately, there exists no dedicated documentation of the project yet. However, some additional details on some 
+key topics can be found in the ``DOCUMENTATION.rst`` file.
+
+Aside from that, the ``pycomex/examples`` ( https://github.com/the16thpythonist/pycomex/tree/master/pycomex/examples ) folder 
+contains some example modules which illustrate some of the key features of the framework by practical example.
+
+==========
+🤝 Credits
+==========
 
 This package was created with Cookiecutter_ and the `audreyr/cookiecutter-pypackage`_ project template.
 

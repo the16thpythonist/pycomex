@@ -1,0 +1,3 @@
+"""
+The new functional interface.
+"""

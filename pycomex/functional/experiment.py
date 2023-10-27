@@ -55,6 +55,16 @@ class Experiment:
         }
         self.error = None
         self.tb = None
+        
+        # 27.10.23
+        # This boolean flag indicates whether the experiment is currently actually being executed or whether one is 
+        # just dealing with a stored version of the experiment. It will be set to True only right before the actual 
+        # function implementation of the experiment is executed.
+        self.is_running: bool = False
+        # 27.10.23
+        # This boolean flag indicates whether the experiment is currently in the testing mode. This flag is only 
+        # set to True after the testing hook function implementation was already executed.
+        self.is_testing: bool = False
 
         # This list will contain the absolute string paths to all the python module files, which this
         # experiment depends on (for example in the case that this experiment is a sub experiment that was
@@ -140,6 +150,87 @@ class Experiment:
                 result = func(self, **kwargs)
 
         return result
+    
+    # ~ Testing functionality
+    # The "testing" functionality refers to a feature of the Experiment object whereby it can be put into the 
+    # "testing" mode by setting the magic parameter __TESTING__ to True. In this testing mode special hooks will 
+    # be executed that modify the experiment parameters in a way that results in a minimal runtime of the experiment 
+    # which only serves the purpose of testing if all the code actually runs without exceptions.
+    
+    # 27.10.23 - this method is a decorator which can be used to define the special testing hooks. Within these 
+    # testing hook implementations we implement the parameter changes that are applied to the model if 
+    def testing(self, func: t.Callable) -> t.Callable:
+        """
+        This method can be used as a decorator for a function within an experiment module. The decorated function will then 
+        be subsequently used as the implementation of how to put the experiment itself into testing mode. So when the experiment 
+        is actually put into testing mode via __TESTING__, that code will be executed to modify the parameters and whatever 
+        else is required for it.
+        
+        :returns: None
+        """
+        # We dont need to check anything here because by design the testing implementation should always be overriding.
+        # In each highest instance in the hierarchy of sub experiments should it be possible to define distinct 
+        # testing behavior that is not implicitly modified or dependent on the lower levels.
+        self.hook_map['__TESTING__'] = func
+        
+        # This requires a bit more explanation because it gets a bit convoluted here. We actually immediately *try* to
+        # execute the testing immediately after adding the function at the point where the decoration happens. 
+        # We need this because of the way that the testing function will most likely be defined in BASE experiment
+        # modules - that is INSIDE the experiment function. At that point the experiment has already started and 
+        # if we dont execute it right then, there's no idiomatic way to do so at a later point.
+        # Although this isn't a big problem because this function will actually check various conditions to make sure 
+        # that we are not actually executing the testing function for example when defining the testing hook in a child 
+        # experiment or when merely importing an experiment from another file.
+        self.apply_testing_if_possible()
+        
+        return func
+    
+    def apply_testing_if_possible(self):
+        """
+        This will execute the function which has been provided to the experiment as an implementation of the testing
+        function, IF a certain set of conditions is satisfied.
+
+        These are the conditions under which the testing code will be executed:
+        
+        - The experiment is actually configured to run in testing mode by the magic parameter __TESTING__
+        - The experiment has been provided with a function that can be executed for the testing mode
+        - The experiment is actually currently being executed as indicated by the is_running flag
+        - The experiment is not already in testing mode
+        
+        :returns: None
+        """
+        # "applying" the test mode means to actually execute the function that is currently saved as the "testing" 
+        # hook. However, we only actually execute that in case a very specific set of conditions is met:
+        # - the experiment needs to be already running.
+        # - the testing hasn't been applied before
+        # - the experiment is not currently in it's loaded form
+        # - there actually exists a test to be executed
+        
+        # First and most important criterium: Is the experiment even configured to testing mode?
+        # This is indicated with the magic parameter __TESTING__
+        if '__TESTING__' not in self.parameters or not self.parameters['__TESTING__']:
+            return
+        
+        # Is there actually a test hook impementation that could be executed?
+        # This is implemented as the special __TESTING__ name for a hook
+        if '__TESTING__' not in self.hook_map:
+            return
+        
+        # Also if the experiment is not actually in execution mode we are not running the test either
+        if not self.is_running:
+            return
+        
+        # And finally, if the testing has already been applied then we also dont't do it
+        if self.is_testing:
+            return
+        
+        # Only after all these conditions have been checked do we actually execute the testing hook 
+        # implementation here.
+        self.apply_hook('before_testing')
+        func = self.hook_map['__TESTING__']
+        func(self)
+        
+        self.is_testing = True
 
     # ~ Posthoc Analysis functionality
 
@@ -161,6 +252,9 @@ class Experiment:
     # ~ Experiment Execution
 
     def initialize(self):
+        """
+        This method handles all the 
+        """
         # ~ creating archive
         self.prepare_path()
 
@@ -210,7 +304,18 @@ class Experiment:
         self.initialize()
 
         try:
-            self.func(self)
+            # This flag will be used at various other places to check whether a given experiment object is 
+            # currently actually in the process of executing or whether it is rather a 
+            self.is_running = True
+            # Right before we actually start the main execution code of the 
+            self.apply_testing_if_possible()
+            
+            # 27.10.23 - Added the "before_execute" and the "after_execute" hook because they might be useful 
+            # in the future.
+            self.apply_hook('before_run')
+            self.func(self)  # This is where the actual user defined experiment code gets executed!
+            self.apply_hook('after_run')
+            
         except Exception as error:
             self.error = error
             self.tb = traceback.format_exc()

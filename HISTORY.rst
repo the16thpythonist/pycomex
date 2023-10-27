@@ -253,3 +253,18 @@ does now!
 - I had to change the name of the experiment file copy that is placed in the artifacts folder from "code.py" 
   to "experiment_code.py" because there was a very weird naming collision with tensorflow internals
 - Also adjusted the anylsis file template accordingly.
+
+0.10.0 (27.10.2023)
+-------------------
+
+Added the "testing" functionality as it's own feature to the Experiment class
+
+- it is now possible to define the hook with the necessary code to put the experiment into testing mode using
+- Added a dedicated example that illustrates the testing mode
+
+Other changes
+
+- Added some more docstrings
+- Updated the ``README.rst``
+- Added the ``DOCUMENTATION.rst`` and started to compile some additional documentation that is not immediately 
+  relevant to the README
