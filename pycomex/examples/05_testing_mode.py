@@ -1,4 +1,6 @@
 """
+This experiment will illustrate how to use the testing mode functionality of the pycomex library 
+to test experiments with a long runtime for coding errors in beforehand.
 
 **MOTIVATION**
 

@@ -70,7 +70,7 @@ def test_experiment_info_basically_works():
     LOG.info(result.output)
     assert result.exit_code == 0
 
-    result = runner.invoke(cli, ['info', 'basic'], terminal_width=100)
+    result = runner.invoke(cli, ['info', '02_basic'], terminal_width=100)
     LOG.info(result.output)
     assert result.exit_code == 0
 
@@ -84,6 +84,6 @@ def test_run_experiment_basically_works():
     assert result.exit_code == 0
 
     with ArgumentIsolation():
-        result = runner.invoke(cli, ['run', 'quickstart'], terminal_width=100)
+        result = runner.invoke(cli, ['run', '02_basic'], terminal_width=100)
         LOG.info(result.output)
         assert result.exit_code == 0

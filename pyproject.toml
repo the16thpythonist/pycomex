@@ -4,7 +4,7 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.poetry]
 name = "pycomex"
-version = "0.9.5"
+version = "0.10.0"
 description = "Python Computational Experiments"
 license = "MIT"
 authors = ["Jonas Teufel <jonseb1998@gmail.com>"]
@@ -29,7 +29,7 @@ include = [
 generate-setup-file = true
 
 [tool.poetry.scripts]
-pycomex = 'pycomex.cli:main'
+pycomex = 'pycomex.cli:cli'
 
 [tool.poetry.dependencies]
 python = ">=3.8"
@@ -38,6 +38,7 @@ jinja2 = ">=3.0.3"
 numpy = ">=1.22.0"
 matplotlib = ">=3.5.3"
 psutil = ">=5.7.2"
+rich-click = ">=1.7.0,<=1.8.0"
 
 [tool.poetry.dev-dependencies]
 nox = "2022.1.7"
@@ -51,4 +52,3 @@ replace = '__version__ = "{new_version}"'
 [tool.poetry_bumpversion.file."pycomex/VERSION"]
 search = "{current_version}"
 replace = "{new_version}"
-

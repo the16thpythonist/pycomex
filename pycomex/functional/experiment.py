@@ -1,4 +1,5 @@
 import os
+import re
 import shutil
 import sys
 import time
@@ -8,10 +9,16 @@ import traceback
 import typing as t
 import logging
 import datetime
+import textwrap
+import importlib.util
 from collections import defaultdict
 from pycomex.utils import random_string, dynamic_import
 from pycomex.utils import TEMPLATE_ENV
 from pycomex.utils import CustomJsonEncoder
+from pycomex.utils import get_comments_from_module
+from pycomex.utils import parse_parameter_info
+
+HELLO: str = ''
 
 
 class Experiment:
@@ -34,7 +41,6 @@ class Experiment:
         # ~ setting up logging
         self.log_formatter = logging.Formatter('%(asctime)s - %(message)s')
         stream_handler = logging.StreamHandler(sys.stdout)
-        # stream_handler.setFormatter(self.log_formatter)
         self.logger = logging.Logger(name='experiment')
         self.logger.addHandler(stream_handler)
 
@@ -74,8 +80,22 @@ class Experiment:
         self.analyses: t.List[t.Callable] = []
         self.hook_map: t.Dict[str, t.List[t.Callable]] = defaultdict(list)
 
+        # This method here actually "discovers" all the parameters (=global variables) of the experiment module.
+        # It essentially iterates through all the global variables of the given experiment module and then if it finds 
+        # a parameter (CAPS) it inserts it into the "self.parameters" dictionary of this object.
         self.update_parameters()
+        
+        # 27.10.23
+        # This method will extract other metadata from the source experiment module. This metadata for example includes 
+        # a description of the experiment (the doc string of the experiment module).
+        # Only after this method has been called, will those properties of the "self.metadata" dict actually contain 
+        # the appropriate values.
+        self.read_module_metadata()
 
+        # Here we do a bit of a trick, we insert a special value into the global dictionary of the source experiment 
+        # dict wich contains a reference to the experiment object itself. This will later make it a lot easier when we 
+        # import an experiment module to actually get the experiment object instance from it, because we can't guarantee 
+        # what variable name the user will actually give it, but this we can assume to always be there.
         self.glob['__experiment__'] = self
 
     @property
@@ -103,6 +123,68 @@ class Experiment:
         # This method will search through the freshly updated parameters dictionary for "special" keys
         # and then use those values to trigger some more fancy updates based on those.
         self.update_parameters_special()
+        
+    # ~ Module Metadata
+
+    def read_module_metadata(self):
+        """
+        This method extract certain information of the original experiment module and saves them as the appropriate 
+        metadata for the experiment object.
+        This information includes for example the module doc string of the experiment module which will be attached as 
+        the "description" of the experiment.
+    
+        :returns: None
+        """
+        # ~ the experiment name
+        # We simply use the name of the python experiment module as the name of the experiment as well!
+        name = os.path.basename(self.glob['__file__']).split('.')[0]
+        self.metadata['name'] = name
+        
+        # ~ the experiment description
+        # We simply say that the docstring of the module is the experiment description.
+        
+        doc_string = self.glob['__doc__']
+        description = doc_string.lstrip(' \n')
+        self.metadata['description'] = description
+        short_description = doc_string.split('\n\n')[0]
+        short_description = textwrap.shorten(short_description, width=600)
+        self.metadata['short_description'] = short_description
+
+        # ~ the experiment parameters
+        # We also importantly want to automatically extract some additionional information about the 
+        
+        # At the point that this method is usually executed, we can already expect that the experiment parameters 
+        # were discovered and saved into the self.parameters dictionary.
+        # So now we iterate through this dictionary and then. 
+        self.metadata['parameters'] = {} 
+        for parameter, value in self.parameters.items():
+            self.metadata['parameters'][parameter] = {
+                'name': parameter,
+            }
+        
+        # Here we get the type annotations.
+        # This also needs some additional justification, becasue the observant reader will question why we do not 
+        # just use the __annotations__ property of the glob dictionary of the experiment module here. The problem 
+        # is that we want to get the annotations of the same file before that file is fully loaded by importlib!
+        # Which means that in most cases, the __annotations__ dict will not have been created yet!
+        # But using inspect like this works, although we have to do a bit of a hack with the frame. I think that we 
+        # can be sure that the frame twice on top from this point on is always experiment module itself.        
+        frame = inspect.currentframe().f_back.f_back
+        module = inspect.getmodule(frame)
+        annotations = inspect.get_annotations(module)
+
+        for parameter, type_instance in annotations.items():
+            if parameter in self.parameters:
+                type_string = type_instance
+                self.metadata['parameters'][parameter]['type'] = type_string
+        
+        module_path = self.glob['__file__']
+        comment_lines = get_comments_from_module(module_path)
+        comment_string = '\n'.join([line.lstrip('#') for line in comment_lines])
+        parameter_info: t.Dict[str, str] = parse_parameter_info(comment_string)
+        for parameter, description in parameter_info.items():
+            if parameter in self.parameters:
+                self.metadata['parameters'][parameter]['description'] = description
 
     # ~ Logging
 
@@ -322,16 +404,47 @@ class Experiment:
 
         self.finalize()
 
-    def is_main(self) -> bool:
-        return self.glob['__name__'] == '__main__'
-
     def __call__(self, func, *args, **kwargs):
         self.func = func
 
         return self
+    
+    def set_main(self) -> None:
+        """
+        Will modify the internal dictionary in such a way that after this method was called, 
+        "is_main" will evaluate as True.
+        
+        :returns: None
+        """
+        self.glob['__name__'] = '__main__'
+
+    def is_main(self) -> bool:
+        """
+        Returns True only if the current global context is "__main__" which is only the case if the python 
+        module is directly being executed rather than being imported for example.
+        
+        :returns: bool
+        """
+        return self.glob['__name__'] == '__main__'
 
     def run_if_main(self):
-
+        """
+        This method will actually execute the main implementation of the experiment, but only if the current 
+        global context is the __main__ context. That is only true if the corresponding python module is actually 
+        being executed rather than imported.
+        
+        This is the method that any experiment method should be using at the very end of the module. A user should 
+        NOT use execute() directly, as that would issue the experiment to be executed in the case of an import as well!
+        
+        .. code-block:: python
+        
+            # Define the experiment...
+            
+            # At the end of the experiment module
+            experiment.run_if_main()
+        
+        :returns: None
+        """
         if self.is_main():
             self.execute()
             self.execute_analyses()
@@ -663,6 +776,9 @@ class Experiment:
         # TODO: nested updates!
         experiment.glob.update(glob)
         experiment.update_parameters()
+        
+        # 30.10.23 - This method will read all the metadata from the thingy
+        experiment.read_module_metadata()
 
         # This line is necessary so that the experiments can be discovered by the CLI
         glob['__experiment__'] = experiment
@@ -694,3 +810,42 @@ class Experiment:
             experiment.data = json.loads(content)
 
         return experiment
+
+
+def find_experiment_in_module(module: t.Any) -> Experiment:
+    """
+    Given an imported module object, this function will return the *first* experiment object that is encountered to be 
+    known to the global scope of the given module.
+    
+    :returns: An Experiment object
+    """
+    if '__experiment__' in dir(module):
+        experiment = getattr(module, '__experiment__')
+        return experiment
+    else: 
+        raise ModuleNotFoundError(f'You are attempting to get the experiment from the module {module.__name__}. '
+                                  f'However, it seems like there is no Experiment object defined in that module!')
+
+
+def run_experiment(path: str) -> None:
+    """
+    This function runs an experiment given the absolute path to the experiment module.
+    
+    :param path: The absolute string path to a valid experiment python module
+    
+    :returns: None
+    """
+    # This is a handy utilitiy function which just generically imports a python module given its absolute path in
+    # the file system.
+    module = dynamic_import(path)
+    
+    # This function will actually return the (first) Experiment object instance that is encountered to be defined 
+    # within the given module object.
+    # It will raise an error if there is none.
+    experiment = find_experiment_in_module(module)
+    
+    # And now finally we can just execute that experiment.
+    experiment.set_main()
+    experiment.run_if_main()
+    
+    return experiment

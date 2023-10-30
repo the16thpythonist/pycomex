@@ -1,87 +1,70 @@
 import os
-import unittest
+import inspect
 import subprocess
 import importlib.util
 from typing import Tuple
 
-from pycomex.util import PATH
-from pycomex.experiment import AbstractExperiment, Experiment
-from pycomex.experiment import run_experiment
+from pycomex.util import dynamic_import, PATH
+from pycomex.functional.experiment import Experiment 
+from pycomex.functional.experiment import find_experiment_in_module, run_experiment
 from pycomex.testing import ArgumentIsolation
 
+from .util import ASSETS_PATH
 
-def run_example(file_name: str) -> AbstractExperiment:
+
+def run_example(file_name: str) -> Experiment:
     path = os.path.join(PATH, "examples", file_name)
     return run_experiment(path)
 
 
-def test_example_quickstart():
-    # It is important that we can import the experiment module without actually triggering the
-    # execution of the main experiment code. We can check this by checking if the experiment path exists
-    # or not.
-    # This is possible because the experiment path itself is determined within the constructor of
-    # "Experiment" but the path itself is only created on __enter__!
-    import pycomex.examples.quickstart as module
-
-    assert isinstance(module.HELLO, str)
-    assert isinstance(module.e, Experiment)
-
-    # First of all, we should be able to execute the example without an exception
-    with ArgumentIsolation():
-        experiment = run_example("quickstart.py")
-        assert experiment.error is None
-        assert os.path.exists(experiment.path)
+def test_example_experiment_inspect():
+    
+    experiment_path = os.path.join(ASSETS_PATH, 'mock_functional_experiment.py')
+    module = dynamic_import(experiment_path)
+    
+    doc_string = module.__doc__
+    assert doc_string != ''
+    
+    experiment = find_experiment_in_module(module)
+    description = experiment.metadata['description']
+    assert description != ''
+    
+    parameter_dict = experiment.metadata['parameters']
+    assert isinstance(parameter_dict, dict)
+    assert len(parameter_dict) != 0
+    assert 'PARAMETER' in parameter_dict
+    assert 'type' in parameter_dict['PARAMETER']
+    assert 'description' in parameter_dict['PARAMETER']
 
 
 def test_example_basic():
-    import pycomex.examples.basic as module
-
-    assert isinstance(module.e, Experiment)
-
-    with ArgumentIsolation():
-        experiment = run_example("basic.py")
-        assert experiment.error is None
-        assert os.path.exists(experiment.path)
+    
+    experiment = run_example("02_basic.py")
+    
+    assert experiment.error is None
+    assert os.path.exists(experiment.path)
 
 
 def test_example_analysis():
-    import pycomex.examples.basic as module
 
-    assert isinstance(module.e, Experiment)
-
-    with ArgumentIsolation():
-        experiment = run_example("analysing.py")
-        assert experiment.error is None
-        assert os.path.exists(experiment.path)
+    experiment = run_example("03_analysing.py")
+    
+    assert experiment.error is None
+    assert os.path.exists(experiment.path)
 
 
 def test_example_inheritance():
-    with ArgumentIsolation():
-        experiment = run_example('inheritance.py')
+    
+    experiment = run_example('04_inheritance.py')
 
-        assert experiment.error is None
-        assert os.path.exists(experiment.path)
+    assert experiment.error is None
+    assert os.path.exists(experiment.path)
 
 
-def test_experiment_can_be_imported_from_snapshot():
-    with ArgumentIsolation():
-        experiment = run_example('quickstart.py')
-        assert experiment.error is None
-        assert os.path.exists(experiment.path)
+def test_example_testing_mode():
+    
+    experiment = run_example('05_testing_mode.py')
+    
+    assert experiment.error is None
+    assert os.path.exists(experiment.path)
 
-    # Now after the experiment has successfully run, we navigate to the copy of the experiment script which
-    # was created in the archive folder and try to import that. Importing that file should NOT execute the
-    # script again but should still load the data into the experiment instance!
-    snapshot_path = os.path.join(experiment.path, 'snapshot.py')
-    assert os.path.exists(snapshot_path)
-
-    spec = importlib.util.spec_from_file_location('snapshot', snapshot_path)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-
-    # It should be possible to import the 'e' object from the experiment snapshot. For this example it
-    # is the main Experiment object. If this experiment is imported rather than being executed, it
-    # should still populate the "data" property from the saved JSON file which is also located in the
-    # records folder
-    assert isinstance(module.e, Experiment)
-    # TODO: check for this in a better way

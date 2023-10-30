@@ -21,9 +21,13 @@ from pycomex.utils import folder_path, file_namespace
 # (1) All variables defined in uppercase are automatically detected as experiment
 #     variables and can be overwritten when externally executing the experiment
 #     using "run_experiment" for example
-NUM_WORDS = 1000
-REPETITIONS = 10
-SHORT_DESCRIPTION = 'An example experiment, which shows all the basic features of the library'
+
+# :param NUM_WORDS:
+#       The number of words to be generated each time
+NUM_WORDS: int = 1000
+# :param REPETITIONS:
+#       The number of times to repeat the generation process
+REPETITIONS: int = 10
 
 
 # There are some utility functions which simplify the setup of the experiment decorator.

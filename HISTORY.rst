@@ -263,8 +263,17 @@ Added the "testing" functionality as it's own feature to the Experiment class
   the ``Experiment.testing`` function and the ``__TESTING__`` magic parameter.
 - Added a dedicated example that illustrates the testing mode ``05_testing_mode.py``
 
+Command line interface
+
+- fixed the command line interface. ``ExperimentCLI`` should now be working with the new pycomex functional API
+- Switched to using python ``rich`` package for the CLI printing
+- Changed the styling of the "list" and "info" commands to rich formatting
+
 Other changes
 
+- During construction an ``Experiment`` instance will now attempt to automatically parse the parameter description strings from the 
+  module's comments and the parameter typing information from the type hints annotations dict. This information will then be stored 
+  in ``Experiment.metadata`` dictionary.
 - Added some more docstrings
 - Updated the ``README.rst``
 - Added the ``DOCUMENTATION.rst`` and started to compile some additional documentation that is not immediately 

@@ -1,111 +1,48 @@
+import os
 import unittest
 
 from inspect import getframeinfo, stack
 
 from pycomex.util import get_version
-from pycomex.util import RecordCode
-from pycomex.util import Skippable
+from pycomex.util import get_comments_from_module
+from pycomex.util import parse_parameter_info
+
+from .util import ASSETS_PATH
 
 
-class TestFunctions(unittest.TestCase):
-
-    def test_context_manager_exception(self):
-        """
-        This is just to find out what exactly happens when an exception is raised within a context manager
-        """
-
-        class Context:
-
-            def __init__(self):
-                self.exc_type = None
-
-            def __enter__(self):
-                return self
-
-            def __exit__(self, exc_type, exc_value, exc_traceback):
-                print(exc_type, exc_value, exc_traceback)
-                self.exc_type = exc_type
-                return True
-
-        with Context() as c:
-            raise ValueError()
-
-        assert c.exc_type is not None
-        assert c.exc_type == ValueError
-
-    def test_get_version(self):
-        version = get_version()
-        self.assertIsInstance(version, str)
-        self.assertNotEqual(0, len(version))
+def test_parse_parameter_info_basically_works():
+    """
+    the "parse_parameter_info" is supposed to parse a specific format of additional parameter information 
+    from a string and return all the information as a dictionary.
+    """
+    string = (
+        'Some random comment\n'
+        ':param PARAMETER:\n'
+        '       the first line.\n'
+        '       the second line.\n'
+        'Some random string\n'
+    )
+    result = parse_parameter_info(string)
+    assert isinstance(result, dict)
+    assert 'PARAMETER' in result
 
 
-class TestRecordCode(unittest.TestCase):
+def test_get_comments_from_module_basically_works():
+    """
+    The "get_comments_from_module" function should return a list with all the string comment lines 
+    for the absolute path of a given python module
+    """
+    module_path = os.path.join(ASSETS_PATH, 'mock_functional_experiment.py')
+    comments = get_comments_from_module(module_path)
+    assert isinstance(comments, list)
+    assert len(comments) != 0
+    
+    # Testing a single example comment from the list which we know is part of that module.
+    assert '# testing comment - do not remove' in comments
 
-    # -- EXPLORATION --
 
-    def test_frameinfo(self):
+def test_get_version():
+    version_string = get_version()
+    assert version_string != ''
 
-        # These two should show two different frame indices
-        frame_info_1 = getframeinfo(stack()[0][0])
-        frame_info_2 = getframeinfo(stack()[0][0])
-        self.assertNotEqual(frame_info_1.lineno, frame_info_2.lineno)
 
-    def test_removing_first_k_characters_string(self):
-        string = '1234only this string should remain'
-        expected = 'only this string should remain'
-        clipped = string[4:]
-        self.assertEqual(expected, clipped)
-
-    # -- UNITTESTS --
-
-    def test_basically_works(self):
-
-        variable = 10
-        with RecordCode(stack_index=2) as code:
-            self.assertIsInstance(code, RecordCode)
-            self.assertIsInstance('hello world', str)
-
-        variable = 12
-
-        self.assertIsInstance(variable, int)
-        self.assertIsInstance(code.code_string, str)
-        self.assertIn('hello world', code.code_string)
-        self.assertNotIn('variable', code.code_string)
-
-    def test_enter_and_exit_callback(self):
-
-        rc = RecordCode(stack_index=2)
-        setattr(rc, 'value', 10)
-
-        def enter_cb(record_code, enter_index):
-            self.assertEqual(record_code, rc)
-            self.assertEqual(10, record_code.value)
-
-        def exit_cb(record_code, exit_index):
-            self.assertEqual(record_code, rc)
-            self.assertEqual(20, record_code.value)
-
-        rc.enter_callbacks.append(enter_cb)
-        rc.exit_callbacks.append(exit_cb)
-
-        with rc:
-            rc.value = 20
-
-    def test_skip_flag(self):
-        """
-        A special flag can be set for the context manager, making it skip the execution of the content.
-        """
-        value = 10
-
-        with Skippable(), RecordCode(stack_index=2, skip=False):
-            value = 20
-
-        with Skippable(), (code := RecordCode(stack_index=2, skip=True)):
-            value = 30
-            # In the best case this will never be executed
-            self.assertTrue(False)
-
-        print(code)
-
-        self.assertTrue(True)
-        self.assertEqual(value, 20)

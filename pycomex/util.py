@@ -2,6 +2,8 @@
 Utility methods
 """
 import sys
+import re
+import tokenize
 import random
 import string
 import traceback
@@ -309,6 +311,14 @@ def split_namespace(namespace: str) -> t.List[str]:
 
 
 def dynamic_import(path: str):
+    """
+    Given the absolute string ``path`` to a python module, this function will dynamically import that 
+    module and return the module object instance that represents that module.
+    
+    :param path: The absolute string path to a python module
+    
+    :returns: A module object instance
+    """
     module_name = path.split('.')[-2]
     module_spec = importlib.util.spec_from_file_location(module_name, path)
     module = importlib.util.module_from_spec(module_spec)
@@ -335,3 +345,31 @@ def random_string(length: int = 4,
                   characters=string.ascii_lowercase + string.ascii_uppercase + string.digits
                   ) -> str:
     return ''.join(random.choices(characters, k=length))
+
+
+def get_comments_from_module(path: str) -> t.List[str]:
+    comments = []
+    with open(path) as file:
+        tokens = tokenize.generate_tokens(file.readline)
+        for token in tokens:
+            if token.type == tokenize.COMMENT:
+                comments.append(token.string)
+                
+    return comments
+
+
+def parse_parameter_info(string: str) -> t.Dict[str, str]:
+    
+    result = {}
+    pattern = re.compile(r':param\s+(\w+):\n((?:(?:\t+|\s{4,}).*\n)*)')
+    for name, description in pattern.findall(string):
+        description_lines = description.split('\n')
+        description = ' '.join([line.lstrip(' ') for line in description_lines])
+        result[name] = description
+        
+    return result
+
+
+def parse_hook_info(string: str) -> t.Dict[str, str]:
+    pattern = re.compile(r':hook\s+(\w+):\n((?:(?:\t+|\s{4,}).*\n)*)')
+    return dict(pattern.findall(string))

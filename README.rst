@@ -12,7 +12,6 @@
 Microframework to improve the experience of running and managing archival records of computational
 experiments, such as machine learning and data science experiments, in Python.
 
-
 ===========
 🔥 Features
 ===========
@@ -33,7 +32,7 @@ experiments, such as machine learning and data science experiments, in Python.
 
 Install the stable version with ``pip``
 
-.. code-block:: bash
+.. code-block:: console
 
     pip3 install pycomex
 
@@ -43,20 +42,20 @@ Install the stable version with ``pip``
 
 Or the most recent development version by cloning the source:
 
-.. code-block:: bash
+.. code-block:: console
 
     git clone https://github.com/the16thpythonist/pycomex.git
 
 and then installing with either pip 
 
-.. code-block:: bash
+.. code-block:: console
 
     cd pycomex
     pip3 install -e .
 
 or poetry
 
-.. code-block:: bash
+.. code-block:: console
 
     cd pycomex
     poetry install
@@ -165,6 +164,7 @@ This example would create the following folder structure:
              |+ hello_world.txt        # Text artifact that was committed to the experiment
              |+ code.py                # Copy of the original experiment python module
              |+ analysis.py            # boilerplate code to get started with analysis of results
+
 
 The ``analysis.py`` file is of special importance. It is created as a boilerplate starting
 place for additional code, which performs analysis or post processing on the results of the experiment.

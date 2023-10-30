@@ -32,10 +32,12 @@ NUM_WORDS = 500
 #     The first parameter will have to be either an absolute or a relative
 #     path to another, existing, experiment module that will be used as
 #     the basis
-experiment = Experiment.extend('03_analysing.py',
-                               base_path=folder_path(__file__),
-                               namespace=file_namespace(__file__),
-                               glob=globals())
+experiment = Experiment.extend(
+    '03_analysing.py',
+    base_path=folder_path(__file__),
+    namespace=file_namespace(__file__),
+    glob=globals()
+)
 
 # (3) Sub experiment implementation rely on so-called hooks. In the base experiment
 #     module that is being extended there have to be "apply_hook" statements, which
