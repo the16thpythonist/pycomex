@@ -359,7 +359,16 @@ def get_comments_from_module(path: str) -> t.List[str]:
 
 
 def parse_parameter_info(string: str) -> t.Dict[str, str]:
+    """
+    Given a ``string`` that contains some multiline text, this function will parse and extract 
+    all the individual parameter descriptions that are contained in that string. These will be 
+    returned as a dictionary where the string keys are the names of the parameters and the 
+    string values are the corresponding descriptions.
     
+    :param string: A multiline string which may contain parameter descriptions among other things
+    
+    :returns: dict
+    """
     result = {}
     pattern = re.compile(r':param\s+(\w+):\n((?:(?:\t+|\s{4,}).*\n)*)')
     for name, description in pattern.findall(string):
@@ -371,5 +380,39 @@ def parse_parameter_info(string: str) -> t.Dict[str, str]:
 
 
 def parse_hook_info(string: str) -> t.Dict[str, str]:
+    """
+    Given a ``string`` that contains some multiline text, this function will parse and extract 
+    all the individual hook descriptions that are contained in that string. These will be 
+    returned as a dictionary where the string keys are the names of the parameters and the 
+    string values are the corresponding descriptions.
+    
+    :param string: A multiline string which may contain hook descriptions among other things
+    
+    :returns: dict
+    """
+    result = {}
     pattern = re.compile(r':hook\s+(\w+):\n((?:(?:\t+|\s{4,}).*\n)*)')
-    return dict(pattern.findall(string))
+    for name, description in pattern.findall(string):
+        description_lines = description.split('\n')
+        description = ' '.join([line.lstrip(' ') for line in description_lines])
+        result[name] = description
+        
+    return result
+
+
+def type_string(type_instance: t.Type) -> str:
+    
+    string = ''
+    if hasattr(type_instance, '__origin__'):
+        if hasattr(type_instance, '__name__'):
+            string = type_instance.__name__
+        else:
+            string = str(type_instance.__origin__)
+        
+        if hasattr(type_instance, '__args__'):
+            string += f'[{", ".join([type_string(arg) for arg in type_instance.__args__])}]'
+    
+    else:
+        string = str(type_instance.__name__)
+        
+    return string

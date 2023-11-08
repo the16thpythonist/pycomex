@@ -16,7 +16,8 @@ from pycomex.utils import random_string, dynamic_import
 from pycomex.utils import TEMPLATE_ENV
 from pycomex.utils import CustomJsonEncoder
 from pycomex.utils import get_comments_from_module
-from pycomex.utils import parse_parameter_info
+from pycomex.utils import parse_parameter_info, parse_hook_info
+from pycomex.utils import type_string
 
 HELLO: str = ''
 
@@ -44,7 +45,16 @@ class Experiment:
         self.logger = logging.Logger(name='experiment')
         self.logger.addHandler(stream_handler)
 
+        # After the experiment was properly initialized, this will hold the absolute string path to the *archive*
+        # folder of the current experiment execution!
         self.path: t.Optional[str] = None
+        
+        # 08.11.23
+        # Optionally it is possible to define a specific name before the experiment is started and then 
+        # the experiment archive will be created with that custom name. In the default case (if this stays None)
+        # the name will be generated according to some pattern
+        self.name: t.Optional[str] = None
+        
         self.func: t.Optional[t.Callable] = None
         self.parameters: dict = {}
         self.data: dict = {}
@@ -58,6 +68,8 @@ class Experiment:
             'namespace': str(namespace),
             'description': '',
             'short_description': '',
+            'parameters': {},
+            'hooks': {},
         }
         self.error = None
         self.tb = None
@@ -144,6 +156,7 @@ class Experiment:
         # We simply say that the docstring of the module is the experiment description.
         
         doc_string = self.glob['__doc__']
+        doc_string = '' if doc_string is None else doc_string
         description = doc_string.lstrip(' \n')
         self.metadata['description'] = description
         short_description = doc_string.split('\n\n')[0]
@@ -155,12 +168,12 @@ class Experiment:
         
         # At the point that this method is usually executed, we can already expect that the experiment parameters 
         # were discovered and saved into the self.parameters dictionary.
-        # So now we iterate through this dictionary and then. 
-        self.metadata['parameters'] = {} 
+        # So now we iterate through this dictionary and then.
         for parameter, value in self.parameters.items():
-            self.metadata['parameters'][parameter] = {
-                'name': parameter,
-            }
+            if parameter not in self.metadata['parameters']: 
+                self.metadata['parameters'][parameter] = {
+                    'name': parameter,
+                }
         
         # Here we get the type annotations.
         # This also needs some additional justification, becasue the observant reader will question why we do not 
@@ -175,8 +188,7 @@ class Experiment:
 
         for parameter, type_instance in annotations.items():
             if parameter in self.parameters:
-                type_string = type_instance
-                self.metadata['parameters'][parameter]['type'] = type_string
+                self.metadata['parameters'][parameter]['type'] = type_string(type_instance)
         
         module_path = self.glob['__file__']
         comment_lines = get_comments_from_module(module_path)
@@ -185,7 +197,30 @@ class Experiment:
         for parameter, description in parameter_info.items():
             if parameter in self.parameters:
                 self.metadata['parameters'][parameter]['description'] = description
-
+                
+        # The experiment hooks
+        # We also want to save information about all the available hooks in the metadata dictionary 
+        
+        # The most basic information that we can gather about the hooks is which hooks are even available 
+        # at all. This information is directly accessible over the main hook dictionary.
+        for hook, func_list in self.hook_map.items():
+            if hook not in self.metadata['hooks']:
+                self.metadata['hooks'][hook] = {
+                    'name': hook,
+                    'num': len(func_list),
+                }
+            
+        # Then we can do something similar to the parameters, where we parse all the comments inside the 
+        # experiment module and check if there is the special hook description syntax somewhere.
+        hook_info: t.Dict[str, str] = parse_hook_info(comment_string)
+        for hook, description in hook_info.items():
+            if hook not in self.metadata['hooks']:
+                self.metadata['hooks'][hook] = {
+                    'name': hook,
+                }
+                
+            self.metadata['hooks'][hook]['description'] = description
+            
     # ~ Logging
 
     def log(self, message: str):
@@ -448,6 +483,14 @@ class Experiment:
         if self.is_main():
             self.execute()
             self.execute_analyses()
+            
+    def run(self):
+        """
+        unlike, the method "run_if_main", this method will actually execute the experiment no matter what. At the point 
+        at which this method is called, the experiment will be executed
+        """
+        self.execute()
+        self.execute_analyses()
 
     # ~ Archive management
 
@@ -494,6 +537,16 @@ class Experiment:
         return os.path.join(str(self.path), 'analysis.py')
 
     def prepare_path(self):
+        """
+        This method will for one thing create the actual path to the archive folder of the current expriment. This 
+        means that it will combine the information about the base path, the namespace and the name of the experiment 
+        to create the actual absolute path at which the archive folder should exist.
+        
+        Additionally, this method will also CREATE that folder (hierarchy) if it does not already exist. So potentially 
+        this method will actually create multiple nested folders on the system.
+        
+        :returns: None
+        """
         # One thing which we will need to assume as given here is that the given base_path exists!
         # The rest of the nested sub structure we can create if need be, but the base path has to exist in
         # the first place as a starting point
@@ -514,27 +567,43 @@ class Experiment:
             if not os.path.exists(current_path):
                 os.mkdir(current_path)
 
+        # 08.11.23
         # Now at this point we can be sure that the base path exists and we can create the specific
-        # archive folder. How this archive folder will be called first of all depends on the "self.debug".
-        # If it is true, then we will forcefully recreate the debug folder. If false, we create a new
-        # folder based on the class internal format string.
-        if self.debug:
-            self.path = os.path.join(current_path, 'debug')
-            if os.path.exists(self.path):
-                shutil.rmtree(self.path)
-
+        # archive folder. 
+        # How this archive folder will be called depends on some conditions.
+        # - Most importantly, if the experiment was given an actual name (self.name != None) then 
+        #   we want to use that name, otherwise the name will be auto generated
+        # - The next best option would be if the experiment is in debug mode, we will call the 
+        #   resulting folder "debug"
+        # - In the last case we generate a name from the current datetime combined with a random
+        #   string to make it unique.
+        
+        if self.name is not None:
+            pass
+        
+        elif self.debug:
+            self.name = 'debug'
+            
         else:
             now = datetime.datetime.now()
             date_string = now.strftime('%d_%m_%Y')
             time_string = now.strftime('%H_%M')
             id_string = random_string(length=4)
-            name = self.name_format.format(
+            self.name = self.name_format.format(
                 date=date_string,
                 time=time_string,
                 id=id_string,
             )
-            self.path = os.path.join(current_path, name)
+            
+        # Now that we have decided on the name we can assemble the full path
+        self.path = os.path.join(current_path, self.name)
+        
+        # If the experiment is in "debug" mode that means that we actually want to get rid of the previous 
+        # archive folder with the same name, it one exists
+        if self.debug and os.path.exists(self.path):
+            shutil.rmtree(self.path)
 
+        # And then finally in any case we create a new and clean folder
         os.mkdir(self.path)
 
     def save_metadata(self) -> None:
@@ -812,7 +881,7 @@ class Experiment:
         return experiment
 
 
-def find_experiment_in_module(module: t.Any) -> Experiment:
+def find_experiment_in_module(module: t.Any) -> Experiment: 
     """
     Given an imported module object, this function will return the *first* experiment object that is encountered to be 
     known to the global scope of the given module.
@@ -825,6 +894,14 @@ def find_experiment_in_module(module: t.Any) -> Experiment:
     else: 
         raise ModuleNotFoundError(f'You are attempting to get the experiment from the module {module.__name__}. '
                                   f'However, it seems like there is no Experiment object defined in that module!')
+
+
+
+def get_experiment(path: str) -> None:
+    
+    module = dynamic_import(path)
+    experiment = find_experiment_in_module(module)
+    return experiment
 
 
 def run_experiment(path: str) -> None:

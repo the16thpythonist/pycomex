@@ -74,6 +74,33 @@ class RichExperimentParameterInfo:
                 yield ''
             
             
+class RichExperimentHookInfo:
+    
+    def __init__(self,
+                 experiment: Experiment
+                 ):
+        self.experiment = experiment
+        
+    def __rich_console__(self, 
+                         console: Console, 
+                         options: ConsoleOptions
+                         ) -> RenderResult:
+        width = options.size.width
+        
+        num_parameters = len(self.experiment.metadata['hooks'])
+        for index, (hook, data) in enumerate(self.experiment.metadata['hooks'].items()):
+            title = f'[magenta]{hook}[/magenta]'
+            if 'type' in data:
+                title = title + f' - {data["type"]}'
+
+            yield title
+            
+            if 'description' in data and len(data['description']) > 3:
+                yield data['description']
+            
+            if index + 1 < num_parameters:
+                yield ''
+
 
 class RichExperimentInfo:
     
@@ -113,6 +140,12 @@ class RichExperimentInfo:
             title='parmeters',
             title_align='left',
             border_style='bright_black', 
+        )
+        yield rich.panel.Panel(
+            RichExperimentHookInfo(self.experiment),
+            title='hooks',
+            title_align='left',
+            border_style='bright_black',
         )
         
     def __rich_measure__(self,

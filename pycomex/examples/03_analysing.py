@@ -13,12 +13,17 @@ import tempfile
 import random
 import textwrap
 import urllib.request
+import typing as t
 
 from pycomex.functional.experiment import Experiment
 from pycomex.utils import folder_path, file_namespace
 
-NUM_WORDS = 1000
-REPETITIONS = 10
+# :param NUM_WORDS:
+#       This is the number of words to be generated each time
+NUM_WORDS: t.Optional[int] = 1000
+# :param REPETITIONS:
+#       The number of independent repetitions of the experiment
+REPETITIONS: int = 10
 
 
 @Experiment(base_path=folder_path(__file__),
@@ -35,6 +40,10 @@ def experiment(e):
     # injected / executed. This will be further explained in later examples.
     # Using the "default" argument defines a filter hook, where custom code
     # of child experiments is able to modify the value of the WORDS variable
+    
+    # :hook filter_words:
+    #       This is a filter hook, to be applied on a list of words and may modify that list of 
+    #       words in any way. It has to return the modified list of words and nothing else.
     WORDS = e.apply_hook('filter_words', words=WORDS, default=WORDS)
 
     for i in range(e.parameters["REPETITIONS"]):

@@ -278,3 +278,17 @@ Other changes
 - Updated the ``README.rst``
 - Added the ``DOCUMENTATION.rst`` and started to compile some additional documentation that is not immediately 
   relevant to the README
+
+0.10.1 (05.11.2023)
+-------------------
+
+- Fixed a breaking bug during the construction of Experiment instances 
+- Added information about possible hooks to the ``info`` cli command as well
+
+0.10.2 (08.11.2023)
+-------------------
+
+- fixed a crucial bug that would break the experiment modules if no module level doc string exists
+- Added the ``get_experiment`` method which allows to easily get the Experiment object instance based 
+  on a given absolute experiment module path.
+- Added the example ``07_meta_experiments.py``

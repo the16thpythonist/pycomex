@@ -1,13 +1,25 @@
 import os
 import unittest
+import typing as t
 
 from inspect import getframeinfo, stack
 
 from pycomex.util import get_version
 from pycomex.util import get_comments_from_module
 from pycomex.util import parse_parameter_info
+from pycomex.util import type_string
 
 from .util import ASSETS_PATH
+
+
+def test_type_string():
+    string = type_string(t.Dict[str, int])
+    print(string)
+    assert string == 'Dict[str, int]'
+    
+    string = type_string(t.List[t.Dict[bool, t.Tuple[int, int]]])
+    print(string)
+    assert string == 'List[Dict[bool, Tuple[int, int]]]'
 
 
 def test_parse_parameter_info_basically_works():
