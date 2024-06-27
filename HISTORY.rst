@@ -292,3 +292,17 @@ Other changes
 - Added the ``get_experiment`` method which allows to easily get the Experiment object instance based 
   on a given absolute experiment module path.
 - Added the example ``07_meta_experiments.py``
+
+0.11.0 (27.06.2024)
+-------------------
+
+Added a *Plugin System* to the pycomex framework. This is a major new feature which allows to extend the
+functionality of the framework in a modular way. The plugin system is custom and implemented via hooks that 
+are accessible through a global singleton config instance.
+
+- Added the ``pycomex.plugin`` module which contains the ``Plugin`` class and the ``PluginManager`` class
+- Added the ``pycomex.config`` decorator which can be used to define hooks in the plugin modules
+- Added the "weights_biases" plugin which is a simple example of how to use the plugin system. It implements 
+  a weights and biases integration for the pycomex experimentation framework. In addition to the local artifact 
+  folders it is now also possible to log the resuls to the online dashboard of weights and biases.
+- Added some unittests for the config and plugin system
