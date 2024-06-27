@@ -8,6 +8,7 @@ from pycomex.util import get_version
 from pycomex.util import get_comments_from_module
 from pycomex.util import parse_parameter_info
 from pycomex.util import type_string
+from pycomex.util import trigger_notification
 
 from .util import ASSETS_PATH
 
@@ -58,3 +59,9 @@ def test_get_version():
     assert version_string != ''
 
 
+def test_trigger_notification_basically_works():
+    """
+    The "trigger_notification" function should display a system notification with the given message
+    """
+    trigger_notification('Hello World, from unittesting!')
+    assert True

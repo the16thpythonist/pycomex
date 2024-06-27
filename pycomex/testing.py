@@ -2,6 +2,51 @@ import tempfile
 import sys
 import typing as t
 from copy import deepcopy
+from pycomex.config import Config
+
+
+class MockConfig:
+    """
+    This class can be used as a stand-in for a ``config.Config`` object. It is used in instances 
+    where the actual config singleton shouldn't be constructed.
+    """
+    def __init__(self, data: dict = {}):
+        self.data = data
+    
+    
+class ConfigIsolation:
+    """
+    This class is a context manager that can be used to properly isolate the config singleton 
+    during testing. The problem is that the config class is a global singleton and therefore the 
+    constructor of the class always returns the same object. For any tests that in some way modify 
+    that config object, this can lead to side effects in other tests. This context manager can be
+    used to isolate the config object for a specific test like this:
+    
+    .. code-block:: python
+    
+        with self.ConfigIsolation() as config:
+            # do something with the config object
+            
+        # afterwards the config will be restored to the previous state
+        
+    This context manager will save the state of the config object when entering the context, then 
+    reset the config object to its default state. When exiting the context, the config object will
+    be restored to the state it was in when entering the context.
+    """
+    def __init__(self, reset: bool = True):
+        self.config = Config()
+        self.reset = reset
+        self.config_state: dict = None
+    
+    def __enter__(self):
+        self.config_state = self.config.export_state()
+        self.config.reset_state()
+        
+        return self.config
+
+    def __exit__(self, *args):
+        self.config_state = self.config.import_state(self.config_state)
+
 
 
 class ExperimentIsolation:

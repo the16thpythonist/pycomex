@@ -13,6 +13,8 @@ import json
 import datetime
 import pathlib
 import textwrap
+import platform
+import subprocess
 import importlib.util
 import typing as t
 from typing import Optional, List, Callable
@@ -21,11 +23,14 @@ from inspect import getframeinfo, stack
 import jinja2 as j2
 import numpy as np
 
-
+# Contains a human readable string of the operating system name, e.g. "Linux" or "Windows"
+OS_NAME: str = platform.system()
+# Contains the absolute string path to the parent directory of this file
 PATH = pathlib.Path(__file__).parent.absolute()
 VERSION_PATH = os.path.join(PATH, 'VERSION')
 TEMPLATE_PATH = os.path.join(PATH, 'templates')
 EXAMPLES_PATH = os.path.join(PATH, 'examples')
+PLUGINS_PATH = os.path.join(PATH, 'plugins')
 
 TEMPLATE_ENV = j2.Environment(
     loader=j2.FileSystemLoader(TEMPLATE_PATH),
@@ -55,10 +60,13 @@ class CustomJsonEncoder(json.encoder.JSONEncoder):
     to commit numpy arrays to the experiment storage without causing an exception.
     """
     def default(self, value):
+        
         if isinstance(value, np.ndarray):
             return value.tolist()
         elif isinstance(value, np.generic):
             return value.data
+        
+        return super().default(value)
 
 
 # == CUSTOM JINJA FILTERS ==
@@ -416,3 +424,31 @@ def type_string(type_instance: t.Type) -> str:
         string = str(type_instance.__name__)
         
     return string
+
+
+def trigger_notification(message: str,
+                         duration: int = 3,
+                         ) -> None:
+    """
+    This method will trigger a system notification with the given string ``message`` which will 
+    be displayed for the given ``duration`` in seconds.
+    
+    :param message: The string message to be displayed
+    :param duration: The integer duration in seconds
+    
+    :returns: None
+    """
+    
+    if OS_NAME == 'Linux':
+        # On linux there is a native command that can be used to trigger a system notification!
+        subprocess.run(['notify-send', message, '-t', str(duration * 1000)])
+    
+    elif OS_NAME == 'Windows':
+        
+        from win10toast import ToastNotifier
+        import winsound
+
+        # Display the notification on Windows
+        toaster = ToastNotifier()
+        toaster.show_toast("Notification", message, duration=duration, threaded=True)
+        

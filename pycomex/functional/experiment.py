@@ -12,12 +12,15 @@ import datetime
 import textwrap
 import importlib.util
 from collections import defaultdict
+
 from pycomex.utils import random_string, dynamic_import
 from pycomex.utils import TEMPLATE_ENV
 from pycomex.utils import CustomJsonEncoder
 from pycomex.utils import get_comments_from_module
 from pycomex.utils import parse_parameter_info, parse_hook_info
 from pycomex.utils import type_string
+from pycomex.utils import trigger_notification
+from pycomex.config import Config
 
 HELLO: str = ''
 
@@ -32,17 +35,28 @@ class Experiment:
                  namespace: str,
                  glob: dict,
                  debug: bool = False,
-                 name_format: str = '{date}__{time}__{id}'):
+                 name_format: str = '{date}__{time}__{id}',
+                 notify: bool = True,
+                 ) -> None:
+        
         self.base_path = base_path
         self.namespace = namespace
         self.glob = glob
         self.debug = debug
         self.name_format = name_format
+        self.notify = notify
+        
+        # 26.06.24
+        # The config object is a singleton object which is used to store all the configuration information
+        # of pycomex in general. Most importantly, the config singleton stores the reference to the plugin 
+        # manager "pm" that will be used throughout the experiment lifetime to create entry points to extend 
+        # it's functionality.
+        self.config = Config()
 
         # ~ setting up logging
         self.log_formatter = logging.Formatter('%(asctime)s - %(message)s')
         stream_handler = logging.StreamHandler(sys.stdout)
-        self.logger = logging.Logger(name='experiment')
+        self.logger = logging.Logger(name='experiment', level=logging.DEBUG)
         self.logger.addHandler(stream_handler)
 
         # After the experiment was properly initialized, this will hold the absolute string path to the *archive*
@@ -109,6 +123,12 @@ class Experiment:
         # import an experiment module to actually get the experiment object instance from it, because we can't guarantee 
         # what variable name the user will actually give it, but this we can assume to always be there.
         self.glob['__experiment__'] = self
+        
+        # This hook can be used to inject additional functionality at the end of the experiment constructor.
+        self.config.pm.apply_hook(
+            'experiment_constructed', 
+            experiment=self,
+        )
 
     @property
     def dependency_names(self) -> t.List[str]:
@@ -368,9 +388,15 @@ class Experiment:
 
     # ~ Experiment Execution
 
-    def initialize(self):
+    def initialize(self) -> None:
         """
-        This method handles all the 
+        This method handles all the initial preparations that are needed to set up the 
+        experiment before any of the custom code can be implemented. This for example 
+        includes the creation of the archive folder, the initilization of the Logger 
+        instance and the copying of the original code into the archive folder. The method 
+        will also set up all the necessary metadata such as the start time of the experiment.
+        
+        :returns: None
         """
         # ~ creating archive
         self.prepare_path()
@@ -398,7 +424,14 @@ class Experiment:
         template = TEMPLATE_ENV.get_template('functional_experiment_start.out.j2')
         self.log_lines(template.render({'experiment': self}).split('\n'))
 
-    def finalize(self):
+    def finalize(self) -> None:
+        """
+        This method is called at the very end of the experiment.
+        This method will for example save the final experiment metadata and main experiment 
+        object storage to the corresponding JSON files in the archive folder. It will print 
+        the final log messages and system notification to inform the user about the end of 
+        the experiment.
+        """
         # ~ updating the metadata
         self.metadata['end_time'] = time.time()
         self.metadata['duration'] = self.metadata['end_time'] - self.metadata['start_time']
@@ -416,9 +449,33 @@ class Experiment:
         # ~ logging the end conditions
         template = TEMPLATE_ENV.get_template('functional_experiment_end.out.j2')
         self.log_lines(template.render({'experiment': self}).split('\n'))
+        
+        # ~ trigger system notification
+        # 03.06.24 - After the experiment is done, we might want to send a system notification to 
+        # the user which informs them that the experiment is done. This is especially useful in the case
+        # that the experiment was running for a long time and the user might have forgotten about it.
+        if self.notify:
+            duration_hours = self.metadata['duration'] / 3600
+            message = (
+                f'Experiment "{self.name}" is done after {duration_hours:.1f} hours!\n'
+                f'Error: {self.error}'
+            )
+            trigger_notification(message)
 
-    def execute(self):
+    def execute(self) -> None:
+        """
+        This method actually executes ALL of the necessary functionality of the experiment.
+        This inludes the initialization of the experiment, the execution of the custom experiment 
+        implementation and the finalization of the experiment artifacts.
+        
+        :returns: None
+        """
         self.initialize()
+        
+        self.config.pm.apply_hook(
+            'after_experiment_initialize',
+            experiment=self,
+        )
 
         try:
             # This flag will be used at various other places to check whether a given experiment object is 
@@ -438,6 +495,11 @@ class Experiment:
             self.tb = traceback.format_exc()
 
         self.finalize()
+        
+        self.config.pm.apply_hook(
+            'after_experiment_finalize',
+            experiment=self,
+        )
 
     def __call__(self, func, *args, **kwargs):
         self.func = func
@@ -585,15 +647,10 @@ class Experiment:
             self.name = 'debug'
             
         else:
-            now = datetime.datetime.now()
-            date_string = now.strftime('%d_%m_%Y')
-            time_string = now.strftime('%H_%M')
-            id_string = random_string(length=4)
-            self.name = self.name_format.format(
-                date=date_string,
-                time=time_string,
-                id=id_string,
-            )
+            # This method will format the full name of the experiment which includes not only the 
+            # name of the experiment but also the date and time information about the starting 
+            # time.
+            self.name = self.format_full_name()
             
         # Now that we have decided on the name we can assemble the full path
         self.path = os.path.join(current_path, self.name)
@@ -605,6 +662,29 @@ class Experiment:
 
         # And then finally in any case we create a new and clean folder
         os.mkdir(self.path)
+
+    def format_full_name(self, date_time: datetime.datetime = datetime.datetime.now()) -> str:
+        """
+        Given a datetime object ``data_time``, this function will format the "full" experiment name 
+        which does not only include the name of the experiment but also the time and date specificied 
+        by the datetime as well as a random ID string.
+        
+        This full name is therefore guaranteed to be unique for each experiment execution.
+        
+        :param date_time: the datetime object which specifies the time and date that should be included
+            in the experiment name. Default is now()
+        
+        :returns: the string name
+        """
+        date_string = date_time.strftime('%d_%m_%Y')
+        time_string = date_time.strftime('%H_%M')
+        id_string = random_string(length=4)
+        name = self.name_format.format(
+            date=date_string,
+            time=time_string,
+            id=id_string,
+        )
+        return name
 
     def save_metadata(self) -> None:
         with open(self.metadata_path, mode='w') as file:
@@ -739,6 +819,13 @@ class Experiment:
         """
         path = os.path.join(self.path, file_name)
         fig.savefig(path)
+        
+        self.config.pm.apply_hook(
+            'experiment_commit_fig',
+            experiment=self,
+            name=file_name,
+            figure=fig,   
+        )
 
     def commit_json(self,
                     file_name: str,
@@ -760,6 +847,14 @@ class Experiment:
         with open(path, mode='w') as file:
             content = json.dumps(data, cls=encoder_cls)
             file.write(content)
+            
+        self.config.pm.apply_hook(
+            'experiment_commit_json',
+            experiment=self,
+            name=file_name,
+            data=data,
+            content=content,
+        )
 
     def commit_raw(self, file_name: str, content: str) -> None:
         """
@@ -774,6 +869,33 @@ class Experiment:
         file_path = os.path.join(self.path, file_name)
         with open(file_path, mode='w') as file:
             file.write(content)
+            
+        self.config.pm.apply_hook(
+            'experiment_commit_raw',
+            experiment=self,
+            name=file_name,
+            content=content,
+        )
+
+    def track(self, name: str, value: float) -> None:
+        """
+        This method can be used to track a specific value within the experiment object. This is useful for example
+        to keep track of the current state of a model during training or to save the results of a specific
+        computation.
+
+        :param name: The name under which the value should be saved
+        :param value: The value to be saved
+
+        :returns: None
+        """
+        self[name] = value
+        
+        self.config.pm.apply_hook(
+            'experiment_track',
+            experiment=self,
+            name=name,
+            value=value,
+        )
 
     # ~ Alternate constructors
 

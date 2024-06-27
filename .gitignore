@@ -6,6 +6,7 @@ __pycache__/
 # experiment results
 pycomex/examples/results
 tests/example
+tests/assets/results
 
 # C extensions
 *.so

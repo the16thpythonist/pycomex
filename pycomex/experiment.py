@@ -35,6 +35,7 @@ from pycomex.util import SkipExecution
 from pycomex.util import CustomJsonEncoder
 from pycomex.util import Singleton
 from pycomex.util import split_namespace
+from pycomex.util import trigger_notification
 from pycomex.work import AbstractWorkTracker
 from pycomex.work import NaiveWorkTracker
 
