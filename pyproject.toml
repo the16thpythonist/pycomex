@@ -38,6 +38,10 @@ numpy = ">=1.22.0"
 matplotlib = ">=3.5.3"
 psutil = ">=5.7.2"
 rich-click = ">=1.7.0,<=1.8.0"
+# This is the package that is required to send system notifications on windows.
+# The problem is that this is not even installable on linux, so we need to use a marker
+# to conditionally only install this on a windows system!
+"win10toast" = { version = "^0.2", markers = "sys_platform == 'win32'" }
 
 [tool.poetry.dev-dependencies]
 nox = "2022.1.7"
