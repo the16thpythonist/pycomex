@@ -888,7 +888,10 @@ class Experiment:
 
         :returns: None
         """
-        self[name] = value
+        if name not in self.data:
+            self[name] = []
+            
+        self[name].append(value)
         
         self.config.pm.apply_hook(
             'experiment_track',
@@ -896,6 +899,18 @@ class Experiment:
             name=name,
             value=value,
         )
+        
+    def track_many(self, data: dict[str, float]) -> None:
+        """
+        This method can be used to track multiple values at once. The data should be a dictionary where the keys
+        are the names under which the values should be saved and the values are the values to be saved.
+        
+        :param data: A dictionary where the keys are the names and the values are the values to be saved
+        
+        :returns: None
+        """
+        for key, value in data.items():
+            self.track(key, value)
 
     # ~ Alternate constructors
 

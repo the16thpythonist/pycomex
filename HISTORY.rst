@@ -306,3 +306,9 @@ are accessible through a global singleton config instance.
   a weights and biases integration for the pycomex experimentation framework. In addition to the local artifact 
   folders it is now also possible to log the resuls to the online dashboard of weights and biases.
 - Added some unittests for the config and plugin system
+
+0.11.1 (28.06.2024)
+-------------------
+
+- Added the ``Experiment.track_many`` method which can be conveniently used to track multiple artifacts at once
+- Changed the track function generally to store the values in a list instead of replacing the value each time.
