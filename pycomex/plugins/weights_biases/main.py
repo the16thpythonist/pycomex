@@ -47,6 +47,20 @@ class WeightsAndBiasesPlugin(Plugin):
         "WANDB_API_KEY" is set.
         """
         
+        
+    @hook('after_experiment_initialize', priority=0)
+    def after_experiment_initialize(self,
+                                    config: Config, 
+                                    experiment: Experiment,
+                                    **kwargs
+                                    ) -> None:
+        """
+        This method is called after Experiment.initialize() has been called.
+        
+        If the experiment metadata contains the "__wandb__" flag set to True, this method will start a
+        new run in the wandb service. The run will be named after the experiment name and the start time.
+        Uses the experiment metadata and parameters to log the configuration of the experiment.
+        """
         experiment.metadata['__wandb__'] = False
         
         # There are two conditions that have been met before we can even start working with wandb:
@@ -54,7 +68,7 @@ class WeightsAndBiasesPlugin(Plugin):
         # The first condition is that within the experiment parameters there is a key called 'WANDB_PROJECT'
         # which defines the name of the project to which the experiment should be logged to. If this key is
         # not present, we'll skip the initialization of wandb.
-        if 'WANDB_PROJECT' not in experiment.parameters:
+        if 'WANDB_PROJECT' not in experiment.parameters or not isinstance(experiment.WANDB_PROJECT, str):
             experiment.logger.debug('no wandb project defined. skipping...')
             return
         else:
@@ -83,34 +97,20 @@ class WeightsAndBiasesPlugin(Plugin):
         # check if it is save to execute wandb functionality or not.
         experiment.metadata['__wandb__'] = True
         
-    @hook('after_experiment_initialize', priority=0)
-    def after_experiment_initialize(self,
-                                    config: Config, 
-                                    experiment: Experiment,
-                                    **kwargs
-                                    ) -> None:
-        """
-        This method is called after Experiment.initialize() has been called.
+        # Actually initializing the wandb project    
+        start_date_time = datetime.datetime.fromtimestamp(experiment.metadata['start_time'])
+        experiment_name = experiment.metadata['name'] + '_' + experiment.format_full_name(start_date_time)
         
-        If the experiment metadata contains the "__wandb__" flag set to True, this method will start a
-        new run in the wandb service. The run will be named after the experiment name and the start time.
-        Uses the experiment metadata and parameters to log the configuration of the experiment.
-        """
-        if experiment.metadata.get('__wandb__', False):
-            
-            start_date_time = datetime.datetime.fromtimestamp(experiment.metadata['start_time'])
-            experiment_name = experiment.metadata['name'] + '_' + experiment.format_full_name(start_date_time)
-            
-            experiment.logger.debug('starting weights and biases run...')
-            self.run = wandb.init(
-                project=experiment.WANDB_PROJECT,
-                name=experiment_name,
-                id=experiment_name,
-                config={
-                    'metadata': experiment.metadata,
-                    'parameters': experiment.parameters,
-                }
-            )
+        experiment.logger.debug('starting weights and biases run...')
+        self.run = wandb.init(
+            project=experiment.WANDB_PROJECT,
+            name=experiment_name,
+            id=experiment_name,
+            config={
+                'metadata': experiment.metadata,
+                'parameters': experiment.parameters,
+            }
+        )
     
     @hook('experiment_commit_fig', priority=0)
     def experiment_commit_fig(self,

@@ -324,3 +324,9 @@ are accessible through a global singleton config instance.
   the tracked quantities into separate visualizations. Numeric quantities will be plotted as line plots and
   figures will be stitched together into a video.
 - Added ``moviepy`` to the dependencies
+
+0.12.1 (03.07.2024)
+-------------------
+
+- In the wandb plugin: Moved the login of the project into the "after_initialize" hook because there was an issue 
+  with not being able to overwrite the WANDB_PROJECT parameter for sub experiments...
