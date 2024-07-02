@@ -14,6 +14,7 @@ import matplotlib.pyplot as plt
 
 from pycomex.functional.experiment import Experiment
 from pycomex.utils import folder_path, file_namespace
+from pycomex.testing import random_plot
 
 # :param N_ELEMENTS:
 #      The number of elements to be randomly generated for the scatter plot.
@@ -38,7 +39,10 @@ def experiment(e: Experiment):
     # The experiment "track" method can be used to track the numeric (float) values of certain 
     # metrics for example. These will be logged to the wandb service directly and can be 
     # observed in the online dashboard in real-time.
-    e.track('time', time.time())    
+    e.track('time', time.time())   
+    
+    figure = random_plot()
+    e.track('plot', figure) 
 
     e.log('creating plot...')
     e.track('time', time.time())
@@ -55,5 +59,6 @@ def experiment(e: Experiment):
     e.commit_fig('figure.pdf', fig)
     
     e.track('time', time.time())
+    e.track('plot', random_plot())
 
 experiment.run_if_main()

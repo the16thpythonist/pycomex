@@ -1,8 +1,21 @@
 import tempfile
 import sys
+import random
 import typing as t
 from copy import deepcopy
+
+import matplotlib.pyplot as plt
+
 from pycomex.config import Config
+
+
+def random_plot() -> plt.Figure:
+    fig, ax = plt.subplots(1, 1)
+    ax.scatter(
+        [random.random() for _ in range(10)],
+        [random.random() for _ in range(10)],    
+    )
+    return fig
 
 
 class MockConfig:

@@ -134,7 +134,10 @@ class WeightsAndBiasesPlugin(Plugin):
         
         if experiment.metadata.get('__wandb__', False):
             
-            self.run.log({name: value})
+            if isinstance(value, (float, int)):
+                self.run.log({name: value})
+            elif isinstance(value, plt.Figure):
+                self.run.log({name: wandb.Image(value)})
     
     @hook('after_experiment_finalize', priority=0)
     def after_experiment_finalize(self, 

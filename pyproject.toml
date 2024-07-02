@@ -4,7 +4,7 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.poetry]
 name = "pycomex"
-version = "0.11.1"
+version = "0.12.0"
 description = "Python Computational Experiments"
 license = "MIT"
 authors = ["Jonas Teufel <jonseb1998@gmail.com>"]
@@ -17,6 +17,9 @@ packages = [
 ]
 include = [
     "pycomex/functional",
+    "pycomex/plugins",
+    "pycomex/plugins/plot_track",
+    "pycomex/plugins/weights_biases",
     "pycomex/templates",
     "pycomex/templates/analysis.j2",
     "pycomex/VERSION",
@@ -37,6 +40,7 @@ jinja2 = ">=3.0.3"
 numpy = ">=1.22.0"
 matplotlib = ">=3.5.3"
 psutil = ">=5.7.2"
+moviepy = ">=1.0.3"
 rich-click = ">=1.7.0,<=1.8.0"
 # This is the package that is required to send system notifications on windows.
 # The problem is that this is not even installable on linux, so we need to use a marker

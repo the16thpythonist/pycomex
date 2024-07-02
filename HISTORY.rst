@@ -312,3 +312,15 @@ are accessible through a global singleton config instance.
 
 - Added the ``Experiment.track_many`` method which can be conveniently used to track multiple artifacts at once
 - Changed the track function generally to store the values in a list instead of replacing the value each time.
+
+0.12.0 (02.07.2024)
+-------------------
+
+- Extended the ``Experiment.track`` method to be able to track figures as well by storing them into a specific 
+  folder within the experiment archive folder.
+- The ``Experiment.metadata`` dict now contains the "__track__" entry which is used to store the names of all 
+  the tracked quantities.
+- Added the ``plot_track`` plugin which is mainly executed after each experiment and will automatically plot all
+  the tracked quantities into separate visualizations. Numeric quantities will be plotted as line plots and
+  figures will be stitched together into a video.
+- Added ``moviepy`` to the dependencies

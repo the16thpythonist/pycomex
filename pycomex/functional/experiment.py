@@ -13,6 +13,7 @@ import textwrap
 import importlib.util
 from collections import defaultdict
 
+import matplotlib.pyplot as plt
 from pycomex.utils import random_string, dynamic_import
 from pycomex.utils import TEMPLATE_ENV
 from pycomex.utils import CustomJsonEncoder
@@ -84,6 +85,10 @@ class Experiment:
             'short_description': '',
             'parameters': {},
             'hooks': {},
+            # 02.07.24 - This list will store the string names of all the tracked quantities (stored with the 
+            # "track" method). These names are the keys to the experiment data storage dict where the actual 
+            # values are stored.
+            '__track__': []
         }
         self.error = None
         self.tb = None
@@ -405,6 +410,10 @@ class Experiment:
         file_handler = logging.FileHandler(self.log_path)
         file_handler.setFormatter(self.log_formatter)
         self.logger.addHandler(file_handler)
+        
+        # ~ creating the track path
+        self.track_path = os.path.join(self.path, '.track')
+        os.mkdir(self.track_path)
 
         # ~ copying all the code into the archive
         self.save_dependencies()
@@ -487,7 +496,9 @@ class Experiment:
             # 27.10.23 - Added the "before_execute" and the "after_execute" hook because they might be useful 
             # in the future.
             self.apply_hook('before_run')
+            
             self.func(self)  # This is where the actual user defined experiment code gets executed!
+            
             self.apply_hook('after_run')
             
         except Exception as error:
@@ -877,11 +888,21 @@ class Experiment:
             content=content,
         )
 
-    def track(self, name: str, value: float) -> None:
+    def track(self, name: str, value: float | plt.Figure) -> None:
         """
         This method can be used to track a specific value within the experiment object. This is useful for example
         to keep track of the current state of a model during training or to save the results of a specific
         computation.
+        
+        When tracking a quantity to a specific name, each new value will be added to the experiment data storage 
+        using the name as the corresponding key in the storage. 
+        Additionally, the tracked name will be addded to the metadata '__track__' list which will provide an
+        overview of all the tracked quantities in the experiment.
+
+        **Tracking Figures**
+        It is also possible to track figures / images by providing either the Figure object or the absolute string 
+        path to an image as the corresponding value. In this case, the figure will be saved into a special folder in 
+        the experiment archive folder and the list will hold the relative paths towards these files.
 
         :param name: The name under which the value should be saved
         :param value: The value to be saved
@@ -890,8 +911,18 @@ class Experiment:
         """
         if name not in self.data:
             self[name] = []
+            self.metadata['__track__'].append(name)
             
-        self[name].append(value)
+        if isinstance(value, plt.Figure):
+            index = len(self[name]) + 1
+            rel_path = os.path.join('.track', f'{name}_{index:03d}.png')
+            image_path = os.path.join(self.path, rel_path)
+            value.savefig(image_path)
+
+            self[name].append(rel_path)
+            
+        elif isinstance(value, (float, int)):
+            self[name].append(value)
         
         self.config.pm.apply_hook(
             'experiment_track',
