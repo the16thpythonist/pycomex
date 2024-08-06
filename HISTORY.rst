@@ -330,3 +330,8 @@ are accessible through a global singleton config instance.
 
 - In the wandb plugin: Moved the login of the project into the "after_initialize" hook because there was an issue 
   with not being able to overwrite the WANDB_PROJECT parameter for sub experiments...
+
+0.12.2 (06.08.2024)
+-------------------
+
+- Removed the Python 3.10 Union type hint from the experiments module to restore compatibility with Python 3.9

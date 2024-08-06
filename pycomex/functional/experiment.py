@@ -888,7 +888,7 @@ class Experiment:
             content=content,
         )
 
-    def track(self, name: str, value: float | plt.Figure) -> None:
+    def track(self, name: str, value: t.Union[float, plt.Figure]) -> None:
         """
         This method can be used to track a specific value within the experiment object. This is useful for example
         to keep track of the current state of a model during training or to save the results of a specific
