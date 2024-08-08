@@ -335,3 +335,6 @@ are accessible through a global singleton config instance.
 -------------------
 
 - Removed the Python 3.10 Union type hint from the experiments module to restore compatibility with Python 3.9
+- Added a try block for the loading of plugins such that they re-cast errors as warnings and don't actively break 
+  the system such as when an import error in a plugin module occurs (aka we dont want to have to include all the plugin 
+  dependencies in the main package)

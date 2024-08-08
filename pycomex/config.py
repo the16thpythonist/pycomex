@@ -1,6 +1,7 @@
 import os
 import pathlib
 import inspect
+import warnings
 
 from pycomex.plugin import PluginManager
 from pycomex.plugin import Plugin
@@ -92,8 +93,11 @@ class Config(metaclass=Singleton):
             element_path = os.path.join(PLUGINS_PATH, element_name)
             module_path = os.path.join(element_path, 'main.py')
             if os.path.exists(module_path) and os.path.isfile(module_path):
-                module = dynamic_import(module_path)
-                self.load_plugin_from_module(name=element_name, module=module)
+                try:
+                    module = dynamic_import(module_path)
+                    self.load_plugin_from_module(name=element_name, module=module)
+                except (ImportError) as exc:
+                    warnings.warn(f'Failed to load plugin from module "{module_path}" due to {exc}')
                 
         # ~ external plugins
         # TODO: implement loading of external plugins
