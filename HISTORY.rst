@@ -338,3 +338,10 @@ are accessible through a global singleton config instance.
 - Added a try block for the loading of plugins such that they re-cast errors as warnings and don't actively break 
   the system such as when an import error in a plugin module occurs (aka we dont want to have to include all the plugin 
   dependencies in the main package)
+
+0.12.3 (06.08.2024)
+-------------------
+
+- Ported the notification implementation as a plugin instead of having it in the main code
+- Clicking a notification will now open the experiment record folder in the file explorer
+- Disabled the notifications for the windows.

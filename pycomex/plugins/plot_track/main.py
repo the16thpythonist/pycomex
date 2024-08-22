@@ -1,6 +1,4 @@
 import os
-import wandb
-import datetime
 
 import imageio
 import matplotlib.pyplot as plt
@@ -14,6 +12,17 @@ from pycomex.functional.experiment import Experiment
 class PlotTrackedElementsPlugin(Plugin):
     """
     This plugin will automatically create visualizations for all the tracked elements of an experiment.
+    
+    During an experiment it is possible to use the ``Experiment.track`` method to track certain experiment
+    artifacts. This can either be simple numeric properties such as metrics but it can also more complex 
+    artifacts such as images.
+    
+    At the end of the experiment, this plugin will collect all of the tracked elements and create visualizations 
+    in the main experiment folder. The format of these visualizations depends on the type of the tracked 
+    artifact:
+    - numeric properties will be plotted as a line plot.
+    - images will be stitched together into a video which shows the evolution of the tracked image over 
+      the duration of the experiment. 
     
     TODO: Add optional experiment parameters with which this could be customized (FPS, FIGSIZE)
     """

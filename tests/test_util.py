@@ -11,6 +11,7 @@ from pycomex.util import type_string
 from pycomex.util import trigger_notification
 
 from .util import ASSETS_PATH
+from .util import ARTIFACTS_PATH
 
 
 def test_type_string():
@@ -65,3 +66,39 @@ def test_trigger_notification_basically_works():
     """
     trigger_notification('Hello World, from unittesting!')
     assert True
+    
+
+def test_desktop_notify_works():
+    import signal
+    import asyncio
+    import subprocess
+    
+    from desktop_notifier import DesktopNotifier, Button
+    
+    async def main():
+        
+        notifier = DesktopNotifier(
+            app_name='PyComex',
+            notification_limit=10,
+        )
+        
+        timeout = 2
+        stop_event = asyncio.Event()
+        await notifier.send(
+            title='Title',
+            message='Hello World',
+            on_clicked=lambda: subprocess.run(['nautilus', ARTIFACTS_PATH], start_new_session=True),
+            on_dismissed=lambda: stop_event.set(),
+            timeout=2,
+        )
+        
+        loop = asyncio.get_running_loop()
+        loop.call_later(2, stop_event.set)
+
+        # loop.add_signal_handler(signal.SIGINT, stop_event.set)
+        # loop.add_signal_handler(signal.SIGTERM, stop_event.set)
+
+        await stop_event.wait()
+        
+    asyncio.run(main())
+    

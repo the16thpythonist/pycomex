@@ -445,6 +445,7 @@ def trigger_notification(message: str,
     
     elif OS_NAME == 'Windows':
         
+        return
         from win10toast import ToastNotifier
         import winsound
 

@@ -458,18 +458,6 @@ class Experiment:
         # ~ logging the end conditions
         template = TEMPLATE_ENV.get_template('functional_experiment_end.out.j2')
         self.log_lines(template.render({'experiment': self}).split('\n'))
-        
-        # ~ trigger system notification
-        # 03.06.24 - After the experiment is done, we might want to send a system notification to 
-        # the user which informs them that the experiment is done. This is especially useful in the case
-        # that the experiment was running for a long time and the user might have forgotten about it.
-        if self.notify:
-            duration_hours = self.metadata['duration'] / 3600
-            message = (
-                f'Experiment "{self.name}" is done after {duration_hours:.1f} hours!\n'
-                f'Error: {self.error}'
-            )
-            trigger_notification(message)
 
     def execute(self) -> None:
         """
