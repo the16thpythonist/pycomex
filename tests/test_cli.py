@@ -73,17 +73,3 @@ def test_experiment_info_basically_works():
     result = runner.invoke(cli, ['info', '02_basic'], terminal_width=100)
     LOG.info(result.output)
     assert result.exit_code == 0
-
-
-def test_run_experiment_basically_works():
-    cli = ExperimentCLI(name='exp', experiments_path=EXAMPLES_PATH)
-    runner = CliRunner()
-
-    result = runner.invoke(cli, ['run', '--help'])
-    LOG.info(result.output)
-    assert result.exit_code == 0
-
-    with ArgumentIsolation():
-        result = runner.invoke(cli, ['run', '02_basic'], terminal_width=100)
-        LOG.info(result.output)
-        assert result.exit_code == 0

@@ -345,3 +345,17 @@ are accessible through a global singleton config instance.
 - Ported the notification implementation as a plugin instead of having it in the main code
 - Clicking a notification will now open the experiment record folder in the file explorer
 - Disabled the notifications for the windows.
+
+0.13.0 (01.10.2024)
+-------------------
+
+- Fixed an issue with the experiment command line argument parsing where parameters of sub experiments (defined by 
+  Experiment.extend) would not show up in the help message. Solved by re-constructing the ExperimentArgumentParser 
+  in the extend method.
+- The help command will now also show the default values of experiment parameters (if their string representation is 
+  below a certain length.)
+- Cleaned up the unittests. In this version all of the unitests actually passed before the publish
+- "notify" plugin
+  - can now actually be disabled using the ``__NOTIFY__`` special parameter
+- "weights_biases" plugin
+  - Now actually correctly handles when the ``WANDB_PROJECT`` parameter is incorrectly set.

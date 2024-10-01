@@ -112,7 +112,7 @@ class Config(metaclass=Singleton):
                     
             obj = getattr(module, attribute_name)
             if inspect.isclass(obj):
-                if issubclass(obj, Plugin):
+                if issubclass(obj, Plugin) and not obj == Plugin:
                     plugin: Plugin = obj(config=self)
                     plugin.register()
                     self.plugins[name] = plugin

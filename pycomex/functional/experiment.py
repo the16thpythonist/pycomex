@@ -7,10 +7,12 @@ import json
 import inspect
 import traceback
 import typing as t
+import typing as typ
 import logging
 import datetime
 import textwrap
 import importlib.util
+import argparse
 from collections import defaultdict
 
 import matplotlib.pyplot as plt
@@ -21,14 +23,87 @@ from pycomex.utils import get_comments_from_module
 from pycomex.utils import parse_parameter_info, parse_hook_info
 from pycomex.utils import type_string
 from pycomex.utils import trigger_notification
+from pycomex.utils import SetArguments
 from pycomex.config import Config
 
 HELLO: str = ''
 
+class ExperimentArgumentParser:
+    """
+    This class handles the parsing of the command line arguments when DIRECTLY calling an 
+    experiment module with the intention of overwriting experiment parameters through the 
+    command line arguments.
+    
+    The parser object is constructed with a reference to the "parameters" map of the 
+    experiment object which stores the actual experiment parameter values which will be 
+    available to the experiment code. Additionally, the parser object is also constructed
+    with a reference to the "parameter_metadata" dictionary which contains additional 
+    information about the parameters such as the type and a description.
+    
+    Calling the "parse" method will actually parse the command line arguments and then
+    update the "parameters" map with all the values that are actually provided through 
+    the command line arguments.
+    """
+    def __init__(self, 
+                 parameter_map: dict[str, typ.Any], 
+                 parameter_metadata: dict[str, dict],
+                 description: str = 'The experiment',
+                 ):
+        self.parameter_map = parameter_map
+        self.parameter_metadata = parameter_metadata
+    
+        self.parser = argparse.ArgumentParser()
+        
+        # For each parameter we want to add a possible command line argument to the parser which 
+        # corresponds to the variable name of the parameter in the experiment. Optionally (if available)
+        # the metadata about that parameter can be added as a help string.
+        for parameter, value in self.parameter_map.items():
+            
+            if parameter:
+                
+                # it is not entirely clear if a parameter actually has metadata information for a 
+                # given experiment so we query the values with some safe defaults here.
+                metadata = self.parameter_metadata.get(parameter, {})
+                type_name = metadata.get('type', '')
+                description = metadata.get('description', '')
+                
+                # Most importantly the help string will show the type and the description of the parameter
+                help_string = f'({type_name}) {description}'
+                
+                # If the string representation of the value isn't too long, we also want to include that 
+                # as additional information in the help string.
+                value_string = str(value)
+                if len(value_string) <= 20:
+                    help_string += f' DEFAULT: {value_string}'
+                    
+                self.parser.add_argument(
+                    f'--{parameter}', 
+                    metavar='',
+                    help=help_string
+                )
+        
+    def parse(self) -> dict:
+        """
+        Evaluates the command line arguments and updates the parameter map with the values.
+        """
+        args = self.parser.parse_args()
+        for parameter in self.parameter_map.keys():
+            if parameter in args and getattr(args, parameter) is not None:
+                content = getattr(args, parameter)
+                value = eval(content)
+                self.parameter_map[parameter] = value
+
 
 class Experiment:
     """
-    Functional Experiment Implementation. This class acts as a decorator.
+    Functional Experiment Implementation. This class acts as a decorator for a function which implements 
+    the main functionality of a computational experiment. This decorator class primarily handles the 
+    following aspects of the computational experiment:
+    
+    - Automatic construction of the dictionary / file structure for the experiment archive which contains 
+      the various artifacts that are created during the experiment runtime.
+    - Automatic discovery of the experiment parameters which are either given as global variables in the 
+      corresponding experiment module or alternatively can be overwritten through command line arguments.
     """
 
     def __init__(self,
@@ -90,6 +165,26 @@ class Experiment:
             # values are stored.
             '__track__': []
         }
+        
+        # 01.10.24 - The special parameters (double underscore) are always a possibility and as such we 
+        # can already populate the metadata of these parameters without it having to be specifically 
+        # defined in the individual experiment module.
+        self.metadata['parameters'] = {
+            '__DEBUG__': {
+                'type': 'bool',
+                'description': ('Flag to enable debug mode. In debug mode the experiment archive folder will be '
+                                'called "debug" and will be overwritten when another experiment is started with '
+                                'the same name.'),
+            },
+            '__TESTING__': {
+                'type': 'bool',
+                'description': ('Flag to enable testing mode. In testing mode the experiment will be executed '
+                                'with minimal runtime and minimal resources simply to test if all the components '
+                                'work. Implementing testing mode is optional and will have to be done by each '
+                                'experiment individually.'),
+            }
+        }
+        
         self.error = None
         self.tb = None
         
@@ -111,6 +206,10 @@ class Experiment:
         self.analyses: t.List[t.Callable] = []
         self.hook_map: t.Dict[str, t.List[t.Callable]] = defaultdict(list)
 
+        # 01.10.24 - We can use this hook to modify the default attributes / metadata of the experiment 
+        # object before actually starting to load the experiment specific attributes.
+        self.config.pm.apply_hook('before_experiment_parameters', experiment=self)
+
         # This method here actually "discovers" all the parameters (=global variables) of the experiment module.
         # It essentially iterates through all the global variables of the given experiment module and then if it finds 
         # a parameter (CAPS) it inserts it into the "self.parameters" dictionary of this object.
@@ -128,6 +227,12 @@ class Experiment:
         # import an experiment module to actually get the experiment object instance from it, because we can't guarantee 
         # what variable name the user will actually give it, but this we can assume to always be there.
         self.glob['__experiment__'] = self
+        
+        # 06.09.24
+        # This object handles the parsing of the command line arguments in the case that the experiment module is 
+        # exectued directly from the command line. This object will then update the parameters dictionary with the
+        # values that were actually provided through the command line arguments.
+        self.arg_parser = ExperimentArgumentParser(self.parameters, self.metadata['parameters'])
         
         # This hook can be used to inject additional functionality at the end of the experiment constructor.
         self.config.pm.apply_hook(
@@ -153,6 +258,14 @@ class Experiment:
             self.debug = bool(self.parameters['__DEBUG__'])
 
     def update_parameters(self):
+        """
+        This method updates the internal parameters dictionary of the experiment object with the values of the
+        global variables of the experiment module. This is done by iterating through all the global variables of
+        the experiment module and then checking if the variable name is in all caps. If it is, then it is considered
+        a parameter and inserted into the parameters dictionary.
+        
+        :returns: None
+        """
         for name, value in self.glob.items():
             if name.isupper():
                 self.parameters[name] = value
@@ -160,6 +273,16 @@ class Experiment:
         # This method will search through the freshly updated parameters dictionary for "special" keys
         # and then use those values to trigger some more fancy updates based on those.
         self.update_parameters_special()
+        
+    def update_arg_parser(self) -> None:
+        """
+        This method constructs a new experiment argument parser instance based on the current state of 
+        the parameter dictionary and the parameter metdata dictionary. This is useful to update the
+        argument parser in case the parameter dictionary has been updated.
+        
+        :returns: None
+        """
+        self.arg_parser = ExperimentArgumentParser(self.parameters, self.metadata['parameters'])
         
     # ~ Module Metadata
 
@@ -542,6 +665,16 @@ class Experiment:
         :returns: None
         """
         if self.is_main():
+            
+            # 06.09.24: The parse method will optionall update / overwrite the self.parameters dictionary with 
+            # all of the arguments that were passed to the experiment through the command line. This is a very
+            # important step because it allows the user to overwrite the default parameters of the experiment
+            # with command line arguments.
+            self.arg_parser.parse()
+            # It is possible that some special parameters have been overwritten through the command line arguments
+            # so we need to call this method to make sure that those changes are actually applied.
+            self.update_parameters_special()
+            
             self.execute()
             self.execute_analyses()
             
@@ -1004,6 +1137,11 @@ class Experiment:
         
         # 30.10.23 - This method will read all the metadata from the thingy
         experiment.read_module_metadata()
+        
+        # 25.09.24 - This method will update the argument parser with the new parameters
+        # that have potentially been added in the sub experiment module which have not existed 
+        # in the base experiment.
+        experiment.update_arg_parser()
 
         # This line is necessary so that the experiments can be discovered by the CLI
         glob['__experiment__'] = experiment
@@ -1077,8 +1215,9 @@ def run_experiment(path: str) -> None:
     # It will raise an error if there is none.
     experiment = find_experiment_in_module(module)
     
-    # And now finally we can just execute that experiment.
-    experiment.set_main()
-    experiment.run_if_main()
+    with SetArguments([sys.argv[0]]):
+        # And now finally we can just execute that experiment.
+        experiment.set_main()
+        experiment.run_if_main()
     
     return experiment

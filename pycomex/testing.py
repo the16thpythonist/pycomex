@@ -90,6 +90,8 @@ class ExperimentIsolation:
             # they detect a direct execution of the module as opposed to a simple import for example.
             # Here we modify it to make the experiment think that it is a direct execution to make it run.
             '__name__': '__main__',
+            # As a default we want to disable the system notifications for the testing of the experiments.
+            '__NOTIFY__': False,
             **glob_mod
         }
         self.original_globals = globals().copy()

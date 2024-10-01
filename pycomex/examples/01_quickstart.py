@@ -9,14 +9,14 @@ from pycomex.utils import folder_path, file_namespace
 # Experiment parameters can simply be defined as uppercase global variables.
 # These are automatically detected and can possibly be overwritten in command
 # line invocation
-HELLO = "hello "
-WORLD = "world!"
+HELLO: str = "hello "
+WORLD: str = "world!"
 
 # There are certain special parameters which will be detected by the experiment
 # such as this, which will put the experiment into debug mode.
 # That means instead of creating a new archive for every execution, it will always
 # create/overwrite the "debug" archive folder.
-__DEBUG__ = True
+__DEBUG__: bool = True
 
 # An experiment is essentially a function. All of the code that constitutes
 # one experiment should ultimately be called from this one function...
@@ -34,7 +34,7 @@ __DEBUG__ = True
 def experiment(e: Experiment):
     # Internally saved into automatically created nested dict
     # {'strings': {'hello_world': '...'}}
-    e["strings/hello_world"] = HELLO + WORLD
+    e["strings/hello_world"] = e.HELLO + e.WORLD
 
     # Alternative to "print". Message is printed to stdout as well as
     # recorded to log file
@@ -42,7 +42,7 @@ def experiment(e: Experiment):
 
     # Automatically saves text file artifact to the experiment record folder
     file_name = "hello_world.txt"
-    e.commit_raw(file_name, HELLO + WORLD)
+    e.commit_raw(file_name, e.HELLO + e.WORLD)
     # e.commit_fig(file_name, fig)
     # e.commit_png(file_name, image)
     # ...
@@ -52,7 +52,7 @@ def experiment(e: Experiment):
 def analysis(e: Experiment):
     # And we can access all the internal fields of the experiment object
     # and the experiment parameters here!
-    print(HELLO, WORLD)
+    print(e.HELLO, e.WORLD)
     print(e['strings/hello_world'])
     # logging will print to stdout but not modify the log file
     e.log('analysis done')

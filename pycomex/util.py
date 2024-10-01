@@ -453,3 +453,21 @@ def trigger_notification(message: str,
         toaster = ToastNotifier()
         toaster.show_toast("Notification", message, duration=duration, threaded=True)
         
+        
+class SetArguments:
+    """
+    This class acts as a context manager that can be used to temporarily change the value of the sys.argv 
+    list of command line arguments. This can be useful for testing purposes where the command line arguments
+    need to be changed for a specific test case.
+    """
+    def __init__(self, args: list[str]):
+        self.args = args
+        self.sys_args = None
+    
+    def __enter__(self, ) -> 'SetArguments':
+        self.sys_args = sys.argv
+        sys.argv = self.args
+        return self
+    
+    def __exit__(self, *args, **kwargs) -> None:
+        sys.argv = self.sys_args

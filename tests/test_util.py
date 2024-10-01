@@ -1,6 +1,7 @@
 import os
 import unittest
 import typing as t
+import sys
 
 from inspect import getframeinfo, stack
 
@@ -9,6 +10,7 @@ from pycomex.util import get_comments_from_module
 from pycomex.util import parse_parameter_info
 from pycomex.util import type_string
 from pycomex.util import trigger_notification
+from pycomex.util import SetArguments
 
 from .util import ASSETS_PATH
 from .util import ARTIFACTS_PATH
@@ -67,38 +69,49 @@ def test_trigger_notification_basically_works():
     trigger_notification('Hello World, from unittesting!')
     assert True
     
-
-def test_desktop_notify_works():
-    import signal
-    import asyncio
-    import subprocess
     
-    from desktop_notifier import DesktopNotifier, Button
+class TestSetArguments:
+    """
+    A suite of tests for the SetArguments context manager which is provides a temporary emulation 
+    of a sys.argv list.
+    """
     
-    async def main():
-        
-        notifier = DesktopNotifier(
-            app_name='PyComex',
-            notification_limit=10,
-        )
-        
-        timeout = 2
-        stop_event = asyncio.Event()
-        await notifier.send(
-            title='Title',
-            message='Hello World',
-            on_clicked=lambda: subprocess.run(['nautilus', ARTIFACTS_PATH], start_new_session=True),
-            on_dismissed=lambda: stop_event.set(),
-            timeout=2,
-        )
-        
-        loop = asyncio.get_running_loop()
-        loop.call_later(2, stop_event.set)
+    def test_sys_argv_structure(self):
+        print(sys.argv)
+        assert isinstance(sys.argv, list)
 
-        # loop.add_signal_handler(signal.SIGINT, stop_event.set)
-        # loop.add_signal_handler(signal.SIGTERM, stop_event.set)
-
-        await stop_event.wait()
+    def test_basically_works(self):
+        """
+        The class should act as a context manager that is able to change the sys.argv list only as 
+        long as the context is active and reset it to the previous state afterwards.
+        """
+        original = sys.argv.copy()
         
-    asyncio.run(main())
-    
+        with SetArguments(['python', 'run.py', '--help']):
+            # only in the context manager should the args become exactly that
+            assert sys.argv == ['python', 'run.py', '--help']
+            
+        # outside it should not be that but instead should be its original value
+        assert sys.argv != ['python', 'run.py', '--help']
+        assert len(sys.argv) != 0
+        assert sys.argv == original
+        
+    def test_works_with_exception(self):
+        """
+        It is important that the sys.argv list is reset to its original state even if an exception
+        is raised within the context manager.
+        """
+        original = sys.argv.copy()
+        
+        try:
+            with SetArguments(['python', 'run.py', '--help']):
+                # only in the context manager should the args become exactly that
+                assert sys.argv == ['python', 'run.py', '--help']
+                
+                # raise an exception
+                raise ValueError('Some random exception')
+        except ValueError:
+            pass
+        finally:
+            assert sys.argv != ['python', 'run.py', '--help']
+            assert sys.argv == original

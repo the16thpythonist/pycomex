@@ -27,6 +27,9 @@ class PlotTrackedElementsPlugin(Plugin):
     TODO: Add optional experiment parameters with which this could be customized (FPS, FIGSIZE)
     """
     
+    def __init__(self, config: Config):
+        super().__init__(config)
+    
     @hook('after_experiment_finalize', priority=0)
     def after_experiment_finalize(self, config: Config, experiment: Experiment):
         """

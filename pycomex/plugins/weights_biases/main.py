@@ -1,4 +1,5 @@
 import os
+import re
 import wandb
 import datetime
 
@@ -46,7 +47,12 @@ class WeightsAndBiasesPlugin(Plugin):
         experiment defines a "WANDB_PROJECT" key in the parameters and that the environment variable
         "WANDB_API_KEY" is set.
         """
-        
+        project_defined = 'WANDB_PROJECT' in experiment.parameters and isinstance(experiment.WANDB_PROJECT, str)
+        key_exists = 'WANDB_API_KEY' in os.environ
+        if project_defined and key_exists:
+            experiment.metadata['__wandb__'] = True
+        else:
+            experiment.metadata['__wandb__'] = False
         
     @hook('after_experiment_initialize', priority=0)
     def after_experiment_initialize(self,
@@ -72,6 +78,21 @@ class WeightsAndBiasesPlugin(Plugin):
             experiment.logger.debug('no wandb project defined. skipping...')
             return
         else:
+            
+            # 01.10.24 - Even if the name exists there is a possibility that it is somehow invalid as it 
+            # might not be a valid string or contain special characters not allowed for the wandb names
+            if not isinstance(experiment.WANDB_PROJECT, str):
+                experiment.logger.debug('wandb project name has to be a string. skipping...')
+                return
+        
+            if not experiment.WANDB_PROJECT:
+                experiment.logger.debug('wandb project name cannot be empty. skipping...')
+                return
+            
+            if not re.match(r'^[a-zA-Z0-9\-_]+$', experiment.WANDB_PROJECT):
+                experiment.logger.debug('wandb project name can only contain alphanumeric characters, dashes and underscores. skipping...')
+                return
+            
             self.project_name = experiment.WANDB_PROJECT
         
         # THe second condition is that the environment variable 'WANDB_API_KEY' is set. If this is not the case

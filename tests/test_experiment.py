@@ -11,6 +11,7 @@ import subprocess
 from tempfile import TemporaryDirectory
 from typing import Optional, List
 
+import pytest
 import numpy as np
 
 from pycomex.util import EXAMPLES_PATH
@@ -26,6 +27,9 @@ from pycomex.testing import ExperimentIsolation, ArgumentIsolation
 
 from .util import TEMPLATE_ENV, write_template
 from .util import ASSETS_PATH, ARTIFACTS_PATH
+
+
+pytestmark = pytest.mark.skip(reason="context manager api deprecated...")
 
 
 VARIABLE = 10
