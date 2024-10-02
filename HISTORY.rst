@@ -359,3 +359,10 @@ are accessible through a global singleton config instance.
   - can now actually be disabled using the ``__NOTIFY__`` special parameter
 - "weights_biases" plugin
   - Now actually correctly handles when the ``WANDB_PROJECT`` parameter is incorrectly set.
+  
+0.13.1 (02.10.2024)
+-------------------
+
+- Added the special ``__PREFIX__`` parameter which can be used to add a string prefix to the experiment archive folder 
+  name. This is useful for example when running multiple experiments in parallel and you want to distinguish between 
+  them in the file system.

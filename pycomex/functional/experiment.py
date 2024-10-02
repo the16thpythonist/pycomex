@@ -182,6 +182,12 @@ class Experiment:
                                 'with minimal runtime and minimal resources simply to test if all the components '
                                 'work. Implementing testing mode is optional and will have to be done by each '
                                 'experiment individually.'),
+            },
+            '__PREFIX__': {
+                'type': 'str',
+                'description': ('A string that will be prefixed to the experiment name. This can be used to '
+                                'differentiate between different runs of the same experiment. This will only be '
+                                'used as the prefix for the experiment name and not for the actual folder name.'),
             }
         }
         
@@ -772,17 +778,18 @@ class Experiment:
         # - In the last case we generate a name from the current datetime combined with a random
         #   string to make it unique.
         
-        if self.name is not None:
-            pass
-        
-        elif self.debug:
+        if self.debug:
             self.name = 'debug'
-            
-        else:
+        
+        elif self.name is None:
             # This method will format the full name of the experiment which includes not only the 
             # name of the experiment but also the date and time information about the starting 
             # time.
             self.name = self.format_full_name()
+            
+            if '__PREFIX__' in self.parameters and self.parameters['__PREFIX__']:
+                prefix = self.parameters['__PREFIX__']
+                self.name = f'{prefix}__{self.name}'
             
         # Now that we have decided on the name we can assemble the full path
         self.path = os.path.join(current_path, self.name)

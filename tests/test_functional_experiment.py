@@ -40,5 +40,24 @@ class TestExperiment:
             
             assert isinstance(experiment, Experiment)
             assert 'PARAMETER' in experiment.parameters
-
             
+    def test_prefix_parameter_works(self):
+        """
+        When using the special parameter __PREFIX__ that string should be added in front of the 
+        experiment name when the experiment archive folder is being created.
+        """
+        parameters = {'__PREFIX__': 'custom'}
+        with ConfigIsolation() as config, ExperimentIsolation(sys.argv, glob_mod=parameters) as iso:
+            
+            config.load_plugins()
+            
+            experiment = Experiment(
+                base_path=iso.path,
+                namespace='experiment',
+                glob=iso.glob,
+            )
+            experiment.run()
+            assert '__PREFIX__' in experiment.parameters
+            
+            assert experiment.name.startswith('custom')
+            assert 'custom' in experiment.path
