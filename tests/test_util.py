@@ -11,6 +11,7 @@ from pycomex.util import parse_parameter_info
 from pycomex.util import type_string
 from pycomex.util import trigger_notification
 from pycomex.util import SetArguments
+from pycomex.util import get_dependencies
 
 from .util import ASSETS_PATH
 from .util import ARTIFACTS_PATH
@@ -115,3 +116,21 @@ class TestSetArguments:
         finally:
             assert sys.argv != ['python', 'run.py', '--help']
             assert sys.argv == original
+            
+            
+def test_get_dependencies():
+    """
+    The "get_dependencies" function should return a dictionary with all the dependencies of the current 
+    python runtime.
+    """
+    deps = get_dependencies()
+    print(deps)
+    
+    assert isinstance(deps, dict)
+    assert len(deps) != 0
+    
+    example_info = next(iter(deps.values()))
+    assert isinstance(example_info, dict)
+    assert 'version' in example_info
+    assert 'name' in example_info
+    assert 'path' in example_info

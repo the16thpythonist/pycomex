@@ -20,6 +20,31 @@ def test_run_experiment_works():
     assert len(experiment.data) != 0
 
 
+class TestExperimentArgumentParser:
+    """
+    ExperimentArgumentParser is a class that is used to parse command line arguments that are passed to the 
+    individual experiment modules.
+    """
+    
+    def test_command_line_arguments_basically_work(self):
+        """
+        It should generally be possible to modify the behavior of an experiment object by specifiying 
+        command line arguments (sys.argv)
+        """
+        argv = ['test.py', '--__DEBUG__=True']
+        with ConfigIsolation() as config, ExperimentIsolation(argv) as iso:
+            experiment = Experiment(
+                base_path=iso.path,
+                namespace='experiment',
+                glob=iso.glob,
+            )
+            # We'll have to call this method explicitly because this operation would only be done in the 
+            # experiment.run_if_main() method usually.
+            experiment.arg_parser.parse()
+            
+            assert '__DEBUG__' in experiment.parameters
+            assert experiment.__DEBUG__ is True
+
 class TestExperiment:
     
     def test_construction_basically_works(self):

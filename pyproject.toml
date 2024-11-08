@@ -4,7 +4,7 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.poetry]
 name = "pycomex"
-version = "0.13.1"
+version = "0.13.2"
 description = "Python Computational Experiments"
 license = "MIT"
 authors = ["Jonas Teufel <jonseb1998@gmail.com>"]
@@ -20,11 +20,10 @@ include = [
     "pycomex/plugins",
     "pycomex/plugins/plot_track",
     "pycomex/plugins/weights_biases",
+    "pycomex/plugins/notify",
     "pycomex/templates",
     "pycomex/templates/analysis.j2",
     "pycomex/VERSION",
-    "README.rst",
-    "CHANGLELOG.rst"
 ]
 
 [tool.poetry.build]
@@ -37,12 +36,13 @@ pycomex = 'pycomex.cli:cli'
 python = ">=3.8"
 click = ">=7.1.2"
 jinja2 = ">=3.0.3"
-numpy = ">=1.22.0"
+numpy = ">=1.22.0,<2.0.0"
 matplotlib = ">=3.5.3"
 psutil = ">=5.7.2"
 moviepy = ">=1.0.3"
-rich-click = ">=1.7.0,<=1.8.0"
+rich-click = ">=1.8.0,<=1.9.0"
 desktop-notifier = ">=5.0.1,<=6.0.0"
+rich-argparse = ">=1.0.0,<=2.0.0"
 
 [tool.poetry.dev-dependencies]
 nox = "2022.1.7"

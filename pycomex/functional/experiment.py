@@ -11,11 +11,19 @@ import typing as typ
 import logging
 import datetime
 import textwrap
-import importlib.util
+import tempfile
+import subprocess
 import argparse
 from collections import defaultdict
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 import matplotlib.pyplot as plt
+from uv import find_uv_bin
+from rich.logging import RichHandler
+from rich.console import Console
+from rich.table import Table
+from rich.text import Text
+from rich_argparse import RichHelpFormatter
 from pycomex.utils import random_string, dynamic_import
 from pycomex.utils import TEMPLATE_ENV
 from pycomex.utils import CustomJsonEncoder
@@ -24,11 +32,12 @@ from pycomex.utils import parse_parameter_info, parse_hook_info
 from pycomex.utils import type_string
 from pycomex.utils import trigger_notification
 from pycomex.utils import SetArguments
+from pycomex.utils import get_dependencies
 from pycomex.config import Config
 
 HELLO: str = ''
 
-class ExperimentArgumentParser:
+class ExperimentArgumentParser(argparse.ArgumentParser):
     """
     This class handles the parsing of the command line arguments when DIRECTLY calling an 
     experiment module with the intention of overwriting experiment parameters through the 
@@ -47,19 +56,22 @@ class ExperimentArgumentParser:
     def __init__(self, 
                  parameter_map: dict[str, typ.Any], 
                  parameter_metadata: dict[str, dict],
-                 description: str = 'The experiment',
+                 *args, 
+                 **kwargs
                  ):
+        super().__init__(*args, **kwargs)
         self.parameter_map = parameter_map
         self.parameter_metadata = parameter_metadata
-    
-        self.parser = argparse.ArgumentParser()
         
-        # For each parameter we want to add a possible command line argument to the parser which 
-        # corresponds to the variable name of the parameter in the experiment. Optionally (if available)
-        # the metadata about that parameter can be added as a help string.
-        for parameter, value in self.parameter_map.items():
+        self.console = Console()
+        
+        self.parameters: set[str] = set(parameter_map.keys()) | set(parameter_metadata.keys())
+
+        for parameter in self.parameters:
             
             if parameter:
+                value = self.parameter_map.get(parameter, None)
+                metadata = self.parameter_metadata.get(parameter, {})
                 
                 # it is not entirely clear if a parameter actually has metadata information for a 
                 # given experiment so we query the values with some safe defaults here.
@@ -73,25 +85,57 @@ class ExperimentArgumentParser:
                 # If the string representation of the value isn't too long, we also want to include that 
                 # as additional information in the help string.
                 value_string = str(value)
-                if len(value_string) <= 20:
+                if value is not None and len(value_string) <= 20:
                     help_string += f' DEFAULT: {value_string}'
                     
-                self.parser.add_argument(
+                action = self.add_argument(
                     f'--{parameter}', 
                     metavar='',
-                    help=help_string
+                    help=description
                 )
+                setattr(action, 'type_string', type_name)
+                setattr(action, 'default_string', value_string)
         
+    def format_help(self):
+        """
+        Custom implementation of how the help string is output to the console.
+        """
+        table = Table.grid(expand=True, padding=(0, 2), pad_edge=False)
+        table.add_column('Parameter', style='sandy_brown', justify='left')
+        table.add_column('Description', style='white', justify='left')
+        
+        self._actions.sort(key=lambda x: x.dest)
+        for action in self._actions:
+            
+            if hasattr(action, 'type_string'):
+                
+                content = action.help
+                if action.type_string:
+                    content = f'[bold]({action.type_string})[/bold] {content}'
+                if action.default_string:
+                    content = f'{content}\n[dim]DEFAULT: {action.default_string}[/dim]'
+                
+                if action.option_strings:
+                    options = ', '.join(action.option_strings)
+                    table.add_row(options, content)
+                else:
+                    table.add_row(action.dest, content)
+
+        self.console.print('Experiment Parameters:\n')
+        self.console.print(table)
+    
     def parse(self) -> dict:
         """
         Evaluates the command line arguments and updates the parameter map with the values.
         """
-        args = self.parser.parse_args()
-        for parameter in self.parameter_map.keys():
+        args = self.parse_args()
+        for parameter in self.parameters:
             if parameter in args and getattr(args, parameter) is not None:
                 content = getattr(args, parameter)
                 value = eval(content)
                 self.parameter_map[parameter] = value
+                
+        return self.parameter_map
 
 
 class Experiment:
@@ -105,6 +149,18 @@ class Experiment:
     - Automatic discovery of the experiment parameters which are either given as global variables in the 
       corresponding experiment module or alternatively can be overwritten through command line arguments.
     """
+    # The name of the archive file that will store all of the experiment data that has been directly 
+    # commited to the experiment object during the runtime of the experiment.
+    DATA_FILE_NAME: str = 'experiment_data.json'
+    # The name of the archive file that will store the metadata of the experiment during the execution 
+    # of the experiment as well as afterward.
+    METADATA_FILE_NAME: str = 'experiment_meta.json'
+    # The name of the python module file that will be copied into the experiment archive folder.
+    CODE_FILE_NAME: str = 'experiment_code.py'
+    
+    # This is the filename that will be used to save the python dependencies when terminating the 
+    # experiment in reproducible mode.
+    DEPENDENCIES_FILE_NAME: str = '.dependencies.json'
 
     def __init__(self,
                  base_path: str,
@@ -132,6 +188,13 @@ class Experiment:
         # ~ setting up logging
         self.log_formatter = logging.Formatter('%(asctime)s - %(message)s')
         stream_handler = logging.StreamHandler(sys.stdout)
+        # stream_handler = RichHandler(
+        #     show_level=False, 
+        #     show_time=False, 
+        #     show_path=False, 
+        #     markup=True, 
+        #     rich_tracebacks=True
+        # )
         self.logger = logging.Logger(name='experiment', level=logging.DEBUG)
         self.logger.addHandler(stream_handler)
 
@@ -183,13 +246,25 @@ class Experiment:
                                 'work. Implementing testing mode is optional and will have to be done by each '
                                 'experiment individually.'),
             },
+            '__REPRODUCIBLE__': {
+                'type': 'bool',
+                'description': ('Flag to enable reproducible mode. In reproducible mode, additional information '
+                                'will be stored in the experiment archive at the end of the experiment execution. '
+                                'This information will include a snapshot of the dependencies and the source code.'),
+            },
             '__PREFIX__': {
                 'type': 'str',
                 'description': ('A string that will be prefixed to the experiment name. This can be used to '
                                 'differentiate between different runs of the same experiment. This will only be '
                                 'used as the prefix for the experiment name and not for the actual folder name.'),
-            }
+            },
         }
+        # Then we can also set some default values for these special parameters
+        self.parameters.update({
+            '__DEBUG__': False,
+            '__TESTING__': False,
+            '__REPRODUCIBLE__': False,
+        })
         
         self.error = None
         self.tb = None
@@ -238,7 +313,10 @@ class Experiment:
         # This object handles the parsing of the command line arguments in the case that the experiment module is 
         # exectued directly from the command line. This object will then update the parameters dictionary with the
         # values that were actually provided through the command line arguments.
-        self.arg_parser = ExperimentArgumentParser(self.parameters, self.metadata['parameters'])
+        self.arg_parser = ExperimentArgumentParser(
+            parameter_map=self.parameters, 
+            parameter_metadata=self.metadata['parameters'],
+        )
         
         # This hook can be used to inject additional functionality at the end of the experiment constructor.
         self.config.pm.apply_hook(
@@ -377,8 +455,8 @@ class Experiment:
             
     # ~ Logging
 
-    def log(self, message: str):
-        self.logger.info(message)
+    def log(self, message: str, **kwargs):
+        self.logger.info(message, **kwargs)
 
     def log_lines(self, lines: t.List[str]):
         for line in lines:
@@ -393,7 +471,28 @@ class Experiment:
     def hook(self, name: str, replace: bool = True, default: bool = True):
         """
         This method can be used to register functions as hook candidates for the experiment object to use 
-        whenver the corresponding call of the "apply_hook" method is issued with a matching string identifier.
+        whenver the corresponding call of the "apply_hook" method is issued with a matching unique string 
+        identifier ``name``.
+        
+        This method returns a decorator function that can be used to decorate functions which should then 
+        be registered as the callbacks of the hooks.
+    
+        NOTE: Every hook callback receives the Experiment object that called it as the first positional argument!
+    
+        .. code-block:: python
+        
+            @experiment.hook("before_run")
+            def before_run(e: Experiment) -> str:
+                return "Hello World!"
+        
+        :param name: The unique string identifier to associate with the hook.
+        :param replace: If this is True, the registered hook will replace any previously registered hooks. 
+            Otherwise, the hooks will be appended to the list of registered hooks and all of them will be 
+            executed in the order of their registration when the hook is called.
+        :param default: If this is True, the registered hook will be registered but only as a fallback 
+            option. It won't be used as soon as at least one other callback is registered to the same hook.
+        
+        :returns: A decorator function
         """
         def decorator(func, *args, **kwargs):
             # 07.05.23 - The default flag should only be used for any default implementations used within the 
@@ -414,6 +513,15 @@ class Experiment:
         return decorator
 
     def apply_hook(self, name: str, default: t.Optional[t.Any] = None, **kwargs):
+        """
+        This method can be used to execute (all) the registered hook functions that are associated with the 
+        string identifier ``name``.
+        
+        :param name: The unique string identifier of the hook.
+        :param default: The default value that will be returned if no hook function is registered for the
+        
+        :returns: The return value of the last executed hook function.
+        """
         result = default
 
         if name in self.hook_map:
@@ -587,6 +695,60 @@ class Experiment:
         # ~ logging the end conditions
         template = TEMPLATE_ENV.get_template('functional_experiment_end.out.j2')
         self.log_lines(template.render({'experiment': self}).split('\n'))
+        
+        # ~ potentially packaging reproducible information
+        # The "finalize_reproducible" method wraps all the functionality to package the reproduction information 
+        # into the experiment archive folder.
+        if self.parameters['__REPRODUCIBLE__']:
+            self.finalize_reproducible()
+
+    def finalize_reproducible(self) -> None:
+        """
+        This method is called at the very end of the experiment - only if the experiment is terminated in 
+        reproducible mode. This method will create all the assets that will be required for a experiment 
+        reproduction later on.
+        
+        This includes a snapshot of the dependencies and the source code of the editable dependencies.
+        
+        :returns: None
+        """
+        self.log(Text('...packaging for reproducibility', style='bright_black'))
+
+        # ~ saving the dependencies
+        # One part of the reproducibility is the to gather a snapshot of the exact dependencies and versions 
+        # that are active in the current python runtime environment. This is done by saving the dependencies
+        # into a json file in the experiment archive folder.
+        self.log('...exporting dependencies')
+        dependencies: Dict[str, dict] = get_dependencies()
+        self.commit_json(self.DEPENDENCIES_FILE_NAME, dependencies)
+
+        # ~ exporting source code
+        # Besides all the dependencies that can be installed via the source code of the experiment, there is 
+        # the *current* state of the package that contains the experiment itself which most likely isn't connected 
+        # to specific package version.
+        # So for that package we will actually use UV to build a tarball and then save that into the archive 
+        # as well so that it can later be installed from that tarball.
+        uv_bin = find_uv_bin()
+        
+        path = os.path.join(self.path, '.sources')
+        os.mkdir(path)
+        
+        self.log('...export editable installs')
+        with tempfile.TemporaryDirectory() as temp_path:
+            
+            for name, info in dependencies.items():
+                if info['editable']:
+                    self.log(f' - source "{name}" @ {info["path"]}')
+                    subprocess.run([uv_bin, 'build', info['path'], '--sdist', '--out-dir', temp_path])
+                    
+            # Now that we have created all the tarballs in the temporary directory, we can now move them into
+            # the experiment archive folder.
+            for file in os.listdir(temp_path):
+                if file.endswith('.tar.gz'):
+                    shutil.move(
+                        os.path.join(temp_path, file), 
+                        os.path.join(path, file)
+                    )
 
     def execute(self) -> None:
         """
@@ -703,12 +865,12 @@ class Experiment:
     @property
     def metadata_path(self) -> str:
         self.check_path()
-        return os.path.join(str(self.path), 'experiment_meta.json')
+        return os.path.join(str(self.path), self.METADATA_FILE_NAME)
 
     @property
     def data_path(self) -> str:
         self.check_path()
-        return os.path.join(str(self.path), 'experiment_data.json')
+        return os.path.join(str(self.path), self.DATA_FILE_NAME)
 
     @property
     def code_path(self) -> str:
@@ -719,7 +881,7 @@ class Experiment:
         # archive folder. This is because tensorflow is doing some very weird dynamic shenanigans where at some 
         # point they execute the line "import code" which then referenced to our python module causing a 
         # circular import and thus an error!
-        return os.path.join(str(self.path), 'experiment_code.py')
+        return os.path.join(str(self.path), self.CODE_FILE_NAME)
 
     @property
     def log_path(self) -> str:
@@ -826,8 +988,37 @@ class Experiment:
         return name
 
     def save_metadata(self) -> None:
+        """
+        This method will store the metadata of the experiment object into a JSON file in the archive folder.
+        The method will overwrite any potentially existing file with the same name with the current metadata.
+        
+        :returns: None
+        """
+        # 07.11.24
+        # It is actually quite useful to also store the information about the parameter value and not just the 
+        # type and the description, which is why we are actually adding this information to the metadata here
+        # before saving it.
+        # The only thing we have to be wary of here is that parameters don't necessary need to be JSON encodable 
+        # types. So for all values that are not json encodable we will simply convert them to their string 
+        # representation.
+        for parameter, value in self.parameters.items():
+            try:
+                json.dumps(value)  # Check if value is JSON encodable
+                self.metadata['parameters'][parameter]['value'] = value
+                # We add the additional usable flag here to indicate whether or not a parameter has actually been
+                # exported to a JSON format correctly in such a way that it could be reused later on.
+                self.metadata['parameters'][parameter]['usable'] = True
+            except (TypeError, OverflowError):
+                self.metadata['parameters'][parameter]['value'] = str(value)
+                self.metadata['parametersr'][parameter]['usable'] = False
+        
+        # Then we can save it with human readable formatting
         with open(self.metadata_path, mode='w') as file:
-            content = json.dumps(self.metadata, indent=4, sort_keys=True)
+            content = json.dumps(
+                self.metadata, 
+                indent=4, 
+                sort_keys=True
+            )
             file.write(content)
 
     def save_data(self) -> None:
@@ -1156,7 +1347,57 @@ class Experiment:
         return experiment
 
     @classmethod
+    def is_archive(cls, path: str) -> bool:
+        """
+        Returns whether or not a given absolute ``path`` represents a valid experiment archive folder or 
+        not.
+        
+        :param path: The absolute string path in question to be checked.
+        
+        :returns: bool
+        """
+        if not os.path.isdir(path):
+            return False
+
+        metadata_file_path = os.path.join(path, cls.METADATA_FILE_NAME)
+        if not os.path.exists(metadata_file_path):
+            return False
+        
+        # Finally we can load the information inside the metadata file and check if it is valid or not.
+        # Part of this will also be checking if the experiment is actually done with the execution or not.
+        # If the experiment is still executing, then we determine it technically not an archive yet.
+        metadata: dict = cls.load_metadata(path)
+        return metadata['status'] == 'done'
+
+    @classmethod
+    def load_metadata(cls, path: str) -> dict:
+        """
+        Given the absolute string ``path`` to a valid experiment archive folder, this method will load only the 
+        metadata of this archived experiment from the metadata json file. This can be useful in scenarios where 
+        only the metadata is required and loading the entire information with the "load" function would be 
+        unnecessary.
+        
+        :param path: The absolute string path to the experiment archive folder.
+        
+        :returns: The metadata dict of the archived experiment
+        """
+        metadata_file_path = os.path.join(path, cls.METADATA_FILE_NAME)
+        with open(metadata_file_path) as file:
+            content = file.read()
+            metadata = json.loads(content)
+            return metadata
+
+    @classmethod
     def load(cls, path: str):
+        """
+        This method can be used to load a previously executed experiment back into memory from an existing
+        archive folder ``path``. This will return the Experiment instance which can be used to access the 
+        data and metadata of the experiment at the state in which the experiment ultimately terminated.
+        
+        :param path: The absolute path to the experiment archive folder.
+        
+        :returns: Experiment instance
+        """
         module = dynamic_import(path)
         
         # 28.04.23 - before this was implemented over a hardcoded variable name for an experiment, but

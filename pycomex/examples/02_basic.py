@@ -29,6 +29,7 @@ NUM_WORDS: int = 1000
 #       The number of times to repeat the generation process
 REPETITIONS: int = 10
 
+__REPRODUCIBLE__: bool = True
 
 # There are some utility functions which simplify the setup of the experiment decorator.
 # - folder_path(path: str): This function will return the absolute parent folder path for any given path.

@@ -366,3 +366,10 @@ are accessible through a global singleton config instance.
 - Added the special ``__PREFIX__`` parameter which can be used to add a string prefix to the experiment archive folder 
   name. This is useful for example when running multiple experiments in parallel and you want to distinguish between 
   them in the file system.
+
+0.13.2 (02.10.2024)
+-------------------
+
+- Reworked the ``ExperimentArgumentParser`` 
+  - now uses the ``rich`` package for the rendering of the help message.
+  - The parameters are also now ordered alphabetically in the help message.  

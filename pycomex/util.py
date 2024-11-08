@@ -17,7 +17,9 @@ import platform
 import subprocess
 import importlib.util
 import typing as t
-from typing import Optional, List, Callable
+import pkg_resources
+from pathlib import Path
+from typing import Optional, List, Callable, Dict
 from inspect import getframeinfo, stack
 
 import jinja2 as j2
@@ -454,6 +456,49 @@ def trigger_notification(message: str,
         toaster.show_toast("Notification", message, duration=duration, threaded=True)
         
         
+def is_dist_editable(dist: pkg_resources.EggInfoDistribution) -> bool:
+    location = dist.location
+
+    pth_path = os.path.join(location, f'{dist.key}.pth')
+    if os.path.exists(pth_path):
+        return True
+
+    direct_url_path = os.path.join(dist.location, f'{dist.key}-{dist.version}.dist-info', 'direct_url.json')
+    if os.path.exists(direct_url_path):
+        return True
+    
+    return False
+
+
+def get_dist_path(dist: pkg_resources.EggInfoDistribution, editable: bool = False) -> str:
+    if editable:
+        pth_path = os.path.join(dist.location, f'{dist.key}.pth')
+        if os.path.exists(pth_path):
+            with open(pth_path) as file:
+                package_path = file.read().strip()
+    else:
+        package_path = os.path.join(dist.location, dist.key)
+        
+    return package_path
+
+
+def get_dependencies() -> Dict[str, dict]:
+    
+    dependencies: Dict[str, dict] = {}
+    for dist in pkg_resources.working_set:
+        
+        editable = is_dist_editable(dist)
+        package_path = get_dist_path(dist, editable)
+        
+        dependencies[dist.key] = {
+            'name': dist.key,
+            'path': package_path,
+            'version': dist.version,
+            'editable': editable,
+        }
+            
+    return dependencies
+
 class SetArguments:
     """
     This class acts as a context manager that can be used to temporarily change the value of the sys.argv 
