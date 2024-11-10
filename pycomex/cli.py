@@ -396,15 +396,23 @@ class CLI(click.RichGroup):
         
     @click.command('reproduce', short_help='reproduce an experiment that was previously terminated in reproducible mode.',
                    context_settings={'ignore_unknown_options': True})
+    @click.option('--env-only', is_flag=True, help='Only create the virtual environment and install dependencies.')
     @click.argument('experiment_path', type=click.Path(exists=True))
     @click.argument('experiment_args', type=click.UNPROCESSED, nargs=-1)
     @click.pass_obj
     def reproduce_command(self, 
+                          env_only: bool,
                           experiment_path: str,
                           experiment_args: str
                           ) -> None:
         """
-        This command will attempt to execute the experiment at the given path. 
+        [bright]This command will attempt to execute an experiment that was previously exported in "reproducible" mode. The
+        [bold cyan]EXPERIMENT_PATH[/] may either point to an experiment archive folder or a ZIP file containing an 
+        experiment archive folder.
+        
+        [bright]To reproduce the experiment, the command will first reconstruct a virtual environment with the same 
+        conditions as the original experiment was run in. By default, the experiment will then be executed. To 
+        only create the virtual environment and install the dependencies, the --env-only flag can be used.
         """
         # processing the experiment arguments
         experiment_options = {}
@@ -485,6 +493,9 @@ class CLI(click.RichGroup):
         for file_name in os.listdir(sources_path):
             source_path = os.path.join(sources_path, file_name)
             subprocess.run([uv, 'pip', 'install', '--no-deps', source_path], env=env)
+
+        if env_only:
+            click.secho('environment setup complete. skipping experiment execution...', fg='green')
 
         # ~ running the experiment
         click.secho(f'... collecting parameters', fg='bright_black')

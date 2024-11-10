@@ -1,58 +1,82 @@
 [build-system]
-requires = ["poetry.core>=1.2.0b2"]
-build-backend = "poetry.core.masonry.api"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
-[tool.poetry]
+[project]
+# Project Metadata
+# ================
 name = "pycomex"
-version = "0.13.2"
+version = "0.14.0"
 description = "Python Computational Experiments"
-license = "MIT"
-authors = ["Jonas Teufel <jonseb1998@gmail.com>"]
-maintainers = ["Jonas Teufel <jonseb1998@gmail.com>"]
-documentation = "https://pycomex.readthedocs.io"
-keywords = ["computational experiments", "data science", "maschine learning", "academia"]
-packages = [
-    { include = "pycomex/functional" },
-    { include = "pycomex" },
+readme = "README.rst"
+authors = [
+    {name = "Jonas Teufel", email = "jonseb1998@gmail.com"},
 ]
-include = [
-    "pycomex/functional",
-    "pycomex/plugins",
-    "pycomex/plugins/plot_track",
-    "pycomex/plugins/weights_biases",
-    "pycomex/plugins/notify",
-    "pycomex/templates",
-    "pycomex/templates/analysis.j2",
-    "pycomex/VERSION",
+maintainers = [
+    {name = "Jonas Teufel", email = "jonseb1998@gmail.com"},
+]
+license = {text = "MIT License"}
+keywords = [
+    "computational experiments", 
+    "data science", 
+    "maschine learning", 
+    "academia"
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
 ]
 
-[tool.poetry.build]
-generate-setup-file = true
+# Project Dependencies
+# ====================
+requires_python = ">=3.10"
+dependencies = [
+    "click>=7.1.2,<8.0.0",
+    "jinja2>=3.0.3,<4.0.0",
+    "numpy>=1.22.0,<2.0.0",
+    "matplotlib>=3.5.3,<4.0.0",
+    "psutil>=5.7.2,<6.0.0",
+    "moviepy>=1.0.3,<2.0.0",
+    "rich-click>=1.8.0,<1.9.0",
+    "desktop-notifier>=5.0.1,<6.0.0",
+    "rich-argparse>=1.0.0,<2.0.0",
+]
 
-[tool.poetry.scripts]
-pycomex = 'pycomex.cli:cli'
+# Executable Scripts
+# ==================
+pycomex = "pycomex.cli:cli"
 
-[tool.poetry.dependencies]
-python = ">=3.8"
-click = ">=7.1.2"
-jinja2 = ">=3.0.3"
-numpy = ">=1.22.0,<2.0.0"
-matplotlib = ">=3.5.3"
-psutil = ">=5.7.2"
-moviepy = ">=1.0.3"
-rich-click = ">=1.8.0,<=1.9.0"
-desktop-notifier = ">=5.0.1,<=6.0.0"
-rich-argparse = ">=1.0.0,<=2.0.0"
+# Configuration of Build System (Hatchling)
+# =========================================
+[tool.hatchling.build]
+skip_excluded_dirs = true
 
-[tool.poetry.dev-dependencies]
-nox = "2022.1.7"
-sphinx = "5.0.2"
-pytest = "7.1.3"
+# Version Bumping
+# ===============
 
-[tool.poetry_bumpversion.file."pycomex/__init__.py"]
-search = '__version__ = "{current_version}"'
-replace = '__version__ = "{new_version}"'
-
-[tool.poetry_bumpversion.file."pycomex/VERSION"]
+[tool.bumpversion]
+current_version = "0.14.0"
+parse = "(?<![=<>])(?P<major>\\d+)\\.(?P<minor>\\d+)\\.(?P<patch>\\d+)"
+serialize = ["{major}.{minor}.{patch}"]
 search = "{current_version}"
 replace = "{new_version}"
+regex = true
+ignore_missing_version = true
+tag = false
+sign_tags = false
+tag_name = "v{new_version}"
+tag_message = "Bump version: {current_version} → {new_version}"
+allow_dirty = true
+commit = false
+message = "Bump version: {current_version} → {new_version}"
+commit_args = ""
+files = [
+    {filename = "pyproject.toml", search="version = \"{current_version}\"", replace="version = \"{new_version}\""},
+    {filename = "README.rst"},
+    {filename = "pycomex/VERSION"},
+]

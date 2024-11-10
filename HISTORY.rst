@@ -373,3 +373,14 @@ are accessible through a global singleton config instance.
 - Reworked the ``ExperimentArgumentParser`` 
   - now uses the ``rich`` package for the rendering of the help message.
   - The parameters are also now ordered alphabetically in the help message.  
+
+0.14.0 (07.11.2024)
+-------------------
+
+- Added ``reproducible`` mode to the experiment, which can be enabled by setting the magic parameter ``__REPRODUCIBLE__=True``.
+  This mode will export the dependencies of the experiment explicitly into the archive folder as well.
+- Added the ``reproduce`` command to the CLI which can be used to reproduce an experiment run based on the experiment
+  archive folder, if the experiment was executed in reproducible mode.
+- Switched to using ``uv`` for development instead of poetry.
+- Added the ``ActionableParameterType`` interface which can be used to define custom type annotations for experiment parameters 
+  with custom get and set behavior when interacting with the parameters via the experiment instance.

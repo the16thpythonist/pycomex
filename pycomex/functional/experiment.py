@@ -33,6 +33,7 @@ from pycomex.utils import type_string
 from pycomex.utils import trigger_notification
 from pycomex.utils import SetArguments
 from pycomex.utils import get_dependencies
+from pycomex.functional.parameter import ActionableParameterType
 from pycomex.config import Config
 
 HELLO: str = ''
@@ -749,6 +750,17 @@ class Experiment:
                         os.path.join(temp_path, file), 
                         os.path.join(path, file)
                     )
+        
+        # There might be some additional operations that need to be performed for specific experiment parameters. 
+        # These additional actions are implemented in the "on_reproducible" method for those parameters that are 
+        # annotated by a specific subclass of ActionableParameterType.    
+        self.log('...post-processing parameters')
+        for parameter, info in self.metadata['parameters'].items():
+            if isinstance(info['type'], ActionableParameterType):
+                self.parameters[parameter]['type'].on_reproducible(
+                    experiment=self, 
+                    value=self.parameters[parameter]['value']
+                )
 
     def execute(self) -> None:
         """
@@ -1115,16 +1127,80 @@ class Experiment:
 
         current[keys[-1]] = value
 
-    def __getattr__(self, item: str):
+    def __getattr__(self, item: str) -> Any:
+        """
+        This magic method implements the behavior whenever an attribute of the experiment object is accessed. This 
+        is usually done with the dot notation, for example "experiment.attribute". The method will return the 
+        value of the attribute with the given name ``item``.
+        
+        This method implements custom behavior when an attribute with an upper case name (e.g. PARAMETER) is accessed.
+        In that case, the method will not actually return a direct attribute of the experiment object, but will rather 
+        check if a parameter with the given name exists in the self.parameters dictionary. If it does, the value of that 
+        parameter is returned.
+        
+        :param item: The name of the attribute that should be accessed
+        
+        :returns: any
+        """
+        
         if item.isupper():
+            
+            if item not in self.parameters:
+                raise KeyError(f'There exists no experiment parameter with the name "{item}"!')
+            
+            # In the special case that the given parameter has been annotated with the ActionableParameterType, we
+            # want to use the get() method to retrieve the value of the parameter instead.
+            if (item in self.metadata['parameters'] and \
+                isinstance(self.metadata['parameters'][item]['type'], ActionableParameterType)
+                ):
+                
+                self.metadata['parameters'][item]['type'].get(
+                    experiment=self,
+                    value=self.parameters[item],
+                )
+            
+            # Otherwise we just return the value that is stored in the parameters dictionary
             return self.parameters[item]
         else:
-            raise AttributeError(f'The experiment object does not have an attribute "{item}"')
+            return super(Experiment, self).__getattr__(item)
 
-    def __setattr__(self, key, value):
+    def __setattr__(self, key: str, value: Any) -> None:
+        """
+        This magic method implements the behavior whenever an attribute of the experiment object is set. This is
+        usually done with the dot notation, for example "experiment.attribute = 10". The method will set the value
+        of the attribute with the given name ``key`` to the given value ``value``.
+        
+        This method implements custom behavior when an attribute with an upper case name (e.g. PARAMETER) is set.
+        In that case, the method will not actually set a direct attribute of the experiment object, but will rather
+        add the given key value combination as a new entry to the self.parameters dictionary.
+        
+        :param key: The name of the attribute that should be set
+        :param value: The value that should be set
+        
+        :returns: None
+        """
         if key.isupper():
+            
+            # In the special case that the given parameter has been annotated with the ActionableParameterType, we 
+            # want to use the set() method to overwrite the value of the parameter.
+            if (key in self.metadata['parameters'] and \
+                isinstance(self.metadata['parameters'][key]['type'], ActionableParameterType)
+                ):
+                
+                value = self.metadata['parameters'][key]['type'].set(
+                    experiment=self,
+                    value=value,
+                )
+            
             self.parameters[key] = value
             self.glob[key] = value
+            
+            # 07.11.24
+            # We also want to store the value of the parameter in the parameter metadata directory because 
+            # we now also want that value to be exported to the metadata file as well!
+            if key in self.metadata['parameters']:
+                self.metadata['parameters'][key]['value'] = value
+            
         else:
             super(Experiment, self).__setattr__(key, value)
 

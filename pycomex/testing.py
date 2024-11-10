@@ -75,6 +75,26 @@ class ExperimentIsolation:
       modifies the globals() dict on __enter__ and restores all the original values on __exit__
     - It is also possible to temporarily modify the global sys.argv which experiments also conditionally
       depend on when they are invoked via the command line.
+      
+    Example usage:
+    
+    .. code-block:: python
+    
+        import sys
+        from pycomex.functional import Experiment
+        from pycomex.testing import ExperimentIsolation
+    
+        with ExperimentIsolation(sys.argv) as iso:
+            experiment = Experiment(
+                base_path=iso.path,
+                namespace='experiment',
+                glob=iso.glob,
+            )
+            
+    :param argv: A list of strings that will be used as the sys.argv for the experiment execution
+    :param glob_mod: A dictionary that will be merged into the globals() dict for the experiment execution. This 
+        can optionally be used to modify the behavior of the experiment during the test by overwriting 
+        parameter values for example.
     """
     def __init__(self, argv: t.List[str] = [], glob_mod: dict = {}):
         self.temporary_directory = tempfile.TemporaryDirectory()

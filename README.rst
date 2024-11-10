@@ -5,9 +5,9 @@
         :target: https://pycomex.readthedocs.io/en/latest/?version=latest
         :alt: Documentation Status
 
-============================================
+=============================================
 ☄️ PyComex - Python Computational Experiments
-============================================
+=============================================
 
 Microframework to improve the experience of running and managing archival records of computational
 experiments, such as machine learning and data science experiments, in Python.
