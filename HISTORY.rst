@@ -384,3 +384,24 @@ are accessible through a global singleton config instance.
 - Switched to using ``uv`` for development instead of poetry.
 - Added the ``ActionableParameterType`` interface which can be used to define custom type annotations for experiment parameters 
   with custom get and set behavior when interacting with the parameters via the experiment instance.
+
+0.14.1 (07.11.2024)
+-------------------
+
+- Added the ``uv`` dependency to the ``pyproject.toml`` file
+
+0.14.2 (07.11.2024)
+-------------------
+
+- Fixed a bug which caused the experiment to crash if a parameter was defined without a type annotation.
+
+0.15.0 (08.11.2024)
+-------------------
+
+- Fixed a bug where ``__PREFIX__`` did not have an initial value when the experiment object is created
+- Added the ``Experiment.import_from`` class method which can be used to dynamically import the experiment 
+  object from the relative/absolute path of an experiment module such that it can subsequently be 
+  executed with the "run" method from within another experiment module, for example.
+- When adding data to the experiment storage keys which start with an underscore are now excluded from being 
+  exported to the persistent JSON file inside the archive folder and can therefore be used to exchange 
+  data between hooks for example.

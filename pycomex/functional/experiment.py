@@ -265,6 +265,7 @@ class Experiment:
             '__DEBUG__': False,
             '__TESTING__': False,
             '__REPRODUCIBLE__': False,
+            '__PREFIX__': '',
         })
         
         self.error = None
@@ -1022,7 +1023,7 @@ class Experiment:
                 self.metadata['parameters'][parameter]['usable'] = True
             except (TypeError, OverflowError):
                 self.metadata['parameters'][parameter]['value'] = str(value)
-                self.metadata['parametersr'][parameter]['usable'] = False
+                self.metadata['parameters'][parameter]['usable'] = False
         
         # Then we can save it with human readable formatting
         with open(self.metadata_path, mode='w') as file:
@@ -1034,8 +1035,25 @@ class Experiment:
             file.write(content)
 
     def save_data(self) -> None:
+        """
+        Saves the internal ``self.data`` dictionary with all the experiment data into a JSON file in the 
+        experiment data folder, the name of which is determined by ``self.data_path`` and which 
+        normally is "experiment_data.json".
+        
+        note: Items of the data dictionary which start with an underscore will NOT be saved into this file.
+            Those entries can be used to exchange data between different hooks only within the same experiment
+            runtime!
+        
+        :returns: None
+        """
+        
         with open(self.data_path, mode='w') as file:
-            content = json.dumps(self.data, cls=CustomJsonEncoder)
+            
+            # 16.02.25 - This is the filtered data which does not contian the internal data that starts with 
+            # an underscore.
+            data = {key: value for key, value in self.data.items() if not key.startswith('_')}
+            
+            content = json.dumps(data, cls=CustomJsonEncoder)
             file.write(content)
 
     def save_code(self) -> None:
@@ -1151,6 +1169,7 @@ class Experiment:
             # In the special case that the given parameter has been annotated with the ActionableParameterType, we
             # want to use the get() method to retrieve the value of the parameter instead.
             if (item in self.metadata['parameters'] and \
+                'type' in self.metadata['parameters'][item] and \
                 isinstance(self.metadata['parameters'][item]['type'], ActionableParameterType)
                 ):
                 
@@ -1339,6 +1358,54 @@ class Experiment:
             self.track(key, value)
 
     # ~ Alternate constructors
+    
+    @classmethod
+    def import_from(cls,
+                    experiment_path: str,
+                    glob: dict,
+                    ):
+        """
+        Given the ``experiment_path``, which is either a relative name of the experiment module or an absolute path, 
+        this method will dynamically import that experiment module and return the Experiment object that is defined 
+        in it - without executing the experiment.
+        
+        ..code-block:: python
+        
+            experiment = Experiment.import_from('experiment.py', globals())
+           
+            # Force the experiment to run - for example as part of a parameter sweep
+            experiment.run()
+        
+        :param experiment_path: The relative or absolute path to the experiment module
+        :param glob: The globals() dictionary
+        
+        :returns: The Experiment object from the imported module
+        """
+        
+        # 28.04.23 - this fixes a bug, where the relative import would only work the current working
+        # directory is exactly the folder that also contains. Previously if the working directory was
+        # a different one, it would not work.
+        try:
+            module = dynamic_import(experiment_path)
+        except (FileNotFoundError, ImportError):
+            parent_path = os.path.dirname(glob['__file__'])
+            experiment_path = os.path.join(parent_path, *os.path.split(experiment_path))
+            module = dynamic_import(experiment_path)
+
+        # 28.04.23 - before this was implemented over a hardcoded variable name for an experiment, but
+        # strictly speaking we can't assume that the experiment instance will always be called the same
+        # this is just a soft suggestion.
+        experiment = None
+        for key in dir(module):
+            value = getattr(module, key)
+            if isinstance(value, Experiment):
+                experiment = value
+                
+        assert experiment is not None, (
+            f'No object of the type "Experiment" could be found in the given module @ {experiment_path}'
+        )
+                
+        return experiment
 
     @classmethod
     def extend(cls,
@@ -1376,25 +1443,9 @@ class Experiment:
         """
         # First of all we need to import that module to access the Experiment instance that is
         # defined there. That is the experiment which we need to extend.
-
-        # 28.04.23 - this fixes a bug, where the relative import would only work the current working
-        # directory is exactly the folder that also contains. Previously if the working directory was
-        # a different one, it would not work.
-        try:
-            module = dynamic_import(experiment_path)
-        except (FileNotFoundError, ImportError):
-            parent_path = os.path.dirname(glob['__file__'])
-            experiment_path = os.path.join(parent_path, *os.path.split(experiment_path))
-            module = dynamic_import(experiment_path)
-
-        # 28.04.23 - before this was implemented over a hardcoded variable name for an experiment, but
-        # strictly speaking we can't assume that the experiment instance will always be called the same
-        # this is just a soft suggestion.
-        experiment = None
-        for key in dir(module):
-            value = getattr(module, key)
-            if isinstance(value, Experiment):
-                experiment = value
+        # This method will import the experiment object dynamically from the given experiment path and then 
+        # return that object.
+        experiment: Experiment = cls.import_from(experiment_path, glob=glob)
 
         # Then we need to push the path of that file to the dependencies.
         experiment.dependencies.append(experiment.glob['__file__'])
@@ -1474,7 +1525,14 @@ class Experiment:
         
         :returns: Experiment instance
         """
-        module = dynamic_import(path)
+        # We need the path to the actual code file here to properly import that module. So only if the 
+        # path that we get is a file we interpret it as the code file, otherwise we assume that it is 
+        # the path to the archive folder and we need to append the code file name to it.
+        if os.path.isfile(path):
+            module = dynamic_import(path)
+        else:
+            path = os.path.join(path, cls.CODE_FILE_NAME)
+            module = dynamic_import(path)
         
         # 28.04.23 - before this was implemented over a hardcoded variable name for an experiment, but
         # strictly speaking we can't assume that the experiment instance will always be called the same
@@ -1491,6 +1549,14 @@ class Experiment:
         with open(experiment.metadata_path) as file:
             content = file.read()
             experiment.metadata = json.loads(content)
+            
+            for parameter, info in experiment.metadata['parameters'].items():
+                
+                if 'value' in info and isinstance(info['value'], str) and ('<' in info['value'] and '>' in info['value']):
+                    continue
+                
+                if 'value' in info:
+                    experiment.parameters[parameter] = info['value']
 
         with open(experiment.data_path) as file:
             content = file.read()

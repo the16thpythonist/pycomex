@@ -1,5 +1,6 @@
 import os
 import sys
+import json
 
 from pycomex.testing import ConfigIsolation
 from pycomex.testing import ExperimentIsolation
@@ -86,3 +87,27 @@ class TestExperiment:
             
             assert experiment.name.startswith('custom')
             assert 'custom' in experiment.path
+
+    def test_save_data_excludes_internal_data(self):
+        """
+        The save_data method should exclude any data entries that start with an underscore from being 
+        saved into the experiment_data.json file.
+        """
+        with ConfigIsolation() as config, ExperimentIsolation(sys.argv) as iso:
+            experiment = Experiment(
+                base_path=iso.path,
+                namespace='experiment',
+                glob=iso.glob,
+            )
+            experiment.path = iso.path  # Manually set the path for testing purposes
+            experiment.data = {
+                'public_data': 123,
+                '_internal_data': 456,
+            }
+            experiment.save_data()
+
+            # Read the JSON file and assert that 'internal_data' is not present
+            with open(experiment.data_path, 'r') as f:
+                data = json.load(f)
+                assert '_internal_data' not in data
+                assert 'public_data' in data
