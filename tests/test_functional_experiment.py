@@ -1,10 +1,12 @@
 import os
 import sys
 import json
+import yaml
 
 from pycomex.testing import ConfigIsolation
 from pycomex.testing import ExperimentIsolation
 from pycomex.functional.experiment import Experiment, run_experiment
+from pycomex.functional.experiment import ExperimentConfig
 
 from .util import ASSETS_PATH
 
@@ -111,3 +113,66 @@ class TestExperiment:
                 data = json.load(f)
                 assert '_internal_data' not in data
                 assert 'public_data' in data
+
+
+
+class TestExperimentConfig:
+    
+    def test_experiment_config_basically_works(self):
+        
+        experiment_data = {
+            'extend': 'experiment.py',
+            'parameters': {
+                'PARAMETER': 10,
+            }
+        }
+        
+        experiment_config = ExperimentConfig(
+            path='/tmp/sub_experiment.yml',
+            **experiment_data,
+        )
+        
+        isinstance(experiment_config, ExperimentConfig)
+        assert experiment_config.path == '/tmp/sub_experiment.yml'
+        assert experiment_config.extend == 'experiment.py'
+        
+        # Computed properties
+        assert experiment_config.name is not None
+        assert experiment_config.name == 'sub_experiment'
+        
+        assert experiment_config.base_path is not None
+        assert experiment_config.base_path == '/tmp'
+        
+        assert experiment_config.namespace is not None
+        assert experiment_config.namespace == 'results/sub_experiment'
+        
+    def test_loading_experiment_config_yaml_works(self):
+        
+        config_path = os.path.join(ASSETS_PATH, 'mock_config.yml')
+        with open(config_path, 'r') as file:
+            config_data = yaml.load(file, Loader=yaml.FullLoader)
+        
+        experiment_config = ExperimentConfig(
+            path=config_path,
+            **config_data,
+        )
+        
+        assert experiment_config.path == config_path
+        assert experiment_config.name == 'mock_config'
+        assert experiment_config.base_path is not None
+
+    def test_experiment_from_config_works(self):
+        """
+        The Experiment.from_config method should work to construct an Experiment instance 
+        based on an experiment config file.
+        """
+        with ConfigIsolation() as config, ExperimentIsolation(sys.argv) as iso:
+            
+            config_path = os.path.join(ASSETS_PATH, 'mock_config.yml')
+            
+            experiment = Experiment.from_config(
+                config_path=config_path,
+            )
+            assert isinstance(experiment, Experiment)
+            
+        

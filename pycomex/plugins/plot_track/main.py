@@ -29,7 +29,7 @@ class PlotTrackedElementsPlugin(Plugin):
     
     def __init__(self, config: Config):
         super().__init__(config)
-    
+        
     @hook('after_experiment_finalize', priority=0)
     def after_experiment_finalize(self, config: Config, experiment: Experiment):
         """

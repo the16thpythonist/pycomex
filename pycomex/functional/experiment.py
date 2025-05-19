@@ -15,15 +15,19 @@ import tempfile
 import subprocess
 import argparse
 from collections import defaultdict
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union, Type
 
+import yaml
 import matplotlib.pyplot as plt
 from uv import find_uv_bin
+from pydantic import BaseModel, field_validator
+from pydantic_core.core_schema import FieldValidationInfo
 from rich.logging import RichHandler
 from rich.console import Console
 from rich.table import Table
 from rich.text import Text
 from rich_argparse import RichHelpFormatter
+from pycomex.utils import file_namespace, folder_path
 from pycomex.utils import random_string, dynamic_import
 from pycomex.utils import TEMPLATE_ENV
 from pycomex.utils import CustomJsonEncoder
@@ -37,6 +41,52 @@ from pycomex.functional.parameter import ActionableParameterType
 from pycomex.config import Config
 
 HELLO: str = ''
+
+
+class ExperimentConfig(BaseModel):
+    
+    model_config = {'validate_default': True}
+    
+    # required fields
+    path: str
+    extend: str
+    parameters: Dict[str, Any]
+    
+    # optional fields
+    name: Optional[str] = None
+    base_path: Optional[str] = None
+    namespace: Optional[str] = None
+    description: Optional[str] = None
+
+    @field_validator('name', mode='after')
+    @classmethod
+    def default_name(cls, v: object, info: FieldValidationInfo) -> object:
+        
+        if v is None:
+            path = info.data.get('path')
+            file_name_split = os.path.basename(path).split('.')
+            return file_name_split[0]
+        
+        return v
+    
+    @field_validator('base_path', mode='after')
+    @classmethod
+    def default_base_path(cls, v: object, info: FieldValidationInfo) -> object:
+        if v is None:
+            path = info.data.get('path')
+            return str(folder_path(path))
+
+        return v
+
+    @field_validator('namespace', mode='after')
+    @classmethod
+    def default_namespace(cls, v: object, info: FieldValidationInfo) -> object:
+        if v is None:
+            path = info.data.get('path')
+            return file_namespace(path)
+
+        return v
+
 
 class ExperimentArgumentParser(argparse.ArgumentParser):
     """
@@ -125,11 +175,11 @@ class ExperimentArgumentParser(argparse.ArgumentParser):
         self.console.print('Experiment Parameters:\n')
         self.console.print(table)
     
-    def parse(self) -> dict:
+    def parse(self, parameters: Optional[dict] = None) -> dict:
         """
         Evaluates the command line arguments and updates the parameter map with the values.
         """
-        args = self.parse_args()
+        args = self.parse_args(parameters)
         for parameter in self.parameters:
             if parameter in args and getattr(args, parameter) is not None:
                 content = getattr(args, parameter)
@@ -465,8 +515,10 @@ class Experiment:
             self.log(line)
 
     def log_parameters(self):
-        for name, value in self.parameters:
-            self.log(name)
+
+        template = TEMPLATE_ENV.get_template('experiment_parameters.text.j2')
+        string = template.render({'parameters': self.parameters})
+        self.log(string)
 
     # ~ Hook System
 
@@ -1412,7 +1464,7 @@ class Experiment:
                experiment_path: str,
                base_path: str,
                namespace: str,
-               glob: dict):
+               glob: dict) -> 'Experiment':
         """
         This method can be used to extend an experiment through experiment inheritance by providing the
         path ``experiment_path`` to the base experiment module. It will return the ``Experiment`` instance
@@ -1472,6 +1524,28 @@ class Experiment:
         glob['__experiment__'] = experiment
 
         return experiment
+    
+    @classmethod
+    def from_config(cls,
+                    config_path: str,
+                    **kwargs
+                    ) -> 'Experiment':
+        
+        with open(config_path) as file:
+            config_data = yaml.load(file, Loader=yaml.FullLoader)
+            
+        experiment_config = ExperimentConfig(path=config_path, **config_data)
+        glob = {
+            '__file__': config_path,
+            **experiment_config.parameters,
+        }
+        
+        return cls.extend(
+            experiment_path=experiment_config.extend,
+            base_path=experiment_config.base_path,
+            namespace=experiment_config.namespace,
+            glob=glob,
+        )
 
     @classmethod
     def is_archive(cls, path: str) -> bool:

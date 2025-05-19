@@ -380,7 +380,16 @@ class CLI(click.RichGroup):
         click.RichGroup.__init__(self, *args, invoke_without_command=True, **kwargs)
         
         # ~ adding the default commands
+        
+        # This command can be used to execute existing experiments
+        self.add_command(self.run_command)
+        
+        # This command can be used to reproduce previously executed experiments
         self.add_command(self.reproduce_command)
+        
+        #self.template_group.add_command(self.template_config_command)
+        #self.add_command(self.template_group)
+        
         
     @click.command('inspect', short_help='inspect an experiment that was previously terminated.')
     @click.argument('experiment_path', type=click.Path(exists=True))
@@ -515,6 +524,71 @@ class CLI(click.RichGroup):
         click.secho(f'... running experiment', fg='bright_black')
         code_path = os.path.join(experiment_path, Experiment.CODE_FILE_NAME)
         subprocess.run([uv, 'run', '--no-project', code_path, *kwargs], env=env)
+
+    # ~ RUN COMMAND
+    # The "run" command is a special command which can be used to execute an experiment module from the command 
+    # line. Specifically, it should also be possible to execute a standalone experiment config file using this 
+    # command...
+    
+    @click.command('run', short_help='Run an experiment module or config file.',
+                   context_settings=dict(ignore_unknown_options=True))
+    @click.argument('path', type=click.Path(exists=True, resolve_path=True))
+    @click.argument('experiment_parameters', nargs=-1)
+    @click.pass_obj
+    def run_command(self,
+                    path: str,
+                    experiment_parameters: tuple,
+                    ) -> None:
+        """
+        Executes the experiment module or config file at the given PATH.
+        """
+        click.secho(f'Running experiment module @ {path}')
+        extension = os.path.basename(path).split('.')[-1]
+
+        # ~ create experiment
+        experiment: Optional[Experiment] = None
+
+        # In case of a yml file, we assume that this is a config file which extends upon 
+        # an existing experiment module.
+        if extension in ['yml', 'yaml']:
+            experiment = Experiment.from_config(
+                config_path=path,
+            )
+
+        # In the case of the python file, we assume that this directly represents a python 
+        # experiment module.
+        elif extension in ['py']:
+            module = dynamic_import(path)
+            if hasattr(module, '__experiment__'):
+                experiment = getattr(module, '__experiment__')
+    
+            else:
+                click.secho(
+                    f'The given python file does not contain a valid experiment module!', 
+                    fg='red'
+                )
+                return
+
+        # Now we parse out all of the parameters that were passed as additional options to 
+        # the "run" command.
+        experiment.arg_parser.parse(experiment_parameters)
+        
+        click.echo('Starting the experiment...')
+        experiment.run()
+
+
+    # ~ TEMPLATE COMMANDS
+
+    @click.group('template', short_help='Commands for templating common file types.')
+    @click.pass_obj
+    def template_group(self):
+        pass
+    
+    @click.command('config')
+    @click.pass_obj
+    def template_config_command(self):
+        pass
+    
 
 
 @click.group(cls=CLI)

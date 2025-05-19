@@ -40,7 +40,11 @@ __REPRODUCIBLE__: bool = True
             namespace=file_namespace(__file__),
             glob=globals())
 def experiment(e: Experiment):
-
+    
+    e.log('starting experiment...')
+    e.log_parameters()
+    
+    e.log('downloading word list...')
     response = urllib.request.urlopen("https://www.mit.edu/~ecprice/wordlist.10000")
     WORDS = response.read().decode("utf-8").splitlines()
     # (1) The uppercase "experiment parameters" are stored in the "parameters"

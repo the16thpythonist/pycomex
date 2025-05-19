@@ -405,3 +405,15 @@ are accessible through a global singleton config instance.
 - When adding data to the experiment storage keys which start with an underscore are now excluded from being 
   exported to the persistent JSON file inside the archive folder and can therefore be used to exchange 
   data between hooks for example.
+
+
+0.16.0 (18.05.2025)
+-------------------
+
+- Added the possibility to use pycomex config files to define experiement variations. These config files 
+  are YAML file which can be used to ``extend`` existing experiment python modules and which may be used 
+  to overwrite the parameters of the experiment. This change has been motivated by the fact that there are 
+  many cases where sub-experiments were defined without implementing any hooks but simply with other parameter 
+  values - in which case it is unnecessarily complicated to define a new python module for that.
+- Added the ``run`` command to the CLI which can be used to run an experiment module or a config file 
+  from the command line.

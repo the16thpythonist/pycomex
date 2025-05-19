@@ -1,0 +1,9 @@
+pycomex: true
+extend: mock_functional_experiment.py
+name: mock_config
+description: |
+  This is a mock configuration file for testing purposes.
+  It contains a simple configuration with a few parameters.
+parameters:
+  NUM_VALUES: 2000
+  NUM_BINS: 15
