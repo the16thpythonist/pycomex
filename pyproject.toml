@@ -47,6 +47,14 @@ dependencies = [
     "uv>=0.4.0,<0.5.0",
 ]
 
+[project.optional-dependencies]
+dev = [
+    "pre-commit>=3.5,<4.0",
+    "black>=24.3,<25.0",
+    "ruff>=0.2,<0.3",
+    "mkdocs-material>=9.5,<10.0",
+]
+
 [project.scripts]
 # Executable Scripts
 # ==================
@@ -57,6 +65,9 @@ pycx = "pycomex.cli:cli"
 # =========================================
 [tool.hatch.envs.default]
 python = "^3.10"
+
+[tool.hatch.envs.dev]
+features = ["dev"]
 
 [tool.hatchling.build]
 skip_excluded_dirs = true
