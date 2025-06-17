@@ -1,0 +1,60 @@
+[build-system]
+requires = ["poetry.core>=1.2.0b2"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry]
+name = "pycomex"
+version = "0.13.2"
+description = "Python Computational Experiments"
+license = "MIT"
+authors = ["Jonas Teufel <jonseb1998@gmail.com>"]
+maintainers = ["Jonas Teufel <jonseb1998@gmail.com>"]
+documentation = "https://pycomex.readthedocs.io"
+keywords = ["computational experiments", "data science", "maschine learning", "academia"]
+packages = [
+    { include = "pycomex/functional" },
+    { include = "pycomex" },
+]
+include = [
+    "pycomex/functional",
+    "pycomex/plugins",
+    "pycomex/plugins/plot_track",
+    "pycomex/plugins/weights_biases",
+    "pycomex/plugins/notify",
+    "pycomex/templates",
+    "pycomex/templates/analysis.j2",
+    "pycomex/VERSION",
+]
+
+[tool.poetry.build]
+generate-setup-file = true
+
+[tool.poetry.scripts]
+pycomex = 'pycomex.cli:cli'
+
+[tool.poetry.dependencies]
+python = ">=3.8"
+pyyaml = ">=6.0,<7.0.0"
+pydantic = ">=2.9.0,<3.0.0"
+click = ">=7.1.2"
+jinja2 = ">=3.0.3"
+numpy = ">=1.22.0,<2.0.0"
+matplotlib = ">=3.5.3"
+psutil = ">=5.7.2"
+moviepy = ">=1.0.3"
+rich-click = ">=1.8.0,<=1.9.0"
+desktop-notifier = ">=5.0.1,<=6.0.0"
+rich-argparse = ">=1.0.0,<=2.0.0"
+
+[tool.poetry.dev-dependencies]
+nox = "2022.1.7"
+sphinx = "5.0.2"
+pytest = "7.1.3"
+
+[tool.poetry_bumpversion.file."pycomex/__init__.py"]
+search = '__version__ = "{current_version}"'
+replace = '__version__ = "{new_version}"'
+
+[tool.poetry_bumpversion.file."pycomex/VERSION"]
+search = "{current_version}"
+replace = "{new_version}"

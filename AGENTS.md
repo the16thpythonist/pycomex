@@ -56,6 +56,8 @@ def function(arg1: List[int],
 
 ```
 
+2. Strings that appear inside the code should use single quotes instead of double quotes, e.g. `'this is a string'`.
+
 ## Testing
 
 Unittests use `pytest` in the `/tests` folder with this command
