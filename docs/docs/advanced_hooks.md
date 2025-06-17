@@ -39,6 +39,92 @@ This hook is executed within the lifetime of an `Experiment` instance after its 
 | `experiment` | The `Experiment` instance itself |
 
 
+### 🪝 `experiment_constructed`
+
+This hook is executed at the end of the `Experiment` constructor. It can be used
+to perform additional setup steps once the experiment object exists.
+
+| Parameter | Description |
+|-----------|-------------|
+| `experiment` | The `Experiment` instance that was created |
+| `config` | The `Config` instance that is used by the pycomex library |
+
+
+### 🪝 `after_experiment_initialize`
+
+Executed after the `Experiment.initialize` method completed. At this point the
+archive folder has been created and the experiment is ready to run.
+
+| Parameter | Description |
+|-----------|-------------|
+| `experiment` | The `Experiment` instance itself |
+| `config` | The `Config` instance that is used by the pycomex library |
+
+
+### 🪝 `after_experiment_finalize`
+
+Executed after the `Experiment.finalize` method completed. This allows for
+additional cleanup or post-processing once the experiment is finished.
+
+| Parameter | Description |
+|-----------|-------------|
+| `experiment` | The `Experiment` instance itself |
+| `config` | The `Config` instance that is used by the pycomex library |
+
+
+### 🪝 `experiment_commit_fig`
+
+Called at the end of `Experiment.commit_fig` after the figure has been saved to
+the archive folder.
+
+| Parameter | Description |
+|-----------|-------------|
+| `experiment` | The `Experiment` instance itself |
+| `name` | The name of the saved figure file |
+| `figure` | The `matplotlib` figure instance |
+| `config` | The `Config` instance that is used by the pycomex library |
+
+
+### 🪝 `experiment_commit_json`
+
+Called at the end of `Experiment.commit_json` once the JSON file has been
+written.
+
+| Parameter | Description |
+|-----------|-------------|
+| `experiment` | The `Experiment` instance itself |
+| `name` | The name of the saved JSON file |
+| `data` | The original data structure that was saved |
+| `content` | The string representation that was written to the file |
+| `config` | The `Config` instance that is used by the pycomex library |
+
+
+### 🪝 `experiment_commit_raw`
+
+Called at the end of `Experiment.commit_raw` after the text file has been
+created.
+
+| Parameter | Description |
+|-----------|-------------|
+| `experiment` | The `Experiment` instance itself |
+| `name` | The name of the saved file |
+| `content` | The text content that was written |
+| `config` | The `Config` instance that is used by the pycomex library |
+
+
+### 🪝 `experiment_track`
+
+Called at the end of `Experiment.track`. It receives the tracked name and value
+so that the tracking information can be forwarded to external services.
+
+| Parameter | Description |
+|-----------|-------------|
+| `experiment` | The `Experiment` instance itself |
+| `name` | Name under which the value was tracked |
+| `value` | The tracked value or figure |
+| `config` | The `Config` instance that is used by the pycomex library |
+
+
 ---
 
 ## `Config` Hooks
@@ -53,3 +139,4 @@ This hook is executed right after the plugins are loaded and before the configur
 |-----------|----------------------------|
 | `config` | The `Config` instance itself     |
 | `plugins` | A dictionary where the string keys are the plugin names and the values are the corresponding `Plugin` object instances |
+
