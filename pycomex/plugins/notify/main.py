@@ -1,3 +1,5 @@
+"""Plugin that displays a desktop notification when an experiment finishes."""
+
 import os
 import asyncio
 import subprocess
