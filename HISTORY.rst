@@ -417,3 +417,9 @@ are accessible through a global singleton config instance.
   values - in which case it is unnecessarily complicated to define a new python module for that.
 - Added the ``run`` command to the CLI which can be used to run an experiment module or a config file 
   from the command line.
+
+0.17.0 (19.05.2025)
+-------------------
+
+- Added the ``template`` command group to the CLI which can be used to template various common files.
+  - currently only ``template analysis`` is implemented which will create a new analysis.ipynb notebook 
