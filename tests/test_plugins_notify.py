@@ -3,6 +3,7 @@ Tests for the "notify" pycomex plugin which is shipped by default already.
 """
 import os
 import sys
+import pytest
 from pycomex.config import Config
 from pycomex.functional.experiment import Experiment
 
@@ -10,7 +11,7 @@ from pycomex.testing import ConfigIsolation
 from pycomex.testing import ExperimentIsolation
 
 
-
+@pytest.mark.localonly
 def test_plugin_loading_works():
     """
     After simply calling config.load_plugins() the plugin manager should be populated with all the available 
@@ -28,6 +29,7 @@ def test_plugin_loading_works():
         assert len(config.pm) != 0
         
 
+@pytest.mark.localonly
 def test_plugin_basically_works():
     """
     The plugin is enabled by the default value of the __NOTIFY__ flag and when the plugin is enabled 
@@ -52,6 +54,7 @@ def test_plugin_basically_works():
         assert plugin.message is not None and isinstance(plugin.message, str)
         
         
+@pytest.mark.localonly
 def test_notifications_can_be_disabled():
     """
     When setting the __NOTIFY___ flag to False, the plugin should be inactive and not send 
