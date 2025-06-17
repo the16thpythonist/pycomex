@@ -18,12 +18,21 @@ import subprocess
 import importlib.util
 import typing as t
 import pkg_resources
+from importlib.metadata import distributions
 from pathlib import Path
 from typing import Optional, List, Callable, Dict
 from inspect import getframeinfo, stack
 
 import jinja2 as j2
 import numpy as np
+
+# The modern "importlib.metadata" module is only available in Python 3.8 and later.
+# to ensure backwards compatibility with Python 3.7 and earlier, we use the backport / previous 
+# version of this module, which is "importlib_metadata", if necessary
+if sys.version_info >= (3, 8):
+    from importlib.metadata import distributions
+else:
+    from importlib_metadata import distributions  # backport
 
 # Contains a human readable string of the operating system name, e.g. "Linux" or "Windows"
 OS_NAME: str = platform.system()
@@ -483,20 +492,50 @@ def get_dist_path(dist: pkg_resources.EggInfoDistribution, editable: bool = Fals
 
 
 def get_dependencies() -> Dict[str, dict]:
+    """
+    Retrieves information about all installed Python package dependencies.
+    This function iterates over all installed distributions (packages) in the current Python environment
+    and collects detailed metadata for each package. The information is returned as a dictionary where
+    each key is the package name and the value is another dictionary containing metadata about the package.
+    
+    Notes
+    -----
+    - The function attempts to extract the package name from the distribution metadata, falling back to
+      alternative fields if necessary.
+    - If a package is installed in editable mode, the 'editable' field will be True; otherwise, it will be False.
+    - The function is robust to missing metadata fields and will not raise exceptions in such cases.
+    
+    Examples
+    --------
+    >>> deps = get_dependencies()
+    >>> for name, meta in deps.items():
+    ...     print(f"{name}: {meta['version']} (editable: {meta['editable']})")
+    
+    :returns: A dictionary mapping package names to their metadata dictionaries. Each metadata dictionary contains:
+        - 'name' (str): The name of the package.
+        - 'version' (str): The installed version of the package.
+        - 'path' (str): The filesystem path to the package's installation directory.
+        - 'requires' (List[str]): A list of requirements (dependencies) for the package.
+        - 'editable' (bool): Indicates if the package is installed in editable mode (PEP 610 origin info).
+    """
     
     dependencies: Dict[str, dict] = {}
-    for dist in pkg_resources.working_set:
+    for dist in distributions():
         
-        editable = is_dist_editable(dist)
-        package_path = get_dist_path(dist, editable)
+        try:
+            name = dist.metadata["Name"] or dist.metadata["name"] or dist.metadata["Summary"]
+        except Exception:
+            name = dist.metadata.get("Name", dist.metadata.get("Name", dist.metadata.get("Summary", "")))
         
-        dependencies[dist.key] = {
-            'name': dist.key,
-            'path': package_path,
-            'version': dist.version,
-            'editable': editable,
+        dependencies[name] = {
+            "name": name,
+            "version": dist.version,
+            "path": str(dist.locate_file("")),
+            "requires": list(dist.requires or []),
+            # editable: PEP 610 origin info; falls back to False if not editable
+            "editable": bool(getattr(dist, "origin", None)),
         }
-            
+    
     return dependencies
 
 class SetArguments:
