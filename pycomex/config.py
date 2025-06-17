@@ -140,10 +140,9 @@ class Config(metaclass=Singleton):
                     # This hook can be used to modify plugins right after they have been registered
                     # with the plugin manager and the config
                     self.pm.apply_hook(
-                        'plugin_registered', 
-                        name=name, 
+                        'plugin_registered',
+                        name=name,
                         plugin=plugin,
-                        config=self,
                     )
                     
                     # This hook is called with the name of the actual plugin! Likely only the plugin itself 
@@ -151,7 +150,6 @@ class Config(metaclass=Singleton):
                     self.pm.apply_hook(
                         f'plugin_registered__{name}',
                         plugin=plugin,
-                        config=self,
                     )
              
     # ~ testability utils
