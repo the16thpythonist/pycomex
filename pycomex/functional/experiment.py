@@ -1255,6 +1255,7 @@ class Experiment:
             # In the special case that the given parameter has been annotated with the ActionableParameterType, we 
             # want to use the set() method to overwrite the value of the parameter.
             if (key in self.metadata['parameters'] and \
+                'type' in self.metadata['parameters'][key] and \
                 isinstance(self.metadata['parameters'][key]['type'], ActionableParameterType)
                 ):
                 
