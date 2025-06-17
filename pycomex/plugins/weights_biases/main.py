@@ -1,3 +1,5 @@
+"""Plugin integrating `Weights & Biases` into experiments."""
+
 import os
 import re
 import wandb

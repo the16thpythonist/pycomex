@@ -1,3 +1,5 @@
+"""Plugin for visualising tracked experiment artifacts."""
+
 import os
 
 import imageio
