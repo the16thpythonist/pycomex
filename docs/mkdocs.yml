@@ -4,14 +4,25 @@ site_author: Your Name
 
 theme:
   name: material
+  features:
+    - content.code.copy
+    - content.code.annotate
 
 nav:
   - Home: index.md
   - Advanced Usage:
       - Writing Plugins: advanced_plugins.md
+      - Plugin Hooks: advanced_hooks.md
 
 markdown_extensions:
   - admonition
   - codehilite
   - toc:
       permalink: true
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.superfences
+  - pymdownx.snippets

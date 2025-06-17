@@ -6,6 +6,8 @@ from pycomex.plugin import PluginManager
 from pycomex.plugin import Plugin
 from pycomex.utils import PLUGINS_PATH
 from pycomex.utils import dynamic_import
+import pkgutil
+import importlib
 
 
 class Singleton(type):
@@ -65,12 +67,16 @@ class Config(metaclass=Singleton):
         # The config singleton maintains the access to the pycomex plugin system.
         
         self.plugins: dict[str, Plugin] = {}
-        self.pm = PluginManager(config=self)
+        self.pm: PluginManager = PluginManager(config=self)
         
         # Only when the config is constructed the very first time we actually load the plugins.
         # Should a state reset of the config instance happen at some point, this will have to be 
         # called manually to reload the plugins.
         self.load_plugins()
+        
+        # A hook that could be used for some meta functionality in which some plugins may modify other 
+        # plugins themselves or even enable/disable plugins based on some criteria.
+        self.pm.apply_hook('after_plugins_loaded', config=self, plugins=self.plugins)
         
     def load_plugins(self) -> None:
         """
@@ -99,7 +105,22 @@ class Config(metaclass=Singleton):
                     warnings.warn(f'Failed to load plugin from module "{module_path}" due to {exc}')
                 
         # ~ external plugins
-        # TODO: implement loading of external plugins
+        # Iterate over all installed modules/packages in the current Python runtime
+
+        for finder, name, ispkg in pkgutil.iter_modules():
+            if name.startswith("pycomex_"):
+                try:
+                    # Try to import the "main" module from the package
+                    module_name = f"{name}.main"
+                    try:
+                        module = importlib.import_module(module_name)
+                        self.load_plugin_from_module(name=name, module=module)
+                    except ModuleNotFoundError:
+                        # If "main.py" does not exist, skip this plugin
+                        continue
+                    
+                except Exception as exc:
+                    warnings.warn(f'Failed to load external plugin "{name}" due to {exc}')
         
     def load_plugin_from_module(self, name: str, module: object) -> None:
         """
@@ -122,6 +143,15 @@ class Config(metaclass=Singleton):
                         'plugin_registered', 
                         name=name, 
                         plugin=plugin,
+                        config=self,
+                    )
+                    
+                    # This hook is called with the name of the actual plugin! Likely only the plugin itself 
+                    # will know this hook and will be able to use this to perform additional setup actions.
+                    self.pm.apply_hook(
+                        f'plugin_registered__{name}',
+                        plugin=plugin,
+                        config=self,
                     )
              
     # ~ testability utils
