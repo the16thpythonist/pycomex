@@ -3,6 +3,7 @@ import unittest
 import typing as t
 import sys
 
+import pytest
 from inspect import getframeinfo, stack
 
 from pycomex.util import get_version
@@ -63,6 +64,7 @@ def test_get_version():
     assert version_string != ''
 
 
+@pytest.mark.localonly
 def test_trigger_notification_basically_works():
     """
     The "trigger_notification" function should display a system notification with the given message

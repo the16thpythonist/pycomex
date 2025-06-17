@@ -28,6 +28,7 @@ def test_plugin_loading_works():
         assert len(config.pm) != 0
     
     
+@pytest.mark.localonly
 def test_plugin_basically_works():
     """
     The weights and biases plugin should be able to be initialized and the experiment should be able to run
