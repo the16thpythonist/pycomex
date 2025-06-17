@@ -25,6 +25,7 @@ from inspect import getframeinfo, stack
 
 import jinja2 as j2
 import numpy as np
+from prettytable import PrettyTable
 
 # The modern "importlib.metadata" module is only available in Python 3.8 and later.
 # to ensure backwards compatibility with Python 3.7 and earlier, we use the backport / previous 
@@ -435,6 +436,81 @@ def type_string(type_instance: t.Type) -> str:
         string = str(type_instance.__name__)
         
     return string
+
+
+def has_file_extension(file_path: str,
+                       ) -> bool:
+    """
+    Given the absolute string ``file_path`` to a file, this function checks whether that file has an 
+    extension or not. If it has an extension, it will return True, otherwise False.
+    
+    :param file_path: The absolute string path to a file
+    
+    :returns: bool
+    """
+    return os.path.splitext(file_path)[1] != ''
+
+
+def set_file_extension(file_path: str,
+                       extension: str
+                       ) -> str:
+    """
+    Given the absolute string ``file_path`` to a file, this function is supposed to set the 
+    file extension of that file to the given ``extension`` and return the result.
+
+    If the file does not yet have an extension, it will simply append the given 
+    ``extension`` to the file name. If the file already has an extension, it will replace that
+    extension with the given ``extension``.
+    
+    :param file_path: The absolute string path to a file
+    :param extension: The string file extension to be set, e.g. "txt" or "json"
+    :returns: The absolute string path to the file with the new extension
+    """
+    root, _ = os.path.splitext(file_path)
+    if not extension.startswith('.'):
+        extension = '.' + extension
+    return root + extension
+
+
+def is_experiment_archive(folder_path: str) -> bool:
+    """
+    Given the absolute string ``folder_path`` to a folder, this function checks whether that folder
+    is an experiment archive or not. 
+    
+    An experiment archive is defined as a folder that contains a file
+    named "experiment.json" in it.
+
+    :param folder_path: The absolute string path to a folder
+
+    :returns: bool
+    """
+    return os.path.exists(os.path.join(folder_path, 'experiment.json'))
+    
+
+def render_string_table(column_names: list[str],
+                        rows: list[list[str | int | list]],
+                        reduce_func: lambda l: f'{np.mean(l):.2f}±{np.std(l):.2f}',
+                        ) -> str:
+    """
+    Given a list of ``column_names`` and a list of ``rows``, this function will render a string table
+    where each row is a list of values. If a value in a row is a list, it will be reduced using the
+    given ``reduce_func``. The resulting table will be returned as a string.
+    
+    :param column_names: A list of strings representing the column names
+    :param rows: A list of lists, where each inner list represents a row in the table
+    :param reduce_func: A function that takes a list and returns a string representation of the reduced value
+    :returns: A string representation of the table
+    """
+    table = PrettyTable()
+    table.field_names = column_names
+    
+    for row in rows:
+        table.add_row([
+            reduce_func(cell) if isinstance(cell, list) else cell
+            for cell in row
+        ])
+    
+    return table.get_string()
 
 
 def trigger_notification(message: str,

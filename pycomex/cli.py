@@ -14,9 +14,11 @@ from click.globals import get_current_context
 from rich.console import Console, ConsoleOptions, RenderResult
 from rich.measure import Measurement
 
-from pycomex.util import get_version
-from pycomex.util import TEMPLATE_ENV
-from pycomex.util import dynamic_import
+from pycomex.utils import get_version
+from pycomex.utils import TEMPLATE_ENV
+from pycomex.utils import dynamic_import
+from pycomex.utils import has_file_extension
+from pycomex.utils import set_file_extension
 from pycomex.functional.experiment import Experiment
 from pycomex.functional.experiment import run_experiment
 import zipfile
@@ -387,8 +389,8 @@ class CLI(click.RichGroup):
         # This command can be used to reproduce previously executed experiments
         self.add_command(self.reproduce_command)
         
-        #self.template_group.add_command(self.template_config_command)
-        #self.add_command(self.template_group)
+        self.template_group.add_command(self.template_analysis_command)
+        self.add_command(self.template_group)
         
         
     @click.command('inspect', short_help='inspect an experiment that was previously terminated.')
@@ -576,13 +578,62 @@ class CLI(click.RichGroup):
         click.echo('Starting the experiment...')
         experiment.run()
 
-
     # ~ TEMPLATE COMMANDS
 
-    @click.group('template', short_help='Commands for templating common file types.')
+    @click.group('template', short_help='Command group for templating common file types.')
     @click.pass_obj
     def template_group(self):
         pass
+    
+    @click.command('analysis', short_help='Create a template for an analysis notebook.')
+    @click.option('-t', '--type', type=click.Choice(['jupyter']), default='jupyter', 
+                  help='The type of the analysis template to create.')
+    @click.option('-o', '--output', type=click.STRING, default='analysis')
+    @click.pass_obj
+    def template_analysis_command(self, 
+                                  type: str,
+                                  output: str
+                                  ) -> None:
+        
+        click.echo('Creating analysis template...')
+        
+        # If the given "output" string is an absolute path, we use it as it is. Otherwise, 
+        # we resolve it to an absolute path relative to the current working directory.
+        output_path: str = None
+        if os.path.isabs(output):
+            output_path = output
+        else:
+            output_path = os.path.abspath(output)
+        
+        if type == 'jupyter':
+            
+            template = TEMPLATE_ENV.get_template('analysis.ipynb')
+            
+            if not has_file_extension(output_path):
+                output_path = set_file_extension(
+                    output_path,
+                    '.ipynb'
+                )
+                
+            content = template.render()
+            with open(output_path,'w') as file:
+                file.write(content)
+        
+        elif type == 'python':
+            
+            template = TEMPLATE_ENV.get_template('analysis.py.j2')
+            
+            if not has_file_extension(output_path):
+                output_path = set_file_extension(
+                    output_path,
+                    '.py'
+                )
+                
+            content = template.render()
+            with open(output_path, 'w') as file:
+                file.write(content)
+                
+        click.secho(f'✅ created analysis template @ {output_path}', bold=True)
     
     @click.command('config')
     @click.pass_obj

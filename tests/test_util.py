@@ -5,6 +5,7 @@ import sys
 
 import pytest
 from inspect import getframeinfo, stack
+import numpy as np
 
 from pycomex.util import get_version
 from pycomex.util import get_comments_from_module
@@ -13,6 +14,8 @@ from pycomex.util import type_string
 from pycomex.util import trigger_notification
 from pycomex.util import SetArguments
 from pycomex.util import get_dependencies
+from pycomex.util import set_file_extension
+from pycomex.util import render_string_table
 
 from .util import ASSETS_PATH
 from .util import ARTIFACTS_PATH
@@ -136,3 +139,63 @@ def test_get_dependencies():
     assert 'version' in example_info
     assert 'name' in example_info
     assert 'path' in example_info
+
+
+def test_set_file_extension():
+    
+    # Test replacing an existing extension
+    assert set_file_extension('/tmp/file.txt', 'json') == '/tmp/file.json'
+    # Test adding an extension to a file with no extension
+    assert set_file_extension('/tmp/file', 'txt') == '/tmp/file.txt'
+    # Test adding an extension with a leading dot
+    assert set_file_extension('/tmp/file', '.csv') == '/tmp/file.csv'
+    # Test replacing an extension with a leading dot
+    assert set_file_extension('/tmp/file.md', '.rst') == '/tmp/file.rst'
+    # Test file with multiple dots
+    assert set_file_extension('/tmp/archive.tar.gz', 'zip') == '/tmp/archive.tar.zip'
+    # Test empty extension
+    assert set_file_extension('/tmp/file', '') == '/tmp/file.'
+
+
+def test_render_string_table_basic():
+    # Basic test: no lists in rows
+    columns = ['A', 'B']
+    rows = [
+        [1, 2],
+        [3, 4],
+    ]
+    result = render_string_table(columns, rows, reduce_func=lambda l: f'{np.mean(l):.2f}±{np.std(l):.2f}')
+    assert 'A' in result and 'B' in result
+    assert '1' in result and '2' in result
+    assert '3' in result and '4' in result
+
+def test_render_string_table_with_lists():
+    columns = ['Name', 'Scores']
+    rows = [
+        ['Alice', [1, 2, 3]],
+        ['Bob', [4, 5, 6]],
+    ]
+    def reduce_func(l):
+        return f'{np.mean(l):.1f}±{np.std(l):.1f}'
+    result = render_string_table(columns, rows, reduce_func=reduce_func)
+    assert 'Alice' in result and 'Bob' in result
+    assert '2.0±0.8' in result and '5.0±0.8' in result
+
+def test_render_string_table_mixed_types():
+    columns = ['ID', 'Value']
+    rows = [
+        [1, [10, 20]],
+        [2, 30],
+    ]
+    def reduce_func(l):
+        return f'{sum(l)}'
+    result = render_string_table(columns, rows, reduce_func=reduce_func)
+    assert '30' in result  # from sum([10, 20]) and the int 30
+    assert '1' in result and '2' in result
+
+def test_render_string_table_empty():
+    columns = ['A', 'B']
+    rows = []
+    result = render_string_table(columns, rows, reduce_func=lambda l: str(l))
+    assert 'A' in result and 'B' in result
+    assert result.count('\n') > 0  # Table header and border

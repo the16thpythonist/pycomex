@@ -1,6 +1,9 @@
 import os
 import shutil
-from typing import Any
+from typing import Any, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from pycomex.functional.experiment import Experiment
 
 
 class ActionableParameterType:
