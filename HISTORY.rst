@@ -418,7 +418,7 @@ are accessible through a global singleton config instance.
 - Added the ``run`` command to the CLI which can be used to run an experiment module or a config file 
   from the command line.
 
-0.17.0 (19.05.2025)
+0.17.0 (18.06.2025)
 -------------------
 
 - Added the ``template`` command group to the CLI which can be used to template various common files.
