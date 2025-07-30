@@ -855,6 +855,24 @@ class Experiment:
             'after_experiment_finalize',
             experiment=self,
         )
+        
+        # 25.06.25
+        # Previously it was a source of a lot of confusion for other people using the library that the 
+        # actual error was only logged and then the error which would actually stop the program would 
+        # occurr somewhere in the analysis part.
+        # Additionally, its not really possible to use the debugger to debug an experiment file if the 
+        # primary error is only silently logged. Therefore, we actually raise the original error here 
+        # at the end - after we've done all of the cleanup.
+        if self.error:
+            
+            self.config.pm.apply_hook(
+                'before_experiment_error',
+                experiment=self,
+                error=self.error,
+                traceback=self.tb,
+            )
+            
+            raise self.error.with_traceback(self.error.__traceback__)
 
     def __call__(self, func, *args, **kwargs):
         self.func = func

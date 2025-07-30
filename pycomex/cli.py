@@ -3,11 +3,13 @@ import sys
 import os
 import subprocess
 import json
+import shutil
 import importlib.util
 from typing import Optional, Dict
 import typing as t
 
 import rich
+import rich_click
 import rich_click as click
 from uv import find_uv_bin
 from click.globals import get_current_context
@@ -19,6 +21,7 @@ from pycomex.utils import TEMPLATE_ENV
 from pycomex.utils import dynamic_import
 from pycomex.utils import has_file_extension
 from pycomex.utils import set_file_extension
+from pycomex.utils import is_experiment_archive
 from pycomex.functional.experiment import Experiment
 from pycomex.functional.experiment import run_experiment
 import zipfile
@@ -260,7 +263,7 @@ class ExperimentCLI(click.RichGroup):
         self.add_command(self.run_experiment)
         self.run_experiment.params[0].type = click.Choice(self.experiments.keys())
 
-    # -- commands
+    ## --- commands ---
     # The following methods are actually the command implementations which are the specific commands 
     # that are part of the command group that is represented by the ExperimentCLI object instance itself.
 
@@ -331,7 +334,7 @@ class ExperimentCLI(click.RichGroup):
             print(self.version)
             sys.exit(0)
 
-    # ~ utility
+    ## --- utility functions ---
     # The following methods implement some kind of utiltiy functions for this class
 
     def discover_experiments(self):
@@ -380,6 +383,7 @@ class CLI(click.RichGroup):
     
     def __init__(self, *args, **kwargs):
         click.RichGroup.__init__(self, *args, invoke_without_command=True, **kwargs)
+        self.cons = Console()
         
         # ~ adding the default commands
         
@@ -391,6 +395,10 @@ class CLI(click.RichGroup):
         
         self.template_group.add_command(self.template_analysis_command)
         self.add_command(self.template_group)
+        
+        self.archive_group.add_command(self.archive_info_command)
+        self.archive_group.add_command(self.archive_delete_command)
+        self.add_command(self.archive_group)
         
         
     @click.command('inspect', short_help='inspect an experiment that was previously terminated.')
@@ -404,6 +412,8 @@ class CLI(click.RichGroup):
         click.secho(f'inspecting experiment @ {experiment_path}')
         
         # TODO: Implement some pretty printing that shows the metadata etc.
+        
+    ## --- "reproduce" command ---
         
     @click.command('reproduce', short_help='reproduce an experiment that was previously terminated in reproducible mode.',
                    context_settings={'ignore_unknown_options': True})
@@ -527,7 +537,7 @@ class CLI(click.RichGroup):
         code_path = os.path.join(experiment_path, Experiment.CODE_FILE_NAME)
         subprocess.run([uv, 'run', '--no-project', code_path, *kwargs], env=env)
 
-    # ~ RUN COMMAND
+    ## --- "run" command ---
     # The "run" command is a special command which can be used to execute an experiment module from the command 
     # line. Specifically, it should also be possible to execute a standalone experiment config file using this 
     # command...
@@ -578,7 +588,7 @@ class CLI(click.RichGroup):
         click.echo('Starting the experiment...')
         experiment.run()
 
-    # ~ TEMPLATE COMMANDS
+    ## --- "template" command group ---
 
     @click.group('template', short_help='Command group for templating common file types.')
     @click.pass_obj
@@ -640,7 +650,212 @@ class CLI(click.RichGroup):
     def template_config_command(self):
         pass
     
+    ## --- "archive" command group ---
+    # This command group will contain commands that are related to the management of archived 
+    # experiment results. This includes commands to list, show and delete archived experiments.
+    
+    @click.group('archive', short_help='Command group for managing archived experiments.')
+    @click.option('--path', help='The path to the results folder, containing the archived experiments.', 
+                  type=click.Path(resolve_path=True),
+                  default=os.path.join(os.getcwd(), 'results'), show_default=True,)
+    @click.pass_obj
+    def archive_group(self,
+                      path: str
+                      ) -> None:
+        """
+        This command group contains commands that are related to the management of archived experiments.
+        This includes commands to list, show and delete archived experiments. For non-default experiment 
+        archive locations, please use the `--path` option to specify the path where the archived experiments 
+        are stored.
+        """
+        if not os.path.exists(path):
+            self.cons.print(
+                f'[red]The provided path "[bold]{path}[/bold]" does not exist! '
+                'Please provide a valid path to the archive folder.[/red]',
+            )
+            sys.exit(1)     
+        
+        setattr(self, 'archive_path', path)
+    
+    @click.command('info', short_help='Print some top-level information about the experiment archive.')
+    @click.option('--full', is_flag=True,
+                  help='Print more detailed information. Can take a long time.')
+    @click.pass_obj
+    def archive_info_command(self,
+                             full: bool
+                             ) -> None:
+        
+        ## --- reading the experiment archive ---
+        
+        # This method will return the list of all the absolute string paths of all the individual 
+        # archived experiments that are contained within the larger given archive path.
+        experiment_archive_paths: list[str] = self.collect_experiment_archive_paths(self.archive_path)
+    
+        if len(experiment_archive_paths) == 0:
+            self.cons.print(
+                f'[red]There are no archived experiments in the given archive path "[bold]{self.archive_path}[/bold]"!'
+                f'Perhaps the wrong folder was selected? Set the --path option to the archive'
+                f'command group to provide a custom path.[/red]',
+                fg='red',
+            )
+            sys.exit(1)
+            
+        ## --- printing basic information ---
+        # By default we only print very basic information about the archive mainly the number 
+        # of experiments that are contained in it.
+        self.cons.print(f'Experiment Archive @ {self.archive_path}')
+        self.cons.print(f'[green]Contains [bold]{len(experiment_archive_paths)}[/bold] experiments.[/green]')
+    
+    @click.command('delete', short_help='Delete archived experiments.')
+    @click.option('--select', type=click.STRING, 
+                  help='Criterion by which to select the experiments to delete.')
+    @click.option('--all', is_flag=True, help='select all experiments for deletion')
+    @click.option('--yes', is_flag=True, help='Do not ask for confirmation before deleting.')
+    @click.option('-v', '--verbose', is_flag=True, help='Print additional information.')
+    @click.pass_obj
+    def archive_delete_command(self,
+                               select: str,
+                               all: bool,
+                               yes: bool,
+                               verbose: bool,
+                               ) -> None:
+        
+        """
+        This command may be used to delete archived experiments from the overall experiment archive.
+        
+        The --select option determines a snippet of python code which is supposed to evaluate to a boolean 
+        value that determines whether or not an experiment should be selected for the deletion or not 
+        (True meaning it will be deleted, False meaning it will not be deleted). In this expression, 
+        the following special variables are available : `m` which is the metadata dictionary of the 
+        experiment and `p` which is the parameters value dict of the experiment.
+        
+        If the --yes flag is not set, the command will ask for confirmation before actually deleting 
+        the experiments. If the --yes flag is set, the command will not ask for confirmation and
+        will delete the experiments immediately.
+        """
+        
+        ## --- reading the experiment archive ---
+        
+        # This method will return the list of all the absolute string paths of all the individual 
+        # archived experiments that are contained within the larger given archive path.
+        experiment_archive_paths: list[str] = self.collect_experiment_archive_paths(self.archive_path)
+    
+        if len(experiment_archive_paths) == 0:
+            self.cons.print(
+                f'[red]There are no archived experiments in the given archive path "[bold]{self.archive_path}[/bold]"!'
+                f'Perhaps the wrong folder was selected? Set the --path option to the archive'
+                f'command group to provide a custom path.[/red]',
+                fg='red',
+            )
+            sys.exit(1)
+            
+        self.cons.print(f'Experiment Archive @ [grey50]{self.archive_path}[/grey50]')
+        self.cons.print(f'Found a total of [bold white]{len(experiment_archive_paths)}[/bold white] experiments')
+            
+        ## --- selecting experiments to delete ---
+        
+        # In this list we will collect all the paths of the experiments that we want to delete.
+        delete_paths: list[str] = []
+        
+        # If the --all option is set, the selection is trivial as we just use all of the 
+        # experiments that were found in the archive.
+        if all:
+            self.cons.print('Selecting ALL experiments for deletion...')
+        
+        elif select is not None:
+            
+            self.cons.print(f'Selecting based on expression: [cyan]{select}[/cyan] ...') 
+            for path in experiment_archive_paths:
+                
+                # We load the metadata of the experiment from the archive path.
+                experiment_meta_path: str = os.path.join(path, Experiment.METADATA_FILE_NAME)
+                with open(experiment_meta_path, 'r') as file:
+                    metadata: dict = json.load(file)
+                
+                # We then evaluate the select expression with the metadata and parameters of the 
+                # experiment as special variables which are available in the expression.
+                m = metadata
+                p = {
+                    param: info['value'] 
+                    for param, info in metadata['parameters'].items()
+                    if 'value' in info
+                }
+                locals: dict = {
+                    'metadata': m,
+                    'meta': m,
+                    'm': m,
+                    'parameters': p,
+                    'params': p,
+                    'p': p
+                }
+                
+                try:
+                    if eval(select, locals):
+                        delete_paths.append(path)
+                        
+                except Exception as e:
+                    self.cons.print(f'[red]Error evaluating "select" expression: {e}[/red]')
+                    sys.exit(1)
+            
+        elif select is None:
+            pass
+        
+        ## --- asking for user confirmation ---
 
+        self.cons.print(f'Selected [bold white]{len(delete_paths)}[/bold white] experiments for deletion.')
+        if not yes:
+            prompt = f'Are you sure you want to delete {len(delete_paths)} experiments? [y/N] '
+            answer = click.prompt(prompt, type=click.Choice(['y', 'n']), default='n')
+            if answer.lower() != 'y':
+                self.cons.print('[red]Aborting deletion of experiments![/red]')
+                sys.exit(1)
+        
+        ## --- deleting the experiments ---
+        
+        self.cons.print('🗑️ Deleting experiments ...')
+        for path in delete_paths:
+            pass
+            
+            if verbose:
+                self.cons.print(f' * deleting [bold]{os.path.dirname(path)}[/bold] ([grey50]{path}[/grey50]) ... ')
+            
+            shutil.rmtree(path)
+            
+        self.cons.print('[green]✅ Deleted all selected experiments![/green]')
+
+    ## --- utility methods ---
+    # The following methods do not directly implement CLI commands but rather provide utility 
+    # functionality that can be used throught the CLI commands.
+    
+    def collect_experiment_archive_paths(self, path: str) -> t.List[Experiment]:
+        """
+        Given the `path` to the experiment archive folder, this method will collect and return 
+        a list of all the individual experiment archive folders that are contained within 
+        that larger experiment archive.
+        
+        :param path: The absolute string path to the experiment archive folder.
+        
+        :returns: A list of absolute string paths to the individual experiment archive folder.
+        """
+        experiment_namespace_paths: list[str] = []
+        for obj_name in os.listdir(path):
+            obj_path = os.path.join(path, obj_name)
+            if os.path.isdir(obj_path):
+                experiment_namespace_paths.append(obj_path)
+            
+        # This list will store all the actual experiment archive paths
+        experiment_paths: list[Experiment] = []
+        for namespace_path in experiment_namespace_paths:
+            for dirpath, dirnames, filenames in os.walk(namespace_path):
+                
+                if is_experiment_archive(dirpath):
+                    experiment_paths.append(dirpath)
+                    # prevents the further recursion into the subdirectories of 
+                    # an already found experiment archive folder.
+                    dirnames.clear()
+                    
+        return experiment_paths
+                    
 
 @click.group(cls=CLI)
 @click.option("-v", "--version", is_flag=True)
@@ -658,5 +873,6 @@ def cli(ctx: click.Context,
         sys.exit(0)
 
 
+#rich_click.rich_clickify()
 if __name__ == "__main__":
     cli()  # pragma: no cover

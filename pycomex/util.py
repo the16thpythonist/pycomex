@@ -421,6 +421,27 @@ def parse_hook_info(string: str) -> t.Dict[str, str]:
 
 
 def type_string(type_instance: t.Type) -> str:
+    """
+    Returns a human-readable string representation of a type annotation or type instance.
+
+    This function recursively constructs a string that describes the given type, including generic types
+    (such as List[int], Dict[str, float], etc.) and their arguments. If the type instance has an
+    '__origin__' attribute (as is the case for many types from the 'typing' module), it will include the
+    origin and its arguments. If the type does not have a '__name__' attribute, 'UnkownType' will be returned.
+
+    Example
+    -------
+    >>> from typing import List, Dict
+    >>> type_string(List[int])
+    'list[int]'
+    >>> type_string(Dict[str, float])
+    'dict[str, float]'
+    >>> type_string(int)
+    'int'
+
+    :param type_instance: The type or type annotation to be converted to a string.
+    :returns: A string representation of the type.
+    """
     
     string = ''
     if hasattr(type_instance, '__origin__'):
@@ -433,7 +454,14 @@ def type_string(type_instance: t.Type) -> str:
             string += f'[{", ".join([type_string(arg) for arg in type_instance.__args__])}]'
     
     else:
-        string = str(type_instance.__name__)
+        
+        # 24.06.2025
+        # Added the check for __name__ here, because there were problems since some objects 
+        # passing through this function did not have a __name__ attribute.
+        if hasattr(type_instance, '__name__'):
+            string = type_instance.__name__
+        else:
+            string = 'UnkownType'
         
     return string
 
@@ -484,7 +512,7 @@ def is_experiment_archive(folder_path: str) -> bool:
 
     :returns: bool
     """
-    return os.path.exists(os.path.join(folder_path, 'experiment.json'))
+    return os.path.exists(os.path.join(folder_path, 'experiment_meta.json'))
     
 
 def render_string_table(column_names: list[str],
