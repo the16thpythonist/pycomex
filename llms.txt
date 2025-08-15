@@ -1,0 +1,168 @@
+# PyComex - AI Integration Guide
+
+## Project Overview
+
+The `pycomex` package is a microframework for Python that simplifies the implementation, execution, and management of *computational experiments*. The framework defines a natural way of implementing computational experiments in the form of individual Python scripts. These experiment modules can be easily configured and executed, allowing for flexible experimentation.
+
+## Installation
+
+```bash
+uv pip install pycomex
+```
+
+## Quick Start
+
+In `pycomex` computational experiments are defined as python modules. Each module can be executed independently which starts a single *experiment* run. For each experiment run, the framework automatically creates a unique run directory where all output artifacts and logs are stored.
+
+To setup a new experiment the following template can be used:
+
+```python
+from pycomex.functional.experiment import Experiment
+from pycomex.utils import file_namespace, folder_path
+
+# --- 1. Define experiment parameters ---
+# experiment parameters can be defined as global variables. Most importantly, thse 
+# have to be upper case to be recognized as such.
+
+# :param NUM_ITERATIONS: Number of iterations to run in the experiment.
+#   This parameter documentation string will automatically be parsed by pycomex
+#   and for example printed in the help string of the command line interface.
+NUM_ITERATIONS: int = 10
+
+# --- 2. Define the experiment object ---
+# The `Experiment` object is the primary element that handles all of the pycomex functionality.
+
+experiment = Experiment(
+    # base_path defines where the root directory of the experiment result storage will be.
+    # This tells it that it is in the same folder as the current script.
+    base_path=folder_path(__file__),
+    # The namespace defines what the folder of the experiment result storage will be called.
+    # Into that folder all the individual experiment runs will be stored.
+    # This tells it that the namespace is the same name as the current script.
+    namespace=file_namespace(__file__),
+    # This is required to make the global experiment parameters work and always is the 
+    # same boilerplate line.
+    glob=globals(),
+)
+
+# --- 3. Define experiment logic ---
+# The main experiment logic is defined in a function that is decorated with the main Experiment
+# object which acts as a decorator. This function will receive the `Experiment` object as an argument 
+# once executed.
+
+@experiment
+def experiment(e: Experiment):
+    
+    # This can be used to print information to the console but at the same time log it to a 
+    # file in the artifacts folder.
+    e.log('Starting the experiment...')
+
+    # Here we can implement the actual experiment logic.
+    
+    # experiment parameters can be accessed via the `Experiment` object: e.{parameter name}
+    for i in range(e.NUM_ITERATIONS):
+        e.log(f'Iteration {i + 1}/{NUM_ITERATIONS}')
+
+# --- 4. Run the experiment ---
+# This line will execute the code in the main experiment function and start the experiment run, but 
+# ONLY if the script is directly executed, not when it is merely imported!
+experiment.run_if_main()
+
+```
+
+## Advanced Usage
+
+### Experiment Hooks
+
+`pycomex` allows for the definition of so called *hooks* functions that can then be used in the main experiment logic by calling them with the Experiment object. These hooks can be defined by decorating function with the `@experiment.hook` decorator.
+
+```python
+# base_experiment.py
+from pycomex.functional.experiment import Experiment
+from pycomex.utils import file_namespace, folder_path
+
+NUM_ITERATIONS = 10
+
+experiment = Experiment(
+    base_path=folder_path(__file__),
+    namespace=file_namespace(__file__),
+    glob=globals(),
+)
+
+@experiment.hook('analyze_results', default=True, replace=False)
+def analyze_results(e: Experiment, 
+                   results: list
+                   ) -> float:
+    
+    # Its possible to use any features of the Experiment object in the hook function, 
+    # including logging and using other hook functions!
+    e.log('Analyzing results...')
+
+    value = sum(results) / len(results)
+
+    # When we don't want to treat anything as a parameter or a return value, we can just
+    # store data to the main Experiment object storage to transfer it between the different 
+    # hook scopes.
+    e['mean'] = value
+
+    return value
+
+@experiment
+def experiment(e: Experiment):
+    
+    e.log('starting the experiment...')
+
+    results = np.random.rand(100)
+
+    # Hooks are being used with the ``apply_hook`` method of the Experiment object.
+    # The experiment argument itself will be passed automatically to the hook function, the 
+    # additional arguments have to be passed explicitly.
+    value:float = e.apply_hook('analyze_results', results=results)
+
+    e.log(f'from the return: {value} or from the storage: {e["mean"]}')
+
+
+experiment.run_if_main()
+```
+
+### Experiment Inheritance
+
+Another powerful feature of `pycomex` is the ability to create experiment inheritance. Any experiment can be used as a base experiment and subsequently extended with the `Experiment.extend` method. The two primary use cases for this are that experiment *parameters* can be overwritten in the extended experiment - effectively allowing for different configurations of the same experiment. More importantly, it is possible to override experiment *hook* implementations to create different variants of the same experiment logic. For example, if the base experiment has a hook that plots the results using matplotlib, there could be a variant that redefines that hook to use seaborn instead.
+
+```python
+from pycomex.functional.experiment import Experiment
+from pycomex.utils import file_namespace, folder_path
+
+# --- overriding experiment parameters ---
+# Any parameter overrides defined at the beginning of the script will be used to override the base 
+# experiment parameters automatically without any additional intervention.
+NUM_ITERATIONS = 5
+
+# --- extending base experiment ---
+# 
+```
+
+### Command Line Interface
+
+Every pycomex experiment module also automatically works as a command line interface tool.
+
+```bash
+# Will print an extensive help message including the type hints and docstrings of the parameters.
+base_epxeriment.py --help
+```
+
+The command line interface can also be used to override the default experiment parameters. For example, to run the `base_experiment.py` with 20 iterations instead of the default 10, one can use:
+
+```bash
+base_experiment.py --NUM_ITERATIONS=20
+```
+
+Note that the values supplied to the parameters over the command line will be interpreted as python literals using the `eval()` function, making it also possible to pass more complex data structures like lists or dictionaries, if necessary.
+
+### Best Practices
+
+- When using experiment inheritance, the naming convention for the extended experiment should include the name of the base experiment and extend it with a suffix separated by two underscore characters. An example base experiment would be `train_model.py` and the extended experiment (which trains a specific model) would be `train_model__llm.py`.
+- Always use the `Experiment` object to log messages, as it will ensure that the messages are stored in the experiment's artifacts directory.
+- Use the `apply_hook` method to call hooks within the experiment logic, ensuring that the hooks are executed in the correct context and can access the Experiment object. More importantly, only like this hook injection through the experiment inheritance will work properly.
+- Use experiment hooks strategically to modularize your code and separate concerns. If a certain step in an experiment can be easily exchanged with some other method or has a very clear interface that can be defined, it makes sense to implement it via a hook instead of hard coding it into the main experiment logic.
+- Always attach a type hint and docstring to experiment parameters. This will ensure that the parameters are properly documented and can be used in the command line interface of the experiment.

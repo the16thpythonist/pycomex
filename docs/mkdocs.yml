@@ -10,6 +10,7 @@ theme:
 
 nav:
   - Home: index.md
+  - Introduction: introduction.md
   - Advanced Usage:
       - Writing Plugins: advanced_plugins.md
       - Plugin Hooks: advanced_hooks.md
@@ -26,3 +27,4 @@ markdown_extensions:
   - pymdownx.inlinehilite
   - pymdownx.superfences
   - pymdownx.snippets
+  - pymdownx.arithmatex

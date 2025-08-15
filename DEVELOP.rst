@@ -94,3 +94,22 @@ syntax of the README file to make sure it can be properly rendered on the PyPi w
 to the package index.
 
     twine upload --username='__token__' --password='[your password]' dist/*
+
+
+Documentation
+=============
+
+The project documentation is done with "Material for Mkdocs" and hosted on Github Pages.
+
+Starting Development Server
+---------------------------
+
+To start the development server for the documentation, the following command can be used:
+
+.. code-block:: bash
+
+    cd docs
+    mkdocs serve
+
+This will start a local server that can be accessed at `http://127.0.0.1:8000/`. Any changes made to the documentation 
+files will be automatically updated in the browser.
