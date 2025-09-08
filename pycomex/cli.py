@@ -15,9 +15,13 @@ from uv import find_uv_bin
 from click.globals import get_current_context
 from rich.console import Console, ConsoleOptions, RenderResult
 from rich.measure import Measurement
+from rich.style import Style
+from rich.text import Text
+from rich.padding import Padding
+from rich.syntax import Syntax
 
 from pycomex.utils import get_version
-from pycomex.utils import TEMPLATE_ENV
+from pycomex.utils import TEMPLATE_PATH, TEMPLATE_ENV
 from pycomex.utils import dynamic_import
 from pycomex.utils import has_file_extension
 from pycomex.utils import set_file_extension
@@ -55,6 +59,83 @@ TEMPLATE_ENV.globals.update({
 })
 
 
+class RichLogo:
+    """
+    A rich display which will show the ASlurmX logo in ASCII art when printed.
+    """
+    
+    STYLE = Style(bold=True, color='white')
+    
+    def __rich_console__(self, console, options):
+        logo_path = os.path.join(TEMPLATE_PATH, 'logo.txt')
+        with open(logo_path, mode='r') as file:
+            logo_string: str = file.read()
+            text = Text(logo_string, style=self.STYLE)
+            pad = Padding(text, (1, 1))
+            yield pad
+
+
+class RichHelp:
+    
+    def __rich_console__(self,
+                        console: Console,
+                        options: ConsoleOptions,
+                        ) -> RenderResult:
+        yield '[white bold]PyComex[/white bold] - A Python framework for computational experiments'
+        yield ''
+        yield (
+            'PyComex is a microframework for the creation, execution and organization of computational experiments '
+            'in python. This command line interface offers tools to easily create new experiment modules '
+            'from boilerplate templates, inspect and interact with the archive of completed experiments and to '
+            'execute experiments directly.'
+        )
+        yield ''
+        # ~ Experiment templating
+        yield '📌 [magenta bold]Create Experiments[/magenta bold]'
+        yield ''
+        yield (
+            'to create new experiments based on the boilerplate templates, use the [cyan]template[/cyan] command group. '
+            'to create a new experiment module, use the [cyan]template experiment[/cyan] command.'
+        )
+        yield Padding(Syntax((
+            "pycomex template experiment --name=my_experiment"
+        ), lexer='bash', theme='monokai', line_numbers=False), (1, 3))
+        yield (
+            'To create a new sub experiment derived from an existing experiment, use the [cyan]template extend[/cyan] command.'
+        )
+        yield Padding(Syntax((
+            "pycomex template extend --from=my_experiment.py --name=my_sub_experiment"
+        ), lexer='bash', theme='monokai', line_numbers=False), (1, 3))
+        yield('Use [cyan]pycomex template --help[/cyan] for more information')
+        yield ''
+        
+        # ~ Experiment execution
+        yield '📌 [magenta bold]Run Experiments[/magenta bold]'
+        yield ''
+        yield (
+            'To start a new run of an experiment module, you can either execute the python module directly - using '
+            '[cyan]python my_experiment.py[/cyan] - or you can use the [cyan]run[/cyan] command. '
+        )
+        yield Padding(Syntax((
+            "pycomex run my_experiment --PARAM1=5000 --PARAM2=20"
+        ), lexer='bash', theme='monokai', line_numbers=False), (1, 3))
+        yield('Use [cyan]pycomex run --help[/cyan] for more information')
+        yield ''
+        
+        # ~ Experiment Archives
+        yield '📌 [magenta bold]Experiment Archives[/magenta bold]'
+        yield ''
+        yield (
+            'All experiments that are executed will automatically be archived in a structured way. '
+            'The [cyan]archive[/cyan] command group can be used to interact with the archive of completed experiments. '
+            'The [cyan]archive info[/cyan] command can be used to print generic information about the selected archive '
+            'folder, for instance.'
+        )
+        yield Padding(Syntax((
+            "pycomex archive info"
+        ), lexer='bash', theme='monokai', line_numbers=False), (1, 3))
+        yield('Use [cyan]pycomex archive --help[/cyan] for more information')
+
 class RichExperimentParameterInfo:
     
     def __init__(self,
@@ -66,6 +147,7 @@ class RichExperimentParameterInfo:
                          console: Console, 
                          options: ConsoleOptions
                          ) -> RenderResult:
+        
         width = options.size.width
         
         num_parameters = len(self.experiment.metadata['parameters'])
@@ -194,6 +276,73 @@ class RichExperimentList:
             
             if index + 1 < num_experiments:
                 yield ''
+
+
+class RichExperimentTailInfo:
+    
+    def __init__(self,
+                 experiment_path: str,
+                 metadata: dict
+                 ):
+        self.experiment_path = experiment_path
+        self.metadata = metadata
+        
+    def __rich_console__(self, 
+                         console: Console, 
+                         options: ConsoleOptions
+                         ) -> RenderResult:
+        import datetime
+        
+        # Extract experiment name from path (last two folders)
+        path_parts = self.experiment_path.rstrip('/').split('/')
+        experiment_id = '/'.join(path_parts[-2:]) if len(path_parts) >= 2 else path_parts[-1]
+        
+        # Experiment name and status
+        name = self.metadata.get('name', 'Unknown')
+        status = self.metadata.get('status', 'unknown')
+        
+        # Status with emojis and colors
+        if status == 'done':
+            status_display = '✅ completed'
+            status_color = 'green'
+        elif status == 'running':
+            status_display = '⏳ running'
+            status_color = 'yellow'
+        else:
+            status_display = f'❌ {status}'
+            status_color = 'red'
+        
+        yield f'[cyan]{name}[/cyan] [{status_color}]{status_display}[/{status_color}] [bright_black]({experiment_id})[/bright_black]'
+        
+        # Timing information
+        start_time = self.metadata.get('start_time')
+        if start_time:
+            dt = datetime.datetime.fromtimestamp(start_time)
+            formatted_time = dt.strftime('%Y-%m-%d %H:%M:%S')
+            yield f'  Started: {formatted_time}'
+        
+        # End time if experiment is done
+        if status == 'done' and start_time:
+            duration = self.metadata.get('duration', 0)
+            if duration > 0:
+                end_time = start_time + duration
+                end_dt = datetime.datetime.fromtimestamp(end_time)
+                formatted_end_time = end_dt.strftime('%Y-%m-%d %H:%M:%S')
+                yield f'  Ended:   {formatted_end_time}'
+        
+        # Duration if available
+        duration = self.metadata.get('duration', 0)
+        if duration > 0:
+            duration_str = f"{duration:.2f}s"
+            yield f'  Duration: {duration_str}'
+        
+        # Short description
+        short_desc = self.metadata.get('short_description', '')
+        if short_desc:
+            # Truncate if too long
+            if len(short_desc) > 80:
+                short_desc = short_desc[:77] + '...'
+            yield f'  [bright_black]{short_desc}[/bright_black]'
 
 
 class ExperimentCLI(click.RichGroup):
@@ -394,11 +543,28 @@ class CLI(click.RichGroup):
         self.add_command(self.reproduce_command)
         
         self.template_group.add_command(self.template_analysis_command)
+        self.template_group.add_command(self.template_experiment_command)
+        self.template_group.add_command(self.template_extend_command)
+        self.template_group.add_command(self.template_config_command)
         self.add_command(self.template_group)
         
         self.archive_group.add_command(self.archive_info_command)
         self.archive_group.add_command(self.archive_delete_command)
+        self.archive_group.add_command(self.archive_tail_command)
         self.add_command(self.archive_group)
+        
+    def format_help(self, ctx, formatter) -> None:
+        """
+        This method overrides the default "format_help" function of the click.Group class.
+        This method is used to override the help string that is printed for the --help 
+        option of the overall group.
+        """
+        rich.print(RichLogo())
+        rich.print(RichHelp())
+        
+        self.format_usage(ctx, formatter)
+        self.format_options(ctx, formatter)
+        self.format_epilog(ctx, formatter)
         
         
     @click.command('inspect', short_help='inspect an experiment that was previously terminated.')
@@ -593,6 +759,10 @@ class CLI(click.RichGroup):
     @click.group('template', short_help='Command group for templating common file types.')
     @click.pass_obj
     def template_group(self):
+        """
+        This command group contains commands that can be used to create new files from common templates, such 
+        as experiment modules or analysis notebooks.
+        """
         pass
     
     @click.command('analysis', short_help='Create a template for an analysis notebook.')
@@ -604,7 +774,12 @@ class CLI(click.RichGroup):
                                   type: str,
                                   output: str
                                   ) -> None:
-        
+        """
+        Will create a new jupyter notebook file which contains boilerplate code for experiment analysis. These 
+        analysis notebooks can be used to load specific experiments from an archive folder, access their results, 
+        sort them according to a customizable criterion and then process the aggregated results into a visualization 
+        or a table.
+        """
         click.echo('Creating analysis template...')
         
         # If the given "output" string is an absolute path, we use it as it is. Otherwise, 
@@ -645,10 +820,222 @@ class CLI(click.RichGroup):
                 
         click.secho(f'✅ created analysis template @ {output_path}', bold=True)
     
-    @click.command('config')
+    @click.command('experiment', short_help='Create a template for a Python experiment module.')
+    @click.option('-n', '--name', type=click.STRING, required=True,
+                  help='The name of the experiment module.')
+    @click.option('-d', '--description', type=click.STRING, 
+                  default='A new computational experiment.',
+                  help='Description of the experiment.')
     @click.pass_obj
-    def template_config_command(self):
-        pass
+    def template_experiment_command(self, 
+                                    name: str,
+                                    description: str,
+                                    ) -> None:
+        """
+        Will create a new Python experiment module from a template. The experiment will include 
+        basic boilerplate code for setting up parameters, logging, and result collection.
+        """
+        click.echo('Creating experiment template...')
+        
+        output = f"{name}.py"
+        
+        # If the given "output" string is an absolute path, use it as it is. Otherwise, 
+        # resolve it to an absolute path relative to the current working directory.
+        output_path: str = None
+        if os.path.isabs(output):
+            output_path = output
+        else:
+            output_path = os.path.abspath(output)
+        
+        # Ensure .py extension
+        if not has_file_extension(output_path):
+            output_path = set_file_extension(output_path, '.py')
+        elif not output_path.endswith('.py'):
+            output_path = set_file_extension(output_path, '.py')
+            
+        template = TEMPLATE_ENV.get_template('experiment.py.j2')
+        content = template.render(
+            experiment_name=name,
+            description=description
+        )
+        
+        with open(output_path, 'w') as file:
+            file.write(content)
+                
+        click.secho(f'✅ created experiment template @ {output_path}', bold=True)
+    
+    @click.command('extend', short_help='Create a new experiment by extending an existing one.')
+    @click.option('-n', '--name', type=click.STRING, required=True,
+                  help='The name of the newly created experiment file.')
+    @click.option('--from', 'from_path', type=click.Path(exists=True), required=True,
+                  help='File path to an existing experiment module to extend from.')
+    @click.pass_obj
+    def template_extend_command(self, 
+                                name: str,
+                                from_path: str,
+                                ) -> None:
+        """
+        Will create a new Python experiment module by extending an existing experiment. The new
+        experiment will inherit all parameters and hook stubs from the base experiment, allowing
+        for easy creation of sub-experiments with modified behavior.
+        """
+        click.echo('Creating extended experiment template...')
+        
+        # Load the base experiment
+        try:
+            # First try to import from the module to get the experiment definition
+            base_experiment = Experiment.import_from(from_path, {})
+        except Exception as e:
+            click.secho(f'Error loading base experiment: {e}', fg='red')
+            return
+            
+        output = f"{name}.py"
+        
+        # If the given "output" string is an absolute path, use it as it is. Otherwise, 
+        # resolve it to an absolute path relative to the current working directory.
+        output_path: str = None
+        if os.path.isabs(output):
+            output_path = output
+        else:
+            output_path = os.path.abspath(output)
+        
+        # Ensure .py extension
+        if not has_file_extension(output_path):
+            output_path = set_file_extension(output_path, '.py')
+        elif not output_path.endswith('.py'):
+            output_path = set_file_extension(output_path, '.py')
+            
+        # Extract parameters from base experiment
+        parameters = base_experiment.metadata.get('parameters', {})
+        hooks = base_experiment.metadata.get('hooks', {})
+        
+        # Also get the actual parameter values from the parameters dict
+        for param_name, param_value in base_experiment.parameters.items():
+            if param_name in parameters:
+                # Format the value appropriately for Python code
+                if isinstance(param_value, str):
+                    parameters[param_name]['value'] = repr(param_value)
+                else:
+                    parameters[param_name]['value'] = param_value
+        
+        # Extract function signatures from hook implementations
+        import inspect
+        
+        # Process all hooks from hook_map to extract their signatures
+        for hook_name, hook_functions in base_experiment.hook_map.items():
+            if not hook_name.startswith('__') and hook_functions:
+                # Ensure the hook exists in our hooks dict
+                if hook_name not in hooks:
+                    hooks[hook_name] = {'name': hook_name}
+                
+                # Get the first hook function implementation for signature extraction
+                func = hook_functions[0]
+                try:
+                    signature = inspect.signature(func)
+                    # Format the signature as a string for the template
+                    params = []
+                    for param_name, param in signature.parameters.items():
+                        if param.annotation != param.empty:
+                            # Handle typing annotations properly
+                            annotation_name = getattr(param.annotation, '__name__', str(param.annotation))
+                            params.append(f"{param_name}: {annotation_name}")
+                        else:
+                            params.append(param_name)
+                    hooks[hook_name]['signature'] = ', '.join(params)
+                    
+                    # Also try to get the docstring as description
+                    if func.__doc__ and 'description' not in hooks[hook_name]:
+                        hooks[hook_name]['description'] = func.__doc__.strip()
+                        
+                except Exception:
+                    # Fallback to basic signature if inspection fails
+                    hooks[hook_name]['signature'] = 'e: Experiment'
+        
+        
+        # Get the base experiment name for the extend call
+        base_experiment_name = os.path.basename(from_path)
+        if base_experiment_name.endswith('.py'):
+            base_experiment_name = base_experiment_name[:-3]
+        
+        template = TEMPLATE_ENV.get_template('experiment_extend.py.j2')
+        content = template.render(
+            experiment_name=name,
+            base_experiment_path=from_path,
+            base_experiment_name=base_experiment_name,
+            parameters=parameters,
+            hooks=hooks,
+            description=f'Extended experiment based on {base_experiment_name}'
+        )
+        
+        with open(output_path, 'w') as file:
+            file.write(content)
+                
+        click.secho(f'✅ created extended experiment template @ {output_path}', bold=True)
+    
+    @click.command('config', short_help='Create a new config.yml file by extracting parameters from an existing experiment.')
+    @click.option('-n', '--name', type=click.STRING, required=True,
+                  help='The name of the newly created config file.')
+    @click.option('--from', 'from_path', type=click.Path(exists=True), required=True,
+                  help='File path to an existing experiment module to extract configuration from.')
+    @click.pass_obj
+    def template_config_command(self, 
+                                name: str,
+                                from_path: str,
+                                ) -> None:
+        """
+        Will create a new config.yml file by extracting parameters from an existing experiment.
+        The config file will extend the base experiment and include all its default parameters.
+        """
+        click.echo('Creating config template...')
+        
+        # Load the base experiment
+        try:
+            # Import from the module to get the experiment definition
+            base_experiment = Experiment.import_from(from_path, {})
+        except Exception as e:
+            click.secho(f'Error loading base experiment: {e}', fg='red')
+            return
+            
+        output = f"{name}.yml"
+        
+        # If the given "output" string is an absolute path, use it as it is. Otherwise, 
+        # resolve it to an absolute path relative to the current working directory.
+        output_path: str = None
+        if os.path.isabs(output):
+            output_path = output
+        else:
+            output_path = os.path.abspath(output)
+        
+        # Ensure .yml extension
+        if not has_file_extension(output_path):
+            output_path = set_file_extension(output_path, '.yml')
+        elif not output_path.endswith('.yml'):
+            output_path = set_file_extension(output_path, '.yml')
+            
+        # Extract parameters from base experiment
+        parameters = {}
+        
+        # Get parameter values from the parameters dict
+        for param_name, param_value in base_experiment.parameters.items():
+            if not param_name.startswith('__'):
+                parameters[param_name] = param_value
+        
+        # Get the base experiment name for the extend reference
+        base_experiment_name = os.path.basename(from_path)
+        
+        template = TEMPLATE_ENV.get_template('config.yml.j2')
+        content = template.render(
+            config_name=name,
+            base_experiment_path=from_path,
+            base_experiment_name=base_experiment_name,
+            parameters=parameters,
+            description=f'Configuration file extending {base_experiment_name}'
+        )
+        
+        with open(output_path, 'w') as file:
+            file.write(content)
+                
+        click.secho(f'✅ created config template @ {output_path}', bold=True)
     
     ## --- "archive" command group ---
     # This command group will contain commands that are related to the management of archived 
@@ -706,7 +1093,8 @@ class CLI(click.RichGroup):
         self.cons.print(f'Experiment Archive @ {self.archive_path}')
         self.cons.print(f'[green]Contains [bold]{len(experiment_archive_paths)}[/bold] experiments.[/green]')
     
-    @click.command('delete', short_help='Delete archived experiments.')
+    @click.command('delete', short_help='Delete archived experiments. Allows to customize selection criteria '
+                   'to delete only specific experiments.')
     @click.option('--select', type=click.STRING, 
                   help='Criterion by which to select the experiments to delete.')
     @click.option('--all', is_flag=True, help='select all experiments for deletion')
@@ -822,6 +1210,74 @@ class CLI(click.RichGroup):
             shutil.rmtree(path)
             
         self.cons.print('[green]✅ Deleted all selected experiments![/green]')
+
+    @click.command('tail', short_help='Show information about the latest experiments.')
+    @click.option('-n', '--num', default=5, type=int, 
+                  help='Number of latest experiments to show (default: 5).')
+    @click.pass_obj
+    def archive_tail_command(self,
+                             num: int
+                             ) -> None:
+        """
+        Shows basic information about the last N experiments that have been added to the 
+        results archive. Experiments are sorted by their start time, with the most recent 
+        experiments shown first.
+        """
+        
+        ## --- reading the experiment archive ---
+        
+        # Get all experiment archive paths
+        experiment_archive_paths: list[str] = self.collect_experiment_archive_paths(self.archive_path)
+        
+        if len(experiment_archive_paths) == 0:
+            self.cons.print(
+                f'[red]There are no archived experiments in the given archive path "[bold]{self.archive_path}[/bold]"!'
+                f'Perhaps the wrong folder was selected? Set the --path option to the archive'
+                f'command group to provide a custom path.[/red]'
+            )
+            sys.exit(1)
+        
+        ## --- loading metadata and sorting by start time ---
+        
+        experiments_with_metadata = []
+        for path in experiment_archive_paths:
+            try:
+                experiment_meta_path = os.path.join(path, Experiment.METADATA_FILE_NAME)
+                with open(experiment_meta_path, 'r') as file:
+                    metadata = json.load(file)
+                experiments_with_metadata.append((path, metadata))
+            except Exception as e:
+                # Skip experiments with invalid metadata
+                continue
+        
+        # Sort by start_time (most recent first)
+        experiments_with_metadata.sort(
+            key=lambda x: x[1].get('start_time', 0), 
+            reverse=True
+        )
+        
+        # Take only the requested number
+        latest_experiments = experiments_with_metadata[:num]
+        
+        if len(latest_experiments) == 0:
+            self.cons.print('[red]No experiments with valid metadata found![/red]')
+            sys.exit(1)
+        
+        ## --- display the results ---
+        
+        self.cons.print(f'Latest [bold]{len(latest_experiments)}[/bold] experiments from archive @ [grey50]{self.archive_path}[/grey50]')
+        self.cons.print()
+        
+        # Display each experiment
+        for i, (path, metadata) in enumerate(latest_experiments):
+            experiment_display = RichExperimentTailInfo(path, metadata)
+            self.cons.print(experiment_display)
+            
+            # Add separator except for last item
+            if i < len(latest_experiments) - 1:
+                self.cons.print()
+                
+        self.cons.print()
 
     ## --- utility methods ---
     # The following methods do not directly implement CLI commands but rather provide utility 

@@ -1,0 +1,60 @@
+"""
+{{ experiment_name }} experiment module - Extended from {{ base_experiment_name }}
+
+{{ description }}
+
+This module extends the base experiment "{{ base_experiment_name }}" by inheriting all its parameters
+and hooks. You can modify parameters and implement hook stubs as needed.
+
+This module-level doc string will automatically be saved as the description
+for this experiment.
+"""
+import os
+import tempfile
+from typing import *
+
+from pycomex.functional.experiment import Experiment
+from pycomex.utils import folder_path, file_namespace
+
+# == INHERITED PARAMETERS ==
+# The following parameters are inherited from the base experiment.
+# You can modify their values as needed or add new parameters.
+{% for param_name, param_info in parameters.items() -%}
+{% if not param_name.startswith('__') %}
+
+# :param {{ param_name }}:
+#       {{ param_info.get('description', 'Inherited parameter from base experiment') }}
+{{ param_name }}{% if 'type' in param_info %}: {{ param_info.type }}{% endif %} = {% if 'value' in param_info %}{{ param_info.value }}{% else %}None{% endif %}
+{% endif -%}
+{% endfor %}
+
+__DEBUG__: bool = True
+
+# Extend the base experiment
+experiment = Experiment.extend(
+    experiment_path="{{ base_experiment_path }}",
+    base_path=folder_path(__file__),
+    namespace=file_namespace(__file__),
+    glob=globals(),
+)
+
+{%- if hooks %}
+
+# == HOOK IMPLEMENTATIONS ==
+# The following hooks are available from the base experiment.
+{%- for hook_name, hook_info in hooks.items() %}
+{%- if not hook_name.startswith('__') %}
+
+@experiment.hook('{{ hook_name }}', default=False, replace=True)
+def {{ hook_name }}({{ hook_info.get('signature', 'e: Experiment') }}):
+    """
+    {{ hook_info.get('description', 'Hook inherited from base experiment') }}
+    """
+    e.log('executing {{ hook_name }} hook in extended experiment')
+    # Your implementation here
+    return
+{%- endif %}
+{%- endfor %}
+{%- endif %}
+
+experiment.run_if_main()

@@ -1,0 +1,21 @@
+# {{ config_name }} configuration file
+# {{ description }}
+
+# Indicates this is a pycomex configuration file
+pycomex: true
+
+# Extend the base experiment
+extend: {{ base_experiment_path }}
+
+# Configuration name
+name: {{ config_name }}
+
+# Description for this configuration
+description: |
+  {{ description }}
+
+# Parameters section - contains all parameters from the base experiment
+parameters:
+{%- for param_name, param_value in parameters.items() %}
+  {{ param_name }}: {{ param_value }}
+{%- endfor %}

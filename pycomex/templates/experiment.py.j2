@@ -1,0 +1,55 @@
+"""
+{{ experiment_name }} experiment module.
+
+{{ description }}
+
+This module-level doc string will automatically be saved as the description
+for this experiment.
+"""
+import os
+import tempfile
+
+from pycomex.functional.experiment import Experiment
+from pycomex.utils import folder_path, file_namespace
+
+# :param EXAMPLE_PARAM:
+#       An example parameter for the experiment. This help string will be made available to 
+#       to the command line interface of the experiment.
+EXAMPLE_PARAM: int = 10
+
+__DEBUG__: bool = True
+
+# There are some utility functions which simplify the setup of the experiment decorator.
+# - folder_path(path: str): This function will return the absolute parent folder path for any given path.
+#   In most cases this can be used to supply the base_path relative to the current file
+# - file_namespace(path: str): This function will return a namespace string which is structured in the
+#   following way: "results/{{experiment_name}}"
+experiment = Experiment(
+    base_path=folder_path(__file__),
+    namespace=file_namespace(__file__),
+    glob=globals(),
+)
+
+@experiment
+def experiment(e: Experiment):
+    
+    e.log('starting {{ experiment_name }} experiment...')
+    e.log_parameters()
+    
+    # Your experiment code goes here
+    # Access experiment parameters via e.parameters dictionary
+    example_param = e.parameters['EXAMPLE_PARAM']
+    e.log(f'Example parameter value: {example_param}')
+    
+    # Log experiment results
+    result = example_param * 2
+    e.log(f'Computed result: {result}')
+    
+    # Commit results to experiment archive
+    e['result'] = result
+    e.commit()
+    
+    e.log('experiment completed!')
+
+
+experiment.run_if_main()
