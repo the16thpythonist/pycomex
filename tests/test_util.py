@@ -219,6 +219,10 @@ def test_render_latex_table_basically_works():
             return {
                 'string': f"\\textbf{{{cell['number']}}}",
             }
+        if 'number' in cell and 1 <= cell['number'] <= 2:
+            return {
+                'underline': True,
+            }
         return cell
     
     latex_code = render_latex_table(table, transform_func=transform)

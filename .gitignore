@@ -116,3 +116,5 @@ wandb/
 
 # nox
 .nox
+
+results/

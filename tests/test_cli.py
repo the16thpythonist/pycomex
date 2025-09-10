@@ -55,7 +55,7 @@ def test_version_works():
 
 def test_list_experiments_basically_works():
     cli = ExperimentCLI(name='exp', experiments_path=EXAMPLES_PATH)
-    runner = CliRunner(mix_stderr=False)
+    runner = CliRunner()
 
     result = runner.invoke(cli, ['list'], terminal_width=50)
     LOG.info(result.output, result.exit_code, result.exception)

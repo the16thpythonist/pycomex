@@ -701,9 +701,10 @@ def render_latex_table(table: PrettyTable,
             # check if value is numeric
             try:
                 number = float(value_clean)
-                row.append({
+                info.update({
                     'number': number,
                 })
+                row.append(info)
                 continue
             except ValueError:
                 pass
@@ -715,16 +716,17 @@ def render_latex_table(table: PrettyTable,
             if match:
                 mean = float(match.group(1))
                 std = float(match.group(2))
-                row.append({
+                info.update({
                     'mean': mean,
                     'std': std,
                 })
+                row.append(info)
                 continue
             
             # If neither of the special cases apply we apply the `extract_func` from the arguments
             # which implements the fallback version of how to extract the dict information from the given
             # cell string.
-            info: dict = extract_func(value)
+            info.update(extract_func(value))
             row.append(info)
             
         rows.append(row)
