@@ -46,6 +46,9 @@ def test_plugin_basically_works():
             namespace='experiment',
             glob=iso.glob,
         )
+        @experiment
+        def run(*args, **kwargs):
+            return
         experiment.run()
         
         assert '__NOTIFY__' in experiment.parameters
@@ -71,6 +74,9 @@ def test_notifications_can_be_disabled():
             namespace='experiment',
             glob=iso.glob,
         )
+        @experiment
+        def run(*args, **kwargs):
+            return
         experiment.run()
         assert '__NOTIFY__' in experiment.parameters
         assert experiment.__NOTIFY__ is False

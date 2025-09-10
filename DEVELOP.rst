@@ -96,6 +96,134 @@ to the package index.
     twine upload --username='__token__' --password='[your password]' dist/*
 
 
+Development Environment with Nox
+=================================
+
+This project uses `Nox <https://nox.thea.codes/en/stable/>`_ as a task runner for development workflows. 
+Nox creates isolated virtual environments for each task and supports running tests across multiple Python 
+versions automatically.
+
+Installation
+------------
+
+Nox can be installed globally using uv:
+
+.. code-block:: bash
+
+    uv tool install nox
+
+Or with pip:
+
+.. code-block:: bash
+
+    pip install nox
+
+Available Sessions
+------------------
+
+The project's ``noxfile.py`` defines several sessions for common development tasks:
+
+**Testing Sessions**
+
+- ``test`` - Run the test suite across all supported Python versions (3.10, 3.11, 3.12)
+- ``test_coverage`` - Run tests with coverage reporting (Python 3.10 only)
+- ``install_test`` - Test package installation across all Python versions
+
+**Code Quality Sessions**
+
+- ``lint`` - Run code quality checks with ruff and black
+- ``format`` - Auto-format code with black and apply ruff fixes
+
+**Build and Documentation Sessions**
+
+- ``build`` - Build the package and test the wheel installation
+- ``docs`` - Build documentation with Sphinx
+- ``serve_docs`` - Open built documentation in browser
+
+**Utility Sessions**
+
+- ``clean`` - Clean build artifacts and cache files
+- ``changelog`` - Verify changelog entry exists for current version
+
+Running Nox Sessions
+--------------------
+
+**Run all test sessions:**
+
+.. code-block:: bash
+
+    nox
+
+**Run tests on all Python versions:**
+
+.. code-block:: bash
+
+    nox -s test
+
+**Run tests on a specific Python version:**
+
+.. code-block:: bash
+
+    nox -s test-3.11
+
+**Run tests with coverage:**
+
+.. code-block:: bash
+
+    nox -s test_coverage
+
+**Check code quality:**
+
+.. code-block:: bash
+
+    nox -s lint
+
+**Format code:**
+
+.. code-block:: bash
+
+    nox -s format
+
+**Build package:**
+
+.. code-block:: bash
+
+    nox -s build
+
+**Clean up artifacts:**
+
+.. code-block:: bash
+
+    nox -s clean
+
+**Build documentation:**
+
+.. code-block:: bash
+
+    nox -s docs
+
+
+Development Workflow
+--------------------
+
+A typical development workflow using nox might look like:
+
+1. **Make changes** to the code
+2. **Format code**: ``nox -s format``
+3. **Run linting**: ``nox -s lint``
+4. **Run tests**: ``nox -s test``
+5. **Check coverage**: ``nox -s test_coverage``
+6. **Build package**: ``nox -s build``
+
+For continuous integration, you can run all sessions:
+
+.. code-block:: bash
+
+    nox
+
+This will execute the default sessions (typically ``test`` and ``lint``).
+
+
 Documentation
 =============
 

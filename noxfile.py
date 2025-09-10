@@ -1,116 +1,146 @@
 import os
 import shutil
-import subprocess
 import webbrowser
-import tempfile
+from pathlib import Path
 from typing import List
 
 import nox
 
-
-def get_requirements() -> List[str]:
-    with tempfile.NamedTemporaryFile("w+") as f:
-        subprocess.run(
-            f"poetry export "
-            f"--no-interaction "
-            f"--dev "
-            f"--format requirements.txt "
-            f"--without-hashes "
-            f"--output={f.name}",
-            check=True,
-            shell=True,
-        )
-        return f.readlines()
+nox.options.default_venv_backend = "uv"
 
 
-def get_wheel_path() -> str:
-    for name in os.listdir("dist"):
-        path = os.path.join("dist", name)
-        if path.endswith(".whl"):
-            return path
-    else:
-        raise FileNotFoundError("The wheel distributional was not correctly created by poetry!")
 
 
-@nox.session
+# Supported Python versions for testing
+PYTHON_VERSIONS = ["3.10", "3.11", "3.12"]
+
+
+@nox.session(python=PYTHON_VERSIONS)
 def test(session: nox.Session) -> None:
-    session.run("poetry", "install")
-    session.install("pytest")
-    session.run("pytest")
+    """Run the test suite across multiple Python versions."""
+    session.install(".[test]")
+    session.run("pytest", "tests/", "-v")
 
 
-@nox.session
+@nox.session(python="3.10")
+def test_coverage(session: nox.Session) -> None:
+    """Run tests with coverage reporting."""
+    session.install(".[test]")
+    session.run("pytest", "tests/", "--cov=pycomex", "--cov-report=term-missing", "--cov-report=html")
+
+
+@nox.session(python="3.10")
 def lint(session: nox.Session) -> None:
-    session.install("flake8==4.0.1")
-    session.run("flake8", "./pycomex/", "./tests/")
+    """Run linting with ruff and black."""
+    session.install(".[dev]")
+    session.run("ruff", "check", "pycomex/", "tests/")
 
 
-@nox.session
-def docs(session: nox.Session) -> None:
-    # ~ Installing the doc requirements
-    #session.run("poetry", "install")
+@nox.session(python="3.10")
+def format(session: nox.Session) -> None:
+    """Format code with black and ruff."""
+    session.install(".[dev]")
+    session.run("black", "pycomex/", "tests/")
+    session.run("ruff", "check", "--fix", "pycomex/", "tests/")
+
+
+@nox.session(python=PYTHON_VERSIONS)
+def install_test(session: nox.Session) -> None:
+    """Test package installation across Python versions."""
     session.install(".")
-    session.install("-r", "docs/requirements.txt")
-    session.run("python", "-m", "pycomex.cli", "--version")
+    session.run("python", "-c", "import pycomex; print(f'Successfully imported pycomex {pycomex.__version__}')")
+    session.run("pycomex", "--version")
 
-    # ~ Removing previous artifacts
+
+@nox.session(python="3.10")
+def docs(session: nox.Session) -> None:
+    """Build documentation."""
+    session.install(".")
+    if os.path.exists("docs/requirements.txt"):
+        session.install("-r", "docs/requirements.txt")
+    
+    # Clean previous artifacts
     if os.path.exists("docs/modules.rst"):
         os.remove("docs/modules.rst")
-
     if os.path.exists("docs/pycomex.rst"):
         os.remove("docs/pycomex.rst")
-
     if os.path.exists("docs/build"):
         shutil.rmtree("docs/build")
-
-    # ~ Building the docs
+    
+    # Build docs
     session.run("sphinx-apidoc", "-o", "docs", "pycomex")
     session.run("sphinx-build", "docs", "docs/build/html")
 
 
-@nox.session
+@nox.session(python="3.10")
 def serve_docs(session: nox.Session) -> None:
+    """Open built documentation in browser."""
+    _ = session  # Unused but required by nox
     url = "docs/build/html/index.html"
     webbrowser.open(url)
 
 
-@nox.session
+@nox.session(python="3.10")
 def build(session: nox.Session) -> None:
-    # ~ Removing old distribution artifacts if they exist
-    if os.path.exists("dist"):
-        shutil.rmtree("dist")
-        session.log("purged dist folder")
-
-    # ~ Invoking poetry to create a new build
-    # TODO: Can we do this using the direct python access to poetry?
-    session.run("poetry", "build")
-
-    # ~ Testing the build in the nox venv
-    # Here we search the dist folder for the path to the wheel distributional which was just created and
-    # then we install it into the nox session venv to see it that works and then we also execute the test
-    # suite for that.
-    wheel_path = None
-    for name in os.listdir("dist"):
-        path = os.path.join("dist", name)
-        if path.endswith(".whl"):
-            wheel_path = path
-            break
-    else:
-        raise FileNotFoundError("The wheel distributional was not correctly created by poetry!")
-
-    session.install(wheel_path)
-    session.run("python", "-m", "pip", "freeze")
-    session.run("python", "-m", "pip", "show", "pycomex")
-    # Testing if the package can be imported
-    session.run("python", "-m", "pycomex.cli", "--version")
+    """Build package and test the wheel using uv."""
+    dist_dir = Path("dist")
+    
+    # Clean old distributions
+    if dist_dir.exists():
+        shutil.rmtree(dist_dir)
+        session.log("Purged dist folder")
+    
+    # Build package with uv
+    session.run("uv", "build", "--python=3.10")
+    
+    # Test the built wheel
+    wheel_files = list(dist_dir.glob("*.whl"))
+    if not wheel_files:
+        raise FileNotFoundError("No wheel file found in dist/")
+    
+    wheel_path = wheel_files[0]
+    session.log(f"Found wheel: {wheel_path}")
+    
+    # Test installation and functionality
+    session.install(str(wheel_path))
+    session.run("python", "-c", "import pycomex; print(f'Installed pycomex {pycomex.__version__}')")
+    session.run("pycomex", "--version")
 
 
-@nox.session
+@nox.session(python="3.10")
 def changelog(session: nox.Session) -> None:
+    """Verify changelog entry exists for current version."""
+    _ = session  # Unused but required by nox
     with open("pycomex/VERSION") as file:
-        version = file.read().replace(" ", "").replace("\n", "")
-
+        version = file.read().strip()
+    
     with open("HISTORY.rst") as file:
         content = file.read()
         if version not in content:
-            raise ValueError("No entry to changelog for current version!")
+            raise ValueError(f"No changelog entry found for version {version}")
+
+
+@nox.session(python="3.10")
+def clean(session: nox.Session) -> None:
+    """Clean build artifacts and cache files."""
+    dirs_to_clean: List[Path] = [
+        Path("dist"),
+        Path("build"),
+        Path(".pytest_cache"),
+        Path("htmlcov"),
+        Path("docs/build"),
+    ]
+    
+    for dir_path in dirs_to_clean:
+        if dir_path.exists():
+            if dir_path.is_dir():
+                shutil.rmtree(dir_path)
+            else:
+                dir_path.unlink()
+            session.log(f"Removed {dir_path}")
+    
+    # Clean __pycache__ directories recursively
+    current_path = Path(".")
+    for pycache_dir in current_path.rglob("__pycache__"):
+        shutil.rmtree(pycache_dir)
+        session.log(f"Removed {pycache_dir}")

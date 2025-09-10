@@ -18,7 +18,7 @@ History
 0.2.0 (12.07.2022)
 ------------------
 
-* Every experiment file now has a command line interface realized with ``argparse``
+* Every experiment file now has a command line interface realized with `argparse`
     * It is possible to pass in either a .JSON or a .PY file which are able to modify the default
       experiment parameters defined in the experiment file
     * It is possible to retrieve the destination path when invoking an experiment file over the command line
@@ -31,31 +31,31 @@ History
 0.2.1 (12.07.2022)
 ------------------
 
-* Now it is possible to commit matplotlib Figures directly to the experiment with ``Experiment.commit_fig``
+* Now it is possible to commit matplotlib Figures directly to the experiment with `Experiment.commit_fig`
 * File artifact paths are now automatically tracked as metadata
-* Added a default template ``annotations.rst`` to be rendered for each experiment which provides a
+* Added a default template `annotations.rst` to be rendered for each experiment which provides a
   boilerplate starting point for additional thoughts to be added
 
 0.3.0 (17.07.2022)
 ------------------
 
-* Added ``Experiment.commit_json`` to directly store dict data as json file artifacts for the experiment
+* Added `Experiment.commit_json` to directly store dict data as json file artifacts for the experiment
   records
-* Improved the ``analysis.py`` templating for experiments
-    * Using the context manager ``Experiment.analysis`` within the experiment file can be used to not only
+* Improved the `analysis.py` templating for experiments
+    * Using the context manager `Experiment.analysis` within the experiment file can be used to not only
       directly execute the analysis right after the experiment is completed but also all the code within
       that context managers content block is copied into the analysis template of that run and it will
       work as it is
-    * This is due to the fact, that ``Experiment`` now automatically realizes if it is being imported
-      from a ``snapshot.py`` within an existing record folder. In that case it populates internal fields
-      such as ``Experiment.data`` by loading the persistent file artifact.
-* Added ``examples/analysis.py`` which documents / explains the previously mentioned process
+    * This is due to the fact, that `Experiment` now automatically realizes if it is being imported
+      from a `snapshot.py` within an existing record folder. In that case it populates internal fields
+      such as `Experiment.data` by loading the persistent file artifact.
+* Added `examples/analysis.py` which documents / explains the previously mentioned process
 
 0.3.1 (20.08.2022)
 ------------------
 
-* Fixed bug that ``e.info()`` could not be used inside the ``analysis.py`` file
-* Decided to add ``numpy`` and ``matplotlib`` to the dependencies after all. Originally I did not want to
+* Fixed bug that `e.info()` could not be used inside the `analysis.py` file
+* Decided to add `numpy` and `matplotlib` to the dependencies after all. Originally I did not want to
   include them because I don't strictly need them and they are quite big packages. But honestly, what kind
   of computational experiment works without those two nowadays?
 * Renamed the template files with better naming scheme
@@ -64,23 +64,23 @@ History
 0.4.0 (21.08.2022)
 ------------------
 
-* Added ``pycomex.experiment.ArchivedExperiment`` which makes it possible to load an arbitrary experiment
-  instance from the archived folder and use it much like it is possible from within ``analysis.py``
-* Added ``pycomex.experiment.ExperimentRegistry`` which can be used to load an experiment base path and
+* Added `pycomex.experiment.ArchivedExperiment` which makes it possible to load an arbitrary experiment
+  instance from the archived folder and use it much like it is possible from within `analysis.py`
+* Added `pycomex.experiment.ExperimentRegistry` which can be used to load an experiment base path and
   automatically discover all the (nested) namespace folders within which contain actual experiment run
   archives.
-    * Added ``pycomex.experiment.NamespaceFolder`` which represents and allows to work with namespace
-      folders, for example by easily getting the ``ArchivedExperiment`` instance according to an experiment
+    * Added `pycomex.experiment.NamespaceFolder` which represents and allows to work with namespace
+      folders, for example by easily getting the `ArchivedExperiment` instance according to an experiment
       run (numeric) index.
-* Added ``psutil`` to dependencies to implement hardware resource monitoring as an additional feature
-  when printing the intermediate status of the experiment run with ``Experiment.status()``
+* Added `psutil` to dependencies to implement hardware resource monitoring as an additional feature
+  when printing the intermediate status of the experiment run with `Experiment.status()`
 
 0.4.1 (12.09.2022)
 ------------------
 
-* Fixed a bug which broke the ``with e.analysis:`` functionality in Python 3.10. Rewrote ``RecordCode``
+* Fixed a bug which broke the `with e.analysis:` functionality in Python 3.10. Rewrote `RecordCode`
   such that it no longer uses the deprecated functionality and now also works for the new version.
-* ``with e.analysis:`` can now also be used on the indent level as the experiment context manager itself
+* `with e.analysis:` can now also be used on the indent level as the experiment context manager itself
   which is more intuitive. Using it this way also solves some unwanted interaction with the error catching
   behavior of the experiment context.
 
@@ -92,7 +92,7 @@ History
   executed when merely importing the module, which had all sorts of bad side effects. This bug is fixed now.
 * While fixing that bug, I accidentally stumbled on a much better method of how to make context managers
   skippable, which I find so good that I moved the experiment context manager to use the same mechanism
-  as well, which gets rid of the need for calling ``Experiment.prepare()``. But this means some
+  as well, which gets rid of the need for calling `Experiment.prepare()`. But this means some
   backwards incompatible API changes.
 
 0.5.1 (14.09.2022)
@@ -104,19 +104,19 @@ History
 0.5.2 (18.09.2022)
 ------------------
 
-* Extended ``run_experiment`` such that it can be called in a non-blocking manner and such that it relays
+* Extended `run_experiment` such that it can be called in a non-blocking manner and such that it relays
   the output of the experiment subprocess to stdout in the main process
 
 0.6.0 (19.09.2022)
 ------------------
 
-* Added ``pycomex.cli.ExperimentCLI`` class which can be used to automatically create a computational
+* Added `pycomex.cli.ExperimentCLI` class which can be used to automatically create a computational
   experiment command line interface for a project by simply providing the folder path at which all the
   experiment modules are located. They will automatically be discovered and the CLI will automatically
-  be built based on those experiments. Currently supported are ``list`` command which will
-  show an overview of experiments, ``info`` which will print more details and ``run`` which will prompt
+  be built based on those experiments. Currently supported are `list` command which will
+  show an overview of experiments, `info` which will print more details and `run` which will prompt
   the execution of an experiment.
-* Made some changes in the ``Experiment`` class. Most importantly it now sets ``__experiment__`` global
+* Made some changes in the `Experiment` class. Most importantly it now sets `__experiment__` global
   variable in the original module namespace, which makes it easier to detect whether any given
   python module contains an experiment or not.
 
@@ -129,28 +129,28 @@ History
 0.7.0 (03.01.2023)
 ------------------
 
-* Added the ``experiment.SubExperiment`` class which implements experiment inheritance! This class now
+* Added the `experiment.SubExperiment` class which implements experiment inheritance! This class now
   allows to refer to a different experiment module to run as parent experiment, but with parameter
   modifications.
 * Added a hook system to experiments, which allows for parent experiment modules to define certain points
   at which custom code from child experiments may be injected.
 
-* changed the datetime format in ``HISTORY.rst`` to the only sane option
+* changed the datetime format in `HISTORY.rst` to the only sane option
 * Fixed a minor windows compatibility problem with the automatic pathing determining for experiments.
-* Added the module ``pycomex.testing`` to contain all of the utility functions and classes which are needed
-  to facilitate the unittests such as the ``ExperimentIsolation`` context manager.
-* Refactored most unittests to use ``pytest`` instead of ``unittest``
+* Added the module `pycomex.testing` to contain all of the utility functions and classes which are needed
+  to facilitate the unittests such as the `ExperimentIsolation` context manager.
+* Refactored most unittests to use `pytest` instead of `unittest`
 * Fixed a bunch of unittests that were not updated for the new API
-* Fixed a rather serious bug in ``testing.ExperimentIsolation`` which left permanent modifications in
+* Fixed a rather serious bug in `testing.ExperimentIsolation` which left permanent modifications in
   in the globals dict and thus introduced side-effects in between different unittests.
 
 **INTERFACE CHANGES**
 
-* changed functionality and signature of ``experiment.run_experiment``. Previously this function executed
-  an existing experiment module by using ``subprocessing.run`` and returned the completed process instance.
-  Now, this works by using ``experiment.SubExperiment`` and the function actually returns an experiment
+* changed functionality and signature of `experiment.run_experiment`. Previously this function executed
+  an existing experiment module by using `subprocessing.run` and returned the completed process instance.
+  Now, this works by using `experiment.SubExperiment` and the function actually returns an experiment
   instance.
-* Do to the change above, the same now applies to ``experiment.run_example``.
+* Do to the change above, the same now applies to `experiment.run_example`.
 
 0.7.1 (17.01.2023)
 ------------------
@@ -165,15 +165,15 @@ History
 * Fixed the bug, where a sub experiment snapshot would not be executable because it was missing the the
   base experiment. The base experiment script is now copied into the archive folder as well.
 * Added the dependency system: It is now possible to define files which an experiment execution depends on
-  via the special ``DEPENDENCY_PATHS`` dict parameter. These files will be copied into the created archive
+  via the special `DEPENDENCY_PATHS` dict parameter. These files will be copied into the created archive
   folders.
 
 0.8.1 (27.01.2023)
 ------------------
 
-* Added ``Experiment.p`` as a shorthand for ``Experiment.parameters`` because that got really annoying to
+* Added `Experiment.p` as a shorthand for `Experiment.parameters` because that got really annoying to
   write so often.
-* Fixed a serious bug, where the ``snapshot.py`` file in the archive folder of an experiment was not in
+* Fixed a serious bug, where the `snapshot.py` file in the archive folder of an experiment was not in
   fact the sub experiment but the lowest level base experiment!
 
 0.8.2 (09.02.2023)
@@ -225,7 +225,7 @@ side effects and bugs.
 CRITICAL FIX: The prevsious package did not actually contain the "functional" sub package, but this one
 does now!
 
-- Added some more functionalities to ``functional.Experiment``
+- Added some more functionalities to `functional.Experiment`
 - Changed all the example files to use the functional interface now
 - Some more code documentation
 
@@ -238,7 +238,7 @@ does now!
 0.9.3 (05.05.2023)
 ------------------
 
-- Fixed an important bug in ``dynamic_import`` which prevented ``inspect`` from working properly in the
+- Fixed an important bug in `dynamic_import` which prevented `inspect` from working properly in the
   imported modules
 
 0.9.4 (08.05.2023)
@@ -260,38 +260,38 @@ does now!
 Added the "testing" functionality as it's own feature to the Experiment class
 
 - it is now possible to define the hook with the necessary code to put the experiment into testing mode using 
-  the ``Experiment.testing`` function and the ``__TESTING__`` magic parameter.
-- Added a dedicated example that illustrates the testing mode ``05_testing_mode.py``
+  the `Experiment.testing` function and the `__TESTING__` magic parameter.
+- Added a dedicated example that illustrates the testing mode `05_testing_mode.py`
 
 Command line interface
 
-- fixed the command line interface. ``ExperimentCLI`` should now be working with the new pycomex functional API
-- Switched to using python ``rich`` package for the CLI printing
+- fixed the command line interface. `ExperimentCLI` should now be working with the new pycomex functional API
+- Switched to using python `rich` package for the CLI printing
 - Changed the styling of the "list" and "info" commands to rich formatting
 
 Other changes
 
-- During construction an ``Experiment`` instance will now attempt to automatically parse the parameter description strings from the 
+- During construction an `Experiment` instance will now attempt to automatically parse the parameter description strings from the 
   module's comments and the parameter typing information from the type hints annotations dict. This information will then be stored 
-  in ``Experiment.metadata`` dictionary.
+  in `Experiment.metadata` dictionary.
 - Added some more docstrings
-- Updated the ``README.rst``
-- Added the ``DOCUMENTATION.rst`` and started to compile some additional documentation that is not immediately 
+- Updated the `README.rst`
+- Added the `DOCUMENTATION.rst` and started to compile some additional documentation that is not immediately 
   relevant to the README
 
 0.10.1 (05.11.2023)
 -------------------
 
 - Fixed a breaking bug during the construction of Experiment instances 
-- Added information about possible hooks to the ``info`` cli command as well
+- Added information about possible hooks to the `info` cli command as well
 
 0.10.2 (08.11.2023)
 -------------------
 
 - fixed a crucial bug that would break the experiment modules if no module level doc string exists
-- Added the ``get_experiment`` method which allows to easily get the Experiment object instance based 
+- Added the `get_experiment` method which allows to easily get the Experiment object instance based 
   on a given absolute experiment module path.
-- Added the example ``07_meta_experiments.py``
+- Added the example `07_meta_experiments.py`
 
 0.11.0 (27.06.2024)
 -------------------
@@ -300,8 +300,8 @@ Added a *Plugin System* to the pycomex framework. This is a major new feature wh
 functionality of the framework in a modular way. The plugin system is custom and implemented via hooks that 
 are accessible through a global singleton config instance.
 
-- Added the ``pycomex.plugin`` module which contains the ``Plugin`` class and the ``PluginManager`` class
-- Added the ``pycomex.config`` decorator which can be used to define hooks in the plugin modules
+- Added the `pycomex.plugin` module which contains the `Plugin` class and the `PluginManager` class
+- Added the `pycomex.config` decorator which can be used to define hooks in the plugin modules
 - Added the "weights_biases" plugin which is a simple example of how to use the plugin system. It implements 
   a weights and biases integration for the pycomex experimentation framework. In addition to the local artifact 
   folders it is now also possible to log the resuls to the online dashboard of weights and biases.
@@ -310,20 +310,20 @@ are accessible through a global singleton config instance.
 0.11.1 (28.06.2024)
 -------------------
 
-- Added the ``Experiment.track_many`` method which can be conveniently used to track multiple artifacts at once
+- Added the `Experiment.track_many` method which can be conveniently used to track multiple artifacts at once
 - Changed the track function generally to store the values in a list instead of replacing the value each time.
 
 0.12.0 (02.07.2024)
 -------------------
 
-- Extended the ``Experiment.track`` method to be able to track figures as well by storing them into a specific 
+- Extended the `Experiment.track` method to be able to track figures as well by storing them into a specific 
   folder within the experiment archive folder.
-- The ``Experiment.metadata`` dict now contains the "__track__" entry which is used to store the names of all 
+- The `Experiment.metadata` dict now contains the "__track__" entry which is used to store the names of all 
   the tracked quantities.
-- Added the ``plot_track`` plugin which is mainly executed after each experiment and will automatically plot all
+- Added the `plot_track` plugin which is mainly executed after each experiment and will automatically plot all
   the tracked quantities into separate visualizations. Numeric quantities will be plotted as line plots and
   figures will be stitched together into a video.
-- Added ``moviepy`` to the dependencies
+- Added `moviepy` to the dependencies
 
 0.12.1 (03.07.2024)
 -------------------
@@ -356,39 +356,39 @@ are accessible through a global singleton config instance.
   below a certain length.)
 - Cleaned up the unittests. In this version all of the unitests actually passed before the publish
 - "notify" plugin
-  - can now actually be disabled using the ``__NOTIFY__`` special parameter
+  - can now actually be disabled using the `__NOTIFY__` special parameter
 - "weights_biases" plugin
-  - Now actually correctly handles when the ``WANDB_PROJECT`` parameter is incorrectly set.
+  - Now actually correctly handles when the `WANDB_PROJECT` parameter is incorrectly set.
   
 0.13.1 (02.10.2024)
 -------------------
 
-- Added the special ``__PREFIX__`` parameter which can be used to add a string prefix to the experiment archive folder 
+- Added the special `__PREFIX__` parameter which can be used to add a string prefix to the experiment archive folder 
   name. This is useful for example when running multiple experiments in parallel and you want to distinguish between 
   them in the file system.
 
 0.13.2 (02.10.2024)
 -------------------
 
-- Reworked the ``ExperimentArgumentParser`` 
-  - now uses the ``rich`` package for the rendering of the help message.
+- Reworked the `ExperimentArgumentParser` 
+  - now uses the `rich` package for the rendering of the help message.
   - The parameters are also now ordered alphabetically in the help message.  
 
 0.14.0 (07.11.2024)
 -------------------
 
-- Added ``reproducible`` mode to the experiment, which can be enabled by setting the magic parameter ``__REPRODUCIBLE__=True``.
+- Added `reproducible` mode to the experiment, which can be enabled by setting the magic parameter `__REPRODUCIBLE__=True`.
   This mode will export the dependencies of the experiment explicitly into the archive folder as well.
-- Added the ``reproduce`` command to the CLI which can be used to reproduce an experiment run based on the experiment
+- Added the `reproduce` command to the CLI which can be used to reproduce an experiment run based on the experiment
   archive folder, if the experiment was executed in reproducible mode.
-- Switched to using ``uv`` for development instead of poetry.
-- Added the ``ActionableParameterType`` interface which can be used to define custom type annotations for experiment parameters 
+- Switched to using `uv` for development instead of poetry.
+- Added the `ActionableParameterType` interface which can be used to define custom type annotations for experiment parameters 
   with custom get and set behavior when interacting with the parameters via the experiment instance.
 
 0.14.1 (07.11.2024)
 -------------------
 
-- Added the ``uv`` dependency to the ``pyproject.toml`` file
+- Added the `uv` dependency to the `pyproject.toml` file
 
 0.14.2 (07.11.2024)
 -------------------
@@ -398,8 +398,8 @@ are accessible through a global singleton config instance.
 0.15.0 (08.11.2024)
 -------------------
 
-- Fixed a bug where ``__PREFIX__`` did not have an initial value when the experiment object is created
-- Added the ``Experiment.import_from`` class method which can be used to dynamically import the experiment 
+- Fixed a bug where `__PREFIX__` did not have an initial value when the experiment object is created
+- Added the `Experiment.import_from` class method which can be used to dynamically import the experiment 
   object from the relative/absolute path of an experiment module such that it can subsequently be 
   executed with the "run" method from within another experiment module, for example.
 - When adding data to the experiment storage keys which start with an underscore are now excluded from being 
@@ -411,15 +411,52 @@ are accessible through a global singleton config instance.
 -------------------
 
 - Added the possibility to use pycomex config files to define experiement variations. These config files 
-  are YAML file which can be used to ``extend`` existing experiment python modules and which may be used 
+  are YAML file which can be used to `extend` existing experiment python modules and which may be used 
   to overwrite the parameters of the experiment. This change has been motivated by the fact that there are 
   many cases where sub-experiments were defined without implementing any hooks but simply with other parameter 
   values - in which case it is unnecessarily complicated to define a new python module for that.
-- Added the ``run`` command to the CLI which can be used to run an experiment module or a config file 
+- Added the `run` command to the CLI which can be used to run an experiment module or a config file 
   from the command line.
 
 0.17.0 (18.06.2025)
 -------------------
 
-- Added the ``template`` command group to the CLI which can be used to template various common files.
-  - currently only ``template analysis`` is implemented which will create a new analysis.ipynb notebook 
+Command Line Interface
+
+- Added the `template` command group to the CLI which can be used to template various common files.
+  - currently only `template analysis` is implemented which will create a new analysis.ipynb notebook 
+
+0.18.0 (08.09.2025)
+-------------------
+
+Command Line Interface
+
+- Added the `template experiment` command which can be used to create a new experiment module from a 
+  template file.
+- Added the `template extend` command which can be used to create a new experiment module which extends
+  an existing experiment module.
+- Added the `template config` command which can be used to create a new experiment config file which
+  extends an existing experiment module.
+- Improved the overall `help` message of the command line interface.
+- Added the `archive tail` command which can be used to print information about the last few runs that 
+  were executed in the archive.
+
+0.19.0 (10.09.2025)
+-------------------
+
+Command Line Interface
+
+- Added the `archive compress` command which can be used to compress the results of an experiment run 
+  into a zip file.
+
+Utils
+
+- Added the `render_latex_table` function which can be used to render a latex table from a PrettyTable 
+  object instance.
+- Added `CLAUDE.md` which contains the prompts that were used to generate some of the code 
+  in this project using the Claude AI assistant.
+
+Tests
+
+- Fixed the unittests which were broken
+- Updated the `noxfile.py` to use `uv` instead of `poetry`

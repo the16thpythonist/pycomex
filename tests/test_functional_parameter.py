@@ -32,6 +32,9 @@ class TestCopiedPath:
                 namespace='experiment',
                 glob=iso.glob,
             )
+            @experiment
+            def run(*args, **kwargs):
+                return
             experiment.run()
             
             # ~ create a file

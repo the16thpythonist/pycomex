@@ -6,7 +6,7 @@ build-backend = "hatchling.build"
 # Project Metadata
 # ================
 name = "pycomex"
-version = "0.18.0"
+version = "0.19.0"
 description = "Python Computational Experiments"
 readme = "README.rst"
 authors = [
@@ -16,20 +16,25 @@ maintainers = [
     {name = "Jonas Teufel", email = "jonseb1998@gmail.com"},
 ]
 license = {text = "MIT License"}
+requires-python = ">=3.10"
 keywords = [
     "computational experiments", 
     "data science", 
-    "maschine learning", 
+    "machine learning", 
     "academia"
 ]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: System :: Archiving",
 ]
 
 # Project Dependencies
@@ -37,13 +42,13 @@ classifiers = [
 dependencies = [
     "pyyaml>=6.0,<7.0.0",
     "pydantic>=2.9.0,<3.0.0",
-    "click>=7.1.2,<8.0.0",
+    "click>=8.0.0,<9.0.0",
     "jinja2>=3.0.3,<4.0.0",
     "numpy>=1.22.0,<2.0.0",
     "matplotlib>=3.5.3,<4.0.0",
     "psutil>=5.7.2,<6.0.0",
     "moviepy>=1.0.3,<2.0.0",
-    "rich-click>=1.8.0,<1.9.0",
+    "rich-click>=1.8.5,<1.9.0",
     "desktop-notifier>=5.0.1,<6.0.0",
     "rich-argparse>=1.0.0,<2.0.0",
     "uv>=0.4.0,<0.5.0",
@@ -58,6 +63,18 @@ dev = [
     "ruff>=0.2,<0.3",
     "mkdocs-material>=9.5,<10.0",
 ]
+test = [
+    "pytest>=7.0,<8.0",
+    "pytest-cov>=4.0,<5.0",
+    "nox>=2023.4,<2025.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/the16thpythonist/pycomex"
+Repository = "https://github.com/the16thpythonist/pycomex"
+Documentation = "https://pycomex.readthedocs.io"
+Issues = "https://github.com/the16thpythonist/pycomex/issues"
+
 
 [project.scripts]
 # Executable Scripts
@@ -68,7 +85,7 @@ pycx = "pycomex.cli:cli"
 # Configuration of Build System (Hatchling)
 # =========================================
 [tool.hatch.envs.default]
-python = "^3.10"
+python = "3.10"
 
 [tool.hatch.envs.dev]
 features = ["dev"]
@@ -80,7 +97,7 @@ skip_excluded_dirs = true
 # ===============
 
 [tool.bumpversion]
-current_version = "0.18.0"
+current_version = "0.19.0"
 parse = "(?<![=<>])(?P<major>\\d+)\\.(?P<minor>\\d+)\\.(?P<patch>\\d+)"
 serialize = ["{major}.{minor}.{patch}"]
 search = "{current_version}"
@@ -99,4 +116,29 @@ files = [
     {filename = "pyproject.toml", search="version = \"{current_version}\"", replace="version = \"{new_version}\""},
     {filename = "README.rst"},
     {filename = "pycomex/VERSION"},
+]
+
+# Tool Configurations
+# ===================
+
+[tool.ruff]
+target-version = "py310"
+line-length = 88
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "A", "C4", "T20"]
+ignore = ["E501", "F401"]
+
+[tool.black]
+target-version = ["py310"]
+line-length = 88
+
+[tool.pytest.ini_options]
+minversion = "7.0"
+addopts = "-ra -q --strict-markers"
+testpaths = ["tests"]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks tests as integration tests",
+    "localonly: marks tests that should only run locally",
 ]

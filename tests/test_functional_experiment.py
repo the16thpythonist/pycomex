@@ -84,6 +84,10 @@ class TestExperiment:
                 namespace='experiment',
                 glob=iso.glob,
             )
+            @experiment
+            def run(*args, **kwargs):
+                return
+                
             experiment.run()
             assert '__PREFIX__' in experiment.parameters
             
