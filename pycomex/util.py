@@ -659,3 +659,93 @@ class SetArguments:
     
     def __exit__(self, *args, **kwargs) -> None:
         sys.argv = self.sys_args
+        
+        
+# === LATEX UTILS ===
+
+def render_latex_table(table: PrettyTable, 
+                       table_template: str = 'latex_table.tex.j2',
+                       extract_func: Callable[[str], dict] = lambda v: {'string': v},
+                       transform_func: Callable[[dict, list], dict] = lambda cell, rows: cell,
+                       ) -> str:
+    """
+    Renders the given ``table`` as a Latex table string.
+    """
+    
+    # --- extracting data from the table ---
+    # At first we need to extract all the data from the PrettyTable instance
+    # which we can then afterwards put back into the latex template.
+    
+    columns = table.field_names
+    rows = []
+    for row_index, _row in enumerate(table._rows):
+        
+        row: list[dict] = []
+        
+        # --- processing special cases ---
+        # When iterating over the individual cells of the row we want to handle some 
+        # special cases. First of all we would like to be able to detect if a cell contains 
+        # only a single numeric value. If that is not the case we want to detect if it contains 
+        # two values separated by a "±" character. If that is the case we want to split
+        # those two values and render them in a special way in latex.
+        # If neither of the special cases apply we simply render the cell as a normal string.
+        
+        for col_index, value in enumerate(_row):
+            
+            value_clean = value.strip().replace(' ', '')
+            info: dict = {
+                'row_index': row_index,
+                'col_index': col_index,
+            }
+                        
+            # check if value is numeric
+            try:
+                number = float(value_clean)
+                row.append({
+                    'number': number,
+                })
+                continue
+            except ValueError:
+                pass
+
+            
+            # Check if the value contains a "±" character (either normally or the latex version)
+            # using a regex
+            match = re.match(r'^([-+]?\d*\.?\d+)(?:\\pm|±)([-+]?\d*\.?\d+)$', value_clean)
+            if match:
+                mean = float(match.group(1))
+                std = float(match.group(2))
+                row.append({
+                    'mean': mean,
+                    'std': std,
+                })
+                continue
+            
+            # If neither of the special cases apply we apply the `extract_func` from the arguments
+            # which implements the fallback version of how to extract the dict information from the given
+            # cell string.
+            info: dict = extract_func(value)
+            row.append(info)
+            
+        rows.append(row)
+        
+    # --- applying transformation ---
+    # After having extracted the raw data from the table, we can now apply the transformation. It is possible 
+    # to supply a custom transformation function via the arguments which will determine how the cell info dict 
+    # is modified based on the individual cell and the entire table.
+    for row in rows:
+        for cell in row:
+            cell.update(transform_func(cell, rows))
+        
+    # --- rendering the latex string ---
+    # The latex string itself will be created from the information about the rows and columns but will
+    # be rendered using a jinja2 template.
+    
+    template = TEMPLATE_ENV.get_template(table_template)
+    string = template.render({
+        # A list of string column names
+        'columns': columns,
+        # A list of rows where each row is a list of dicts representing the content of the cell.
+        'rows': rows,
+    })
+    return string

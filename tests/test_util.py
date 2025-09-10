@@ -5,6 +5,7 @@ import sys
 
 import pytest
 from inspect import getframeinfo, stack
+from prettytable import PrettyTable
 import numpy as np
 
 from pycomex.util import get_version
@@ -16,6 +17,7 @@ from pycomex.util import SetArguments
 from pycomex.util import get_dependencies
 from pycomex.util import set_file_extension
 from pycomex.util import render_string_table
+from pycomex.util import render_latex_table
 
 from .util import ASSETS_PATH
 from .util import ARTIFACTS_PATH
@@ -199,3 +201,25 @@ def test_render_string_table_empty():
     result = render_string_table(columns, rows, reduce_func=lambda l: str(l))
     assert 'A' in result and 'B' in result
     assert result.count('\n') > 0  # Table header and border
+    
+def test_render_latex_table_basically_works():
+    """
+    Checks the ``render_latex_table`` function which is supposed to render a latex table from 
+    a PrettyTable object instance.
+    """
+    
+    table = PrettyTable()
+    table.field_names = ['A', 'B', 'C']
+    table.add_row(['string 1', '12.2', '3.4'])
+    table.add_row(['string 2', '5.6±9.0', '7.8'])
+    table.add_row(['string 3', '9.0\pm3.2', '1.2'])
+    
+    def transform(cell, rows):
+        if 'number' in cell and 3 <= cell['number'] <= 5:
+            return {
+                'string': f"\\textbf{{{cell['number']}}}",
+            }
+        return cell
+    
+    latex_code = render_latex_table(table, transform_func=transform)
+    print(latex_code)

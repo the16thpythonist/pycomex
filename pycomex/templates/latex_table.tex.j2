@@ -1,0 +1,26 @@
+\begin{tabular}{ {% for _ in columns %}l{% endfor %} }
+% --- Header ---
+\toprule
+{% for col in columns -%}
+\multicolumn{1}{c}{ {{ col }} } {% if not loop.last %}&{% endif %}
+{% endfor -%}
+\midrule
+% --- Content ---
+{% for row in rows -%}
+
+% row {{ loop.index }}
+{% for cell in row -%}
+{% if 'string' in cell -%}
+{{ cell["string"] }}
+{%- elif 'number' in cell -%}
+{{ "%.2f"|format(cell["number"]) }}
+{%- elif ('mean' in cell and 'std' in cell) -%}
+{{ "%.2f ± %.2f"|format(cell["mean"], cell["std"]) }}
+{%- endif -%} {%- if not loop.last -%} {{ '    &' }} {% endif %}
+{% endfor -%}
+{% if not loop.last -%}\\{% endif %}
+
+{% endfor -%}
+
+\bottomrule
+\end{tabular}

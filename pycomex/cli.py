@@ -551,6 +551,7 @@ class CLI(click.RichGroup):
         self.archive_group.add_command(self.archive_info_command)
         self.archive_group.add_command(self.archive_delete_command)
         self.archive_group.add_command(self.archive_tail_command)
+        self.archive_group.add_command(self.archive_compress_command)
         self.add_command(self.archive_group)
         
     def format_help(self, ctx, formatter) -> None:
@@ -1096,7 +1097,11 @@ class CLI(click.RichGroup):
     @click.command('delete', short_help='Delete archived experiments. Allows to customize selection criteria '
                    'to delete only specific experiments.')
     @click.option('--select', type=click.STRING, 
-                  help='Criterion by which to select the experiments to delete.')
+                  help=(
+                      'Criterion by which to select the experiments to delete. Is implemented as a python boolean '
+                      'expression that may use the special variables `m` (metadata dict) and `p` (parameters dict). '
+                      'Will be evaluated on all the experiments in the archive.'
+                  ))
     @click.option('--all', is_flag=True, help='select all experiments for deletion')
     @click.option('--yes', is_flag=True, help='Do not ask for confirmation before deleting.')
     @click.option('-v', '--verbose', is_flag=True, help='Print additional information.')
@@ -1116,7 +1121,6 @@ class CLI(click.RichGroup):
         (True meaning it will be deleted, False meaning it will not be deleted). In this expression, 
         the following special variables are available : `m` which is the metadata dictionary of the 
         experiment and `p` which is the parameters value dict of the experiment.
-        
         If the --yes flag is not set, the command will ask for confirmation before actually deleting 
         the experiments. If the --yes flag is set, the command will not ask for confirmation and
         will delete the experiments immediately.
@@ -1149,6 +1153,7 @@ class CLI(click.RichGroup):
         # experiments that were found in the archive.
         if all:
             self.cons.print('Selecting ALL experiments for deletion...')
+            delete_paths = experiment_archive_paths
         
         elif select is not None:
             
@@ -1214,14 +1219,27 @@ class CLI(click.RichGroup):
     @click.command('tail', short_help='Show information about the latest experiments.')
     @click.option('-n', '--num', default=5, type=int, 
                   help='Number of latest experiments to show (default: 5).')
+    @click.option('--select', type=click.STRING, 
+                  help=(
+                      'Criterion by which to select the experiments to delete. Is implemented as a python boolean '
+                      'expression that may use the special variables `m` (metadata dict) and `p` (parameters dict). '
+                      'Will be evaluated on all the experiments in the archive.'
+                  ))
     @click.pass_obj
     def archive_tail_command(self,
-                             num: int
+                             num: int,
+                             select: str
                              ) -> None:
         """
         Shows basic information about the last N experiments that have been added to the 
         results archive. Experiments are sorted by their start time, with the most recent 
         experiments shown first.
+        
+        The --select option determines a snippet of python code which is supposed to evaluate to a boolean 
+        value that determines whether or not an experiment should be included in the tail results 
+        (True meaning it will be included, False meaning it will not be included). In this expression, 
+        the following special variables are available: `m` which is the metadata dictionary of the 
+        experiment and `p` which is the parameters value dict of the experiment.
         """
         
         ## --- reading the experiment archive ---
@@ -1236,6 +1254,18 @@ class CLI(click.RichGroup):
                 f'command group to provide a custom path.[/red]'
             )
             sys.exit(1)
+        
+        # Apply selection filter if provided
+        if select is not None:
+            self.cons.print(f'Applying selection filter: [cyan]{select}[/cyan]')
+            try:
+                experiment_archive_paths = self.filter_experiment_archives_by_select(experiment_archive_paths, select)
+                if len(experiment_archive_paths) == 0:
+                    self.cons.print('[yellow]No experiments match the selection criteria.[/yellow]')
+                    return
+            except Exception as e:
+                self.cons.print(f'[red]Error during selection: {e}[/red]')
+                sys.exit(1)
         
         ## --- loading metadata and sorting by start time ---
         
@@ -1278,6 +1308,122 @@ class CLI(click.RichGroup):
                 self.cons.print()
                 
         self.cons.print()
+
+    @click.command('compress', short_help='Compress selected experiments into a ZIP archive.')
+    @click.option('--select', type=click.STRING, 
+                  help=(
+                      'Criterion by which to select the experiments to compress. Is implemented as a python boolean '
+                      'expression that may use the special variables `m` (metadata dict) and `p` (parameters dict). '
+                      'Will be evaluated on all the experiments in the archive.'
+                  ))
+    @click.option('--name', default='results.zip', type=click.STRING, 
+                  help='Name of the output ZIP file (default: results.zip).')
+    @click.option('--all', is_flag=True, help='Select all experiments for compression.')
+    @click.option('-v', '--verbose', is_flag=True, help='Print additional information.')
+    @click.pass_obj
+    def archive_compress_command(self,
+                                 select: str,
+                                 name: str,
+                                 all: bool,
+                                 verbose: bool,
+                                 ) -> None:
+        
+        """
+        This command compresses selected archived experiments into a ZIP file.
+        
+        The --select option determines a snippet of python code which is supposed to evaluate to a boolean 
+        value that determines whether or not an experiment should be selected for compression 
+        (True meaning it will be included, False meaning it will not be included). In this expression, 
+        the following special variables are available : `m` which is the metadata dictionary of the 
+        experiment and `p` which is the parameters value dict of the experiment.
+        
+        The resulting ZIP file will maintain the same directory structure as the results folder,
+        containing only the selected experiments. When extracted, it will create a 'results' folder
+        with the same structure as the original archive.
+        """
+        
+        ## --- reading the experiment archive ---
+        
+        # This method will return the list of all the absolute string paths of all the individual 
+        # archived experiments that are contained within the larger given archive path.
+        experiment_archive_paths: list[str] = self.collect_experiment_archive_paths(self.archive_path)
+    
+        if len(experiment_archive_paths) == 0:
+            self.cons.print(
+                f'[red]There are no archived experiments in the given archive path "[bold]{self.archive_path}[/bold]"!'
+                f'Perhaps the wrong folder was selected? Set the --path option to the archive'
+                f'command group to provide a custom path.[/red]'
+            )
+            sys.exit(1)
+            
+        self.cons.print(f'Experiment Archive @ [grey50]{self.archive_path}[/grey50]')
+        self.cons.print(f'Found a total of [bold white]{len(experiment_archive_paths)}[/bold white] experiments')
+            
+        ## --- selecting experiments to compress ---
+        
+        # In this list we will collect all the paths of the experiments that we want to compress.
+        compress_paths: list[str] = []
+        
+        if all:
+            compress_paths = experiment_archive_paths
+        elif select is not None:
+            self.cons.print(f'Applying selection filter: [cyan]{select}[/cyan]')
+            try:
+                compress_paths = self.filter_experiment_archives_by_select(experiment_archive_paths, select)
+            except Exception as e:
+                self.cons.print(f'[red]Error during selection: {e}[/red]')
+                sys.exit(1)
+        else:
+            self.cons.print('[red]You need to provide either --select or --all option to specify which experiments to compress.[/red]')
+            sys.exit(1)
+        
+        if len(compress_paths) == 0:
+            self.cons.print('[yellow]No experiments match the selection criteria.[/yellow]')
+            return
+            
+        self.cons.print(f'Selected [bold]{len(compress_paths)}[/bold] experiments for compression')
+        
+        ## --- compressing experiments ---
+        
+        output_path = os.path.join(os.getcwd(), name)
+        
+        try:
+            with zipfile.ZipFile(output_path, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+                
+                for experiment_path in compress_paths:
+                    # Get the relative path from the archive root to maintain structure
+                    rel_path = os.path.relpath(experiment_path, self.archive_path)
+                    
+                    if verbose:
+                        self.cons.print(f'Compressing: [cyan]{rel_path}[/cyan]')
+                    
+                    # Walk through the experiment directory and add all files
+                    for root, _, files in os.walk(experiment_path):
+                        for file in files:
+                            file_path = os.path.join(root, file)
+                            # Calculate the archive path: results/namespace/experiment_id/file
+                            archive_path = os.path.join('results', os.path.relpath(file_path, self.archive_path))
+                            zip_file.write(file_path, archive_path)
+                            
+                            if verbose:
+                                self.cons.print(f'  Added: [grey50]{archive_path}[/grey50]')
+                
+        except Exception as e:
+            self.cons.print(f'[red]Error creating ZIP file: {e}[/red]')
+            sys.exit(1)
+        
+        self.cons.print(f'[green]✅ Successfully compressed {len(compress_paths)} experiments to [bold]{output_path}[/bold][/green]')
+        
+        # Show file size
+        file_size = os.path.getsize(output_path)
+        if file_size > 1024 * 1024:
+            size_str = f"{file_size / (1024 * 1024):.2f} MB"
+        elif file_size > 1024:
+            size_str = f"{file_size / 1024:.2f} KB"
+        else:
+            size_str = f"{file_size} bytes"
+        
+        self.cons.print(f'Archive size: [bold]{size_str}[/bold]')
 
     ## --- utility methods ---
     # The following methods do not directly implement CLI commands but rather provide utility 
