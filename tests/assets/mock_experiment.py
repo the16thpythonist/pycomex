@@ -7,8 +7,8 @@ DO NOT MODIFY. The contents of this file will be checked for in unittests.
 import os
 import pathlib
 
-import numpy as np
 import matplotlib.pyplot as plt
+import numpy as np
 
 from pycomex.experiment import Experiment
 from pycomex.util import Skippable

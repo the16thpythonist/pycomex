@@ -22,11 +22,11 @@ def test(session: nox.Session) -> None:
     session.run("pytest", "tests/", "-v")
 
 
-@nox.session(python="3.10")
-def test_coverage(session: nox.Session) -> None:
-    """Run tests with coverage reporting."""
-    session.install(".[test]")
-    session.run("pytest", "tests/", "--cov=pycomex", "--cov-report=term-missing", "--cov-report=html")
+# @nox.session(python="3.10")
+# def test_coverage(session: nox.Session) -> None:
+#     """Run tests with coverage reporting."""
+#     session.install(".[test]")
+#     session.run("pytest", "tests/", "--cov=pycomex", "--cov-report=term-missing", "--cov-report=html")
 
 
 @nox.session(python="3.10")
@@ -40,7 +40,6 @@ def lint(session: nox.Session) -> None:
 def format(session: nox.Session) -> None:
     """Format code with black and ruff."""
     session.install(".[dev]")
-    session.run("black", "pycomex/", "tests/")
     session.run("ruff", "check", "--fix", "pycomex/", "tests/")
 
 
@@ -52,32 +51,24 @@ def install_test(session: nox.Session) -> None:
     session.run("pycomex", "--version")
 
 
-@nox.session(python="3.10")
-def docs(session: nox.Session) -> None:
-    """Build documentation."""
-    session.install(".")
-    if os.path.exists("docs/requirements.txt"):
-        session.install("-r", "docs/requirements.txt")
+# @nox.session(python="3.10")
+# def docs(session: nox.Session) -> None:
+#     """Build documentation."""
+#     session.install(".")
+#     if os.path.exists("docs/requirements.txt"):
+#         session.install("-r", "docs/requirements.txt")
     
-    # Clean previous artifacts
-    if os.path.exists("docs/modules.rst"):
-        os.remove("docs/modules.rst")
-    if os.path.exists("docs/pycomex.rst"):
-        os.remove("docs/pycomex.rst")
-    if os.path.exists("docs/build"):
-        shutil.rmtree("docs/build")
+#     # Clean previous artifacts
+#     if os.path.exists("docs/modules.rst"):
+#         os.remove("docs/modules.rst")
+#     if os.path.exists("docs/pycomex.rst"):
+#         os.remove("docs/pycomex.rst")
+#     if os.path.exists("docs/build"):
+#         shutil.rmtree("docs/build")
     
-    # Build docs
-    session.run("sphinx-apidoc", "-o", "docs", "pycomex")
-    session.run("sphinx-build", "docs", "docs/build/html")
-
-
-@nox.session(python="3.10")
-def serve_docs(session: nox.Session) -> None:
-    """Open built documentation in browser."""
-    _ = session  # Unused but required by nox
-    url = "docs/build/html/index.html"
-    webbrowser.open(url)
+#     # Build docs
+#     session.run("sphinx-apidoc", "-o", "docs", "pycomex")
+#     session.run("sphinx-build", "docs", "docs/build/html")
 
 
 @nox.session(python="3.10")

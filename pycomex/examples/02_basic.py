@@ -9,14 +9,15 @@ metadata.
 This module-level doc string will automatically be saved as the description
 for this experiment
 """
+
 import os
-import tempfile
 import random
+import tempfile
 import textwrap
 import urllib.request
 
 from pycomex.functional.experiment import Experiment
-from pycomex.utils import folder_path, file_namespace
+from pycomex.utils import file_namespace, folder_path
 
 # (1) All variables defined in uppercase are automatically detected as experiment
 #     variables and can be overwritten when externally executing the experiment
@@ -31,20 +32,21 @@ REPETITIONS: int = 10
 
 __REPRODUCIBLE__: bool = True
 
+
 # There are some utility functions which simplify the setup of the experiment decorator.
 # - folder_path(path: str): This function will return the absolute parent folder path for any given path.
 #   In most cases this can be used to supply the base_path relative to the current file
 # - file_namespace(path: str): This function will return a namespace string which is structured in the
 #   following way: "results/{{ name of file }}"
-@Experiment(base_path=folder_path(__file__),
-            namespace=file_namespace(__file__),
-            glob=globals())
+@Experiment(
+    base_path=folder_path(__file__), namespace=file_namespace(__file__), glob=globals()
+)
 def experiment(e: Experiment):
-    
-    e.log('starting experiment...')
+
+    e.log("starting experiment...")
     e.log_parameters()
-    
-    e.log('downloading word list...')
+
+    e.log("downloading word list...")
     response = urllib.request.urlopen("https://www.mit.edu/~ecprice/wordlist.10000")
     WORDS = response.read().decode("utf-8").splitlines()
     # (1) The uppercase "experiment parameters" are stored in the "parameters"

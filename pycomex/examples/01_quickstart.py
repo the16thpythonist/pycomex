@@ -1,10 +1,11 @@
 """
 This doc string will be saved as the "description" meta data of the experiment records
 """
+
 import os
 
 from pycomex.functional.experiment import Experiment
-from pycomex.utils import folder_path, file_namespace
+from pycomex.utils import file_namespace, folder_path
 
 # Experiment parameters can simply be defined as uppercase global variables.
 # These are automatically detected and can possibly be overwritten in command
@@ -21,6 +22,7 @@ __DEBUG__: bool = True
 # An experiment is essentially a function. All of the code that constitutes
 # one experiment should ultimately be called from this one function...
 
+
 # The main experiment function has to be decorated with the "Experiment"
 # decorator, which needs three main arguments:
 # - base_path: The absolute string path to an existing FOLDER, where the
@@ -28,9 +30,7 @@ __DEBUG__: bool = True
 # - namespace: This is a relative path which defines the concrete folder
 #   structure of the specific archive folder for this specific experiment
 # - glob: The globals() dictionary for the current file
-@Experiment(base_path=os.getcwd(),
-            namespace='results/001_quickstart',
-            glob=globals())
+@Experiment(base_path=os.getcwd(), namespace="results/001_quickstart", glob=globals())
 def experiment(e: Experiment):
     # Internally saved into automatically created nested dict
     # {'strings': {'hello_world': '...'}}
@@ -53,9 +53,9 @@ def analysis(e: Experiment):
     # And we can access all the internal fields of the experiment object
     # and the experiment parameters here!
     print(e.HELLO, e.WORLD)
-    print(e['strings/hello_world'])
+    print(e["strings/hello_world"])
     # logging will print to stdout but not modify the log file
-    e.log('analysis done')
+    e.log("analysis done")
 
 
 # This needs to be put at the end of the experiment. This method will

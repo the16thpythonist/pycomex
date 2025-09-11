@@ -1,0 +1,20 @@
+# test configuration file
+# Configuration file extending 04_inheritance.py
+
+# Indicates this is a pycomex configuration file
+pycomex: true
+
+# Extend the base experiment
+extend: 02_basic.py
+
+# Configuration name
+name: test
+
+# Description for this configuration
+description: |
+  Configuration file extending 04_inheritance.py
+
+# Parameters section - contains all parameters from the base experiment
+parameters:
+  NUM_WORDS: 500
+  REPETITIONS: 10

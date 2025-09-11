@@ -19,6 +19,7 @@ parameter sweeps. It is possible to modify the parameters of these experiements 
 them. In that way one could define a loop in which one (or many) parameters of another experiment 
 are iteratively systematically changed.
 """
+
 import os
 import pathlib
 import typing as t
@@ -34,28 +35,26 @@ REPETITIONS: int = 3
 
 # :param NUM_WORDS_SWEEP:
 #       pass
-NUM_WORDS_SWEEP: t.List[int] = [10, 100, 1000]
+NUM_WORDS_SWEEP: list[int] = [10, 100, 1000]
 
 
 @Experiment(
-    base_path=folder_path(__file__),
-    namespace=file_namespace(__file__),
-    glob=globals()    
+    base_path=folder_path(__file__), namespace=file_namespace(__file__), glob=globals()
 )
 def experiment(e: Experiment):
-    
-    e.log('starting meta experiment...')
-    
+
+    e.log("starting meta experiment...")
+
     for num_words in e.NUM_WORDS_SWEEP:
-        
-        e.log(f'running experiment with {num_words} number of words')
-        exp: Experiment = get_experiment(os.path.join(PATH, '03_analysing.py'))
+
+        e.log(f"running experiment with {num_words} number of words")
+        exp: Experiment = get_experiment(os.path.join(PATH, "03_analysing.py"))
         exp.NUM_WORDS = num_words
         exp.logger = e.logger
-        exp.name = 'meta_' + random_string()
+        exp.name = "meta_" + random_string()
         exp.run()
 
-        e[f'metrics/length/{num_words}'] = sum(exp['metrics/length'].values())
+        e[f"metrics/length/{num_words}"] = sum(exp["metrics/length"].values())
 
 
 experiment.run_if_main()

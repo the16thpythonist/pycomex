@@ -13,8 +13,8 @@ provided :func:`hook` decorator.  When such a plugin is instantiated the
 the plugin manager.
 """
 
-from collections import defaultdict
 import os
+from collections import defaultdict
 
 
 def hook(hook_name: str, priority: int = 0) -> callable:
@@ -35,8 +35,8 @@ def hook(hook_name: str, priority: int = 0) -> callable:
 
     def decorator(function: callable):
 
-        setattr(function, "__hook__", hook_name)
-        setattr(function, "__priority__", priority)
+        function.__hook__ = hook_name
+        function.__priority__ = priority
         return function
 
     return decorator
@@ -79,15 +79,14 @@ class Plugin:
             if callable(attribute) and hasattr(attribute, "__hook__"):
                 function = attribute
                 self.config.pm.register_hook(
-                    getattr(attribute, "__hook__"),
+                    attribute.__hook__,
                     function,
-                    getattr(attribute, "__priority__"),
+                    attribute.__priority__,
                 )
 
     def unregister(self) -> None:
         """Placeholder for unregistering hooks (not yet implemented)."""
         pass
-
 
 
 class PluginManager:
@@ -101,7 +100,7 @@ class PluginManager:
         """
         self.config = config
         self.hooks: dict[str, list[callable]] = defaultdict(list)
-        
+
     def hook(self, hook_name: str, priority: int = 0):
         """Return a decorator that registers a function as a hook."""
 
@@ -110,29 +109,31 @@ class PluginManager:
             return function
 
         return decorator
-        
-    def register_hook(self,
-                      hook_name: str,
-                      function: callable,
-                      priority: int = 0,
-                      ) -> None:
+
+    def register_hook(
+        self,
+        hook_name: str,
+        function: callable,
+        priority: int = 0,
+    ) -> None:
         """Register ``function`` under ``hook_name`` with optional priority."""
 
         # Mark the function so that it can be discovered automatically when
         # iterating over attributes of a plugin instance.
         if not hasattr(function, "__hook__"):
-            setattr(function, "__hook__", hook_name)
+            function.__hook__ = hook_name
 
         if not hasattr(function, "__priority__"):
-            setattr(function, "__priority__", priority)
+            function.__priority__ = priority
 
         # Store the function in the internal mapping for later execution.
         self.hooks[hook_name].append(function)
-        
-    def apply_hook(self,
-                   hook_name: str,
-                   **kwargs,
-                   ) -> None:
+
+    def apply_hook(
+        self,
+        hook_name: str,
+        **kwargs,
+    ) -> None:
         """Execute all functions registered for ``hook_name``."""
 
         result = None
@@ -140,7 +141,7 @@ class PluginManager:
         # priority value means the function is executed earlier.
         for func in sorted(
             self.hooks[hook_name],
-            key=lambda x: getattr(x, "__priority__"),
+            key=lambda x: x.__priority__,
             reverse=True,
         ):
             try:
@@ -150,10 +151,10 @@ class PluginManager:
                 break
 
         return result
-    
+
     def __len__(self) -> int:
         """
-        The length of the plugin manager is defined as the total number of hook callables that are 
+        The length of the plugin manager is defined as the total number of hook callables that are
         currently registered with some hook name.
         """
         return sum([len(hooks) for hook_name, hooks in self.hooks.items()])

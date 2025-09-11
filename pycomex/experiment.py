@@ -7,45 +7,48 @@ Header
 is this ok?
 
 """
-import os
-import sys
-import time
-import json
-import shutil
-import logging
-import pathlib
+
 import argparse
-import tempfile
-import traceback
-import subprocess
-import threading
 import importlib.util
+import json
+import logging
+import os
+import pathlib
+import shutil
+import subprocess
+import sys
+import tempfile
+import threading
+import time
+import traceback
 import typing as t
-from datetime import datetime
 from collections import defaultdict
-from typing import List, Type, Optional, Tuple, Dict
+from datetime import datetime
+from typing import Dict, List, Optional, Tuple, Type
 
 import jinja2 as j2
 import psutil
 
-from pycomex.util import TEMPLATE_ENV, EXAMPLES_PATH
-from pycomex.util import NULL_LOGGER
-from pycomex.util import RecordCode
-from pycomex.util import SkipExecution
-from pycomex.util import CustomJsonEncoder
-from pycomex.util import Singleton
-from pycomex.util import split_namespace
-from pycomex.util import trigger_notification
-from pycomex.work import AbstractWorkTracker
-from pycomex.work import NaiveWorkTracker
+from pycomex.util import (
+    EXAMPLES_PATH,
+    NULL_LOGGER,
+    TEMPLATE_ENV,
+    CustomJsonEncoder,
+    RecordCode,
+    Singleton,
+    SkipExecution,
+    split_namespace,
+    trigger_notification,
+)
+from pycomex.work import AbstractWorkTracker, NaiveWorkTracker
 
 
-
-def _run_experiment(experiment_path: str,
-                   parameters_path: Optional[str] = None,
-                   blocking: bool = True,
-                   print_output: bool = True,
-                   ) -> Tuple[str, subprocess.CompletedProcess]:
+def _run_experiment(
+    experiment_path: str,
+    parameters_path: str | None = None,
+    blocking: bool = True,
+    print_output: bool = True,
+) -> tuple[str, subprocess.CompletedProcess]:
     """
     Given the string absolute ``experiment_path`` to the python experiment module, this function will
     execute that module as an experiment.
@@ -60,22 +63,19 @@ def _run_experiment(experiment_path: str,
         was created by the experiment. The second element is the subprocess.Process object which was used
         to execute the experiment.
     """
-    with tempfile.NamedTemporaryFile(mode='w+') as out_path:
+    with tempfile.NamedTemporaryFile(mode="w+") as out_path:
 
-        command = f'{sys.executable} {experiment_path} -o {out_path.name}'
+        command = f"{sys.executable} {experiment_path} -o {out_path.name}"
         if parameters_path is not None:
-            command += f' -p {parameters_path}'
+            command += f" -p {parameters_path}"
 
         process = subprocess.Popen(
-            command,
-            shell=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE
+            command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE
         )
         if blocking:
             for line in process.stdout:
                 if print_output:
-                    print(line.decode(), end='')
+                    print(line.decode(), end="")
 
             process.wait()
         else:
@@ -137,10 +137,12 @@ class ExperimentArgParser(argparse.ArgumentParser):
         if not os.path.exists(value):
             raise ValueError(f'The given parameter file path "{value}" does not exist!')
 
-        param_suffixes = ['.json', '.py']
+        param_suffixes = [".json", ".py"]
         if not any(value.endswith(suffix) for suffix in param_suffixes):
-            raise ValueError(f'The given parameter file path "{value}" is none of the accepted file types: '
-                             f', '.join(param_suffixes))
+            raise ValueError(
+                f'The given parameter file path "{value}" is none of the accepted file types: '
+                f", ".join(param_suffixes)
+            )
 
         return value
 
@@ -186,16 +188,17 @@ class ExperimentExchange(metaclass=Singleton):
     lock is not released. This entirely blocks any other parent experiments with the same name to be started
     at the same time. The lock is released as soon as the parent experiment has retrieved the data.
     """
+
     def __init__(self):
         # This dictionary will contain the actual data which is passed from child to parent experiment.
         # The keys are absolute string paths of the parent experiments. The values are dictionaries which
         # have to be valid experiment update dicts - aka they are going to be used as the argument to the
         # "update" method of the parent experiment instance.
-        self.data: t.Dict[str, dict] = {}
+        self.data: dict[str, dict] = {}
 
         # This dictionary will contain the thread locks. The keys are the same absolute string paths of the
         # parent experiments and the values are instances of threading.Lock
-        self.locks: t.Dict[str, threading.Lock] = {}
+        self.locks: dict[str, threading.Lock] = {}
 
     def request(self, key: str, data: dict) -> None:
         """
@@ -254,17 +257,18 @@ class AbstractExperiment:
     """
 
     DEFAULT_TEMPLATES = {
-        'analysis.py': TEMPLATE_ENV.get_template('analysis.py.j2'),
-        'annotations.rst': TEMPLATE_ENV.get_template('annotations.py.j2')
+        "analysis.py": TEMPLATE_ENV.get_template("analysis.py.j2"),
+        "annotations.rst": TEMPLATE_ENV.get_template("annotations.py.j2"),
     }
 
-    def __init__(self,
-                 base_path: str,
-                 namespace: str,
-                 glob: dict,
-                 debug: bool = False,
-                 templates: t.Dict[str, j2.Template] = DEFAULT_TEMPLATES.copy()
-                 ):
+    def __init__(
+        self,
+        base_path: str,
+        namespace: str,
+        glob: dict,
+        debug: bool = False,
+        templates: dict[str, j2.Template] = DEFAULT_TEMPLATES.copy(),
+    ):
         self.base_path = base_path
         self.namespace = namespace
         self.glob = glob
@@ -275,20 +279,20 @@ class AbstractExperiment:
         # advantage that additionally to printing to the console, all the printing is additionally
         # recorded within a log file inside the experiment archive folder which can be reviewed again at
         # a later point.
-        self.logger: t.Optional[logging.Logger] = NULL_LOGGER
+        self.logger: logging.Logger | None = NULL_LOGGER
 
         self.data = {}
         self.meta = {}
         self.parameters = {}
-        self.error: t.Optional[Exception] = None
+        self.error: Exception | None = None
         self.prevent_execution = False
-        self.description: t.Optional[str] = None
-        self.short_description: t.Optional[str] = None
+        self.description: str | None = None
+        self.short_description: str | None = None
         self.debug_mode: bool = debug
 
         self.discover_parameters()
 
-        self.hooks: t.Dict[str, t.List[t.Callable]] = defaultdict(list)
+        self.hooks: dict[str, list[t.Callable]] = defaultdict(list)
 
         # ExperimentExchange is actually a singleton, which means that each invocation of the constructor
         # returns the very same object instance. This object instance is basically a global state which is
@@ -298,23 +302,23 @@ class AbstractExperiment:
         self.experiment_exchange = ExperimentExchange()
 
         # ~ experiment relevant paths
-        self.namespace_path: t.Optional[str] = None
-        self.path: t.Optional[str] = None
+        self.namespace_path: str | None = None
+        self.path: str | None = None
 
         # The following fields will contain the absolute string paths to some very important files within
         # the experiment's archive folder:
-        self.data_path: t.Optional[str] = None
-        self.meta_path: t.Optional[str] = None
-        self.error_path: t.Optional[str] = None
-        self.log_path: t.Optional[str] = None
-        self.code_name: t.Optional[str] = None
-        self.code_path: t.Optional[str] = None
+        self.data_path: str | None = None
+        self.meta_path: str | None = None
+        self.error_path: str | None = None
+        self.log_path: str | None = None
+        self.code_name: str | None = None
+        self.code_path: str | None = None
 
         # The keys of this dictionary are unique string names and the values will be absolute string paths
         # of files or folders which have been added as a dependency for the execution of the experiment.
         # Ultimately these files and folders wil be copied into each(!) created archive folder to ensure
         # the reproducibility of the snapshots.
-        self.dependency_paths: t.Dict[str, str] = {}
+        self.dependency_paths: dict[str, str] = {}
 
         # 13.02.2023
         # Moved the base "analysis" functionality to this base class, because I realized that this
@@ -335,7 +339,9 @@ class AbstractExperiment:
         # This line accomplishes that. Upon calling its own __exit__, the RecordCode object will
         # call all the callback functions added to "exit_callback" so we simpl put the method
         # which renders the "analysis.py" file from the jinja template as one such callback!
-        self.analysis.exit_callbacks.append(lambda rc, i: self.render_template('analysis.py'))
+        self.analysis.exit_callbacks.append(
+            lambda rc, i: self.render_template("analysis.py")
+        )
 
     @property
     def p(self):
@@ -357,19 +363,19 @@ class AbstractExperiment:
         # problems with the usage of slashes "/" to declare sub folder structures on a non-unix system.
         # So now the "split_namespace" method takes care of that and divides the namespace string into the
         # semantic segments which can then be joined in an os-agnostic way.
-        namespace_split: t.List[str] = split_namespace(self.namespace)
+        namespace_split: list[str] = split_namespace(self.namespace)
         self.namespace_path = os.path.join(self.base_path, *namespace_split)
         self.path = self.determine_path()
 
-        self.data_path = os.path.join(self.path, 'experiment_data.json')
-        self.meta_path = os.path.join(self.path, 'experiment_meta.json')
-        self.error_path = os.path.join(self.path, 'experiment_error.txt')
-        self.log_path = os.path.join(self.path, 'experiment_log.txt')
+        self.data_path = os.path.join(self.path, "experiment_data.json")
+        self.meta_path = os.path.join(self.path, "experiment_meta.json")
+        self.error_path = os.path.join(self.path, "experiment_error.txt")
+        self.log_path = os.path.join(self.path, "experiment_log.txt")
 
-        self.code_name = 'snapshot'
-        self.code_path = os.path.join(self.path, f'{self.code_name}.py')
+        self.code_name = "snapshot"
+        self.code_path = os.path.join(self.path, f"{self.code_name}.py")
 
-    def update(self, other: t.Union[dict, 'AbstractExperiment']) -> None:
+    def update(self, other: t.Union[dict, "AbstractExperiment"]) -> None:
         """
         Given ``other`` which is a dictionary with key values pairs representing the instance
         attributes of an experiment object instance, this method will update the corresponding
@@ -400,10 +406,12 @@ class AbstractExperiment:
                     setattr(self, key, value)
 
         else:
-            raise TypeError(f'You are attempting to update the internal state of an Experiment instance '
-                            f'using a value of type "{type(other)}". Please use either a dictionary '
-                            f'which specifies the update values or pass another instance of '
-                            f'AbstractExperiment!')
+            raise TypeError(
+                f"You are attempting to update the internal state of an Experiment instance "
+                f'using a value of type "{type(other)}". Please use either a dictionary '
+                f"which specifies the update values or pass another instance of "
+                f"AbstractExperiment!"
+            )
 
     def to_update_dict(self) -> dict:
         """
@@ -414,21 +422,21 @@ class AbstractExperiment:
             experiment object instance.
         """
         return {
-            'base_path': self.base_path,
-            'namespace': self.namespace,
-            'glob': self.glob,
-            'data': self.data,
-            'meta': self.meta,
-            'parameters': self.parameters,
-            'hooks': self.hooks,
-            'path': self.path,
-            'meta_path': self.meta_path,
-            'data_path': self.data_path,
-            'error_path': self.error_path,
-            'log_path': self.log_path,
-            'code_path': self.code_path,
-            'error': self.error,
-            'logger': self.logger,
+            "base_path": self.base_path,
+            "namespace": self.namespace,
+            "glob": self.glob,
+            "data": self.data,
+            "meta": self.meta,
+            "parameters": self.parameters,
+            "hooks": self.hooks,
+            "path": self.path,
+            "meta_path": self.meta_path,
+            "data_path": self.data_path,
+            "error_path": self.error_path,
+            "log_path": self.log_path,
+            "code_path": self.code_path,
+            "error": self.error,
+            "logger": self.logger,
         }
 
     def discover_parameters(self) -> None:
@@ -450,19 +458,21 @@ class AbstractExperiment:
         # ~ Detecting special parameters
         if "__doc__" in self.glob and isinstance(self.glob["__doc__"], str):
             self.data["description"] = self.glob["__doc__"]
-            self.description = self.glob['__doc__']
+            self.description = self.glob["__doc__"]
 
         if "DEBUG" in self.glob and isinstance(self.glob["DEBUG"], bool):
             self.debug_mode = self.glob["DEBUG"]
 
-        if 'DEPENDENCY_PATHS' in self.glob:
-            if isinstance(self.glob['DEPENDENCY_PATHS'], dict):
-                self.dependency_paths = self.glob['DEPENDENCY_PATHS']
+        if "DEPENDENCY_PATHS" in self.glob:
+            if isinstance(self.glob["DEPENDENCY_PATHS"], dict):
+                self.dependency_paths = self.glob["DEPENDENCY_PATHS"]
             else:
-                self.warning('it looks like you have defined "DEPENDENCY_PATH", but it is not a dictionary '
-                             'please make sure that this variable is a dictionary whose keys are unique '
-                             'string identifiers and the values are existing absolute string paths of '
-                             'files that are required for the working of the experiment.')
+                self.warning(
+                    'it looks like you have defined "DEPENDENCY_PATH", but it is not a dictionary '
+                    "please make sure that this variable is a dictionary whose keys are unique "
+                    "string identifiers and the values are existing absolute string paths of "
+                    "files that are required for the working of the experiment."
+                )
 
         # TODO: Default short description from __doc__ first line.
         if "SHORT_DESCRIPTION" in self.glob:
@@ -478,11 +488,11 @@ class AbstractExperiment:
         # same folder (which will *always* be the case for the archival copy of an experiment module, as
         # the meta file is created during the very start of an experiment already).
         # In that case we want to return the path of that archive folder rather than create a new path!
-        folder_path = pathlib.Path(self.glob['__file__']).parent.absolute()
-        meta_path = os.path.join(folder_path, 'experiment_meta.json')
+        folder_path = pathlib.Path(self.glob["__file__"]).parent.absolute()
+        meta_path = os.path.join(folder_path, "experiment_meta.json")
         # An exception to that rule is if the __name__ of the archival experiment copy is __main__ aka
         # if that file is actively being executed.
-        if os.path.exists(meta_path) and self.glob['__name__'] != '__main__':
+        if os.path.exists(meta_path) and self.glob["__name__"] != "__main__":
             return str(folder_path)
 
         # ~ resolving the namespace
@@ -490,10 +500,10 @@ class AbstractExperiment:
         # will have to be created to hold all the experiment results.
 
         if self.debug_mode:
-            return os.path.join(self.namespace_path, 'debug')
+            return os.path.join(self.namespace_path, "debug")
 
         elif not os.path.exists(self.namespace_path):
-            return os.path.join(self.namespace_path, '000')
+            return os.path.join(self.namespace_path, "000")
 
         else:
             contents = os.listdir(self.namespace_path)
@@ -509,7 +519,7 @@ class AbstractExperiment:
             else:
                 index = 0
 
-            return os.path.join(self.namespace_path, f'{index:03d}')
+            return os.path.join(self.namespace_path, f"{index:03d}")
 
     def load_records(self) -> None:
         """
@@ -526,10 +536,12 @@ class AbstractExperiment:
                 self.data = json.load(json_file)
 
         else:
-            raise FileNotFoundError('You are attempting to load the "experiment_data.json" file to '
-                                    'populate the data dictionary of an Experiment instance, but the data '
-                                    'file was not found. Please make sure that this method is only called '
-                                    'for experiments that are already terminated!')
+            raise FileNotFoundError(
+                'You are attempting to load the "experiment_data.json" file to '
+                "populate the data dictionary of an Experiment instance, but the data "
+                "file was not found. Please make sure that this method is only called "
+                "for experiments that are already terminated!"
+            )
 
     def copy_source(self) -> None:
         """
@@ -541,15 +553,15 @@ class AbstractExperiment:
         if not os.path.exists(self.code_path):
             # Since we have the globals() dict from the experiment file, we can access the __file__ global
             # value of that dict to get the file of the experiment code file.
-            source_path = pathlib.Path(self.glob['__file__']).absolute()
-            self.data['artifacts']['source'] = str(source_path)
+            source_path = pathlib.Path(self.glob["__file__"]).absolute()
+            self.data["artifacts"]["source"] = str(source_path)
             shutil.copy(source_path, self.code_path)
 
     def render_template(self, file_name: str, context: dict = {}):
         template = self.templates[file_name]
         path = os.path.join(self.path, file_name)
-        self.data['artifacts']['templates'][file_name] = path
-        with open(path, mode='w') as file:
+        self.data["artifacts"]["templates"][file_name] = path
+        with open(path, mode="w") as file:
             content = template.render(experiment=self, **context)
             file.write(content)
 
@@ -608,7 +620,7 @@ class AbstractExperiment:
         :param str message: The string message to be printed as a log
         :returns: None
         """
-        lines = message.split('\n')
+        lines = message.split("\n")
         for line in lines:
             self.logger.info(line)
 
@@ -619,10 +631,7 @@ class AbstractExperiment:
     # connected with a unique name and any number of callback functions previously connected to that name
     # using the "hook" decorator will be executed at that point.
 
-    def apply_hook(self,
-                   name: str,
-                   default: t.Any = None,
-                   **kwargs) -> t.Any:
+    def apply_hook(self, name: str, default: t.Any = None, **kwargs) -> t.Any:
         """
         This method can be used to call custom code injected from child experiments during the main context
         body of an experiment. Each hook has to be identified by a unique string ``name``.
@@ -643,11 +652,12 @@ class AbstractExperiment:
 
         return value
 
-    def hook(self,
-             name: str,
-             replace: bool = False,
-             default: bool = True,
-             ) -> t.Callable[[t.Callable], t.Callable]:
+    def hook(
+        self,
+        name: str,
+        replace: bool = False,
+        default: bool = True,
+    ) -> t.Callable[[t.Callable], t.Callable]:
         """
         This method will return a decorator, which can be used to register callbacks to certain hooks
         identified by their unique string ``name``.
@@ -666,10 +676,10 @@ class AbstractExperiment:
         # experiment file so that we can attach that information later on to the decorated callback function
         # That information can then be used when that callback is actually executed to make a useful
         # log message.
-        if '__file__' in self.glob:
-            file_name = os.path.basename(self.glob['__file__']).strip('.py')
+        if "__file__" in self.glob:
+            file_name = os.path.basename(self.glob["__file__"]).strip(".py")
         else:
-            file_name = '__child__'  # generic name if we can't determine the experiment file name
+            file_name = "__child__"  # generic name if we can't determine the experiment file name
 
         def decorator(func: t.Callable):
             if replace:
@@ -682,7 +692,7 @@ class AbstractExperiment:
                 if not default or len(self.hooks[name]) == 0:
                     self.hooks[name].append(func)
 
-            setattr(func, 'file_name', file_name)
+            func.file_name = file_name
             return func
 
         return decorator
@@ -715,13 +725,15 @@ class AbstractExperiment:
         instead of overwrite the default value provided by the parent experiment!
         """
         for parameter_name, parameter_value in self.parameters.items():
-            parameter_value = self.apply_hook(parameter_name, value=parameter_value, default=parameter_value)
+            parameter_value = self.apply_hook(
+                parameter_name, value=parameter_value, default=parameter_value
+            )
             self.set_parameter(parameter_name, parameter_value)
 
     # -- Magic Methods --
 
     def check_experiment_exchange(self):
-        module_path = self.glob['__file__']
+        module_path = self.glob["__file__"]
         if module_path in self.experiment_exchange:
             other: dict = self.experiment_exchange[module_path]
 
@@ -761,7 +773,7 @@ class AbstractExperiment:
 
         # We are going to set this magic variable in the original experiment module. This can then be
         # used to identify whether a module is actually an experiment or not
-        self.glob['__experiment__'] = self
+        self.glob["__experiment__"] = self
 
         # At this point we check if the experiment is created in "execution" mode or in "analysis" mode.
         # "execution" mode is only when the module is directly executed and analysis mode is if the module
@@ -787,8 +799,8 @@ class AbstractExperiment:
             # In analysis mode, we are going to use the dependency paths dict which was saved into the
             # meta data of the current archive folder. This will make sure that we are now using the
             # locally copied versions of these dependencies
-            if 'dependency_paths' in self.meta:
-                self.dependency_paths = self.meta['dependency_paths']
+            if "dependency_paths" in self.meta:
+                self.dependency_paths = self.meta["dependency_paths"]
 
             # This exception will be caught by the "Skippable" context manager which always has to precede
             # the experiment manager, effectively skipping the entire context body!
@@ -796,14 +808,14 @@ class AbstractExperiment:
 
         # This is a special hook which can be used to inject code before the execution of any main
         # experiment code.
-        self.apply_hook('__enter__')
+        self.apply_hook("__enter__")
 
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         # This is a special hook which can be used to inject code after any experiment exits the main
         # context.
-        self.apply_hook('__exit__')
+        self.apply_hook("__exit__")
 
     def __getitem__(self, key):
         """
@@ -829,7 +841,9 @@ class AbstractExperiment:
             if key in current:
                 current = current[key]
             else:
-                raise KeyError(f'The namespace "{key}" does not exist within the experiment data storage')
+                raise KeyError(
+                    f'The namespace "{key}" does not exist within the experiment data storage'
+                )
 
         return current
 
@@ -851,9 +865,11 @@ class AbstractExperiment:
         :returns: None
         """
         if not isinstance(key, str):
-            raise ValueError('You are attempting to add to the internal experiment storage, by using a non '
-                             'string key. This is not possible! Please use a valid query string to identify '
-                             'the (nested) location where to save the value within the storage structure.')
+            raise ValueError(
+                "You are attempting to add to the internal experiment storage, by using a non "
+                "string key. This is not possible! Please use a valid query string to identify "
+                "the (nested) location where to save the value within the storage structure."
+            )
 
         # ~ Decoding the nesting and potentially creating it along the way if it does not exist
         keys = key.split("/")
@@ -880,12 +896,13 @@ class Experiment(AbstractExperiment):
     """
     Context Manager to wrap the main business logic of a computational experiment.
     """
+
     DEFAULT_TEMPLATES = {
-        'analysis.py': TEMPLATE_ENV.get_template('analysis.py.j2'),
-        'annotations.rst': TEMPLATE_ENV.get_template('annotations.py.j2')
+        "analysis.py": TEMPLATE_ENV.get_template("analysis.py.j2"),
+        "annotations.rst": TEMPLATE_ENV.get_template("annotations.py.j2"),
     }
 
-    DATETIME_FORMAT = '%A, %d %b %Y  at %H:%M'
+    DATETIME_FORMAT = "%A, %d %b %Y  at %H:%M"
 
     def __init__(
         self,
@@ -893,8 +910,8 @@ class Experiment(AbstractExperiment):
         namespace: str,
         glob: dict,
         debug_mode: bool = False,
-        templates: Dict[str, j2.Template] = DEFAULT_TEMPLATES.copy(),
-        work_tracker_class: Type[AbstractWorkTracker] = NaiveWorkTracker,
+        templates: dict[str, j2.Template] = DEFAULT_TEMPLATES.copy(),
+        work_tracker_class: type[AbstractWorkTracker] = NaiveWorkTracker,
     ):
         super(Experiment, self).__init__(
             base_path=base_path,
@@ -905,25 +922,23 @@ class Experiment(AbstractExperiment):
         self.work_tracker_class = work_tracker_class
         self.templates = templates
 
-        self.logger: Optional[logging.Logger] = None
+        self.logger: logging.Logger | None = None
         self.work_tracker = self.work_tracker_class(0)
 
         # ~ Parsing command line arguments
         # TODO: I could introduce abstract base class and dependency inject this
         self.arg_parser = ExperimentArgParser(
-            name=self.namespace,
-            path=self.path,
-            description=self.description
+            name=self.namespace, path=self.path, description=self.description
         )
 
     def read_parameters(self, path: str) -> None:
-        with open(path, mode='r') as file:
+        with open(path) as file:
             content = file.read()
 
-        if path.endswith('.json'):
+        if path.endswith(".json"):
             self.load_parameters_json(content)
 
-        if path.endswith('.py'):
+        if path.endswith(".py"):
             self.load_parameters_py(content)
 
     def load_parameters_json(self, content: str) -> None:
@@ -944,7 +959,7 @@ class Experiment(AbstractExperiment):
     def prepare_path(self) -> None:
         # ~ Make sure the path exists
         # If the nested structure provided by "self.namespace" does not exist, we create it here
-        current_path = ''
+        current_path = ""
         for name in pathlib.Path(self.path).parts:
             current_path = os.path.join(current_path, name)
             if not os.path.exists(current_path):
@@ -958,27 +973,31 @@ class Experiment(AbstractExperiment):
 
     def open(self, name: str, mode: str = "w"):
         file_path = os.path.join(self.path, name)
-        self.data['artifacts'][name] = file_path
+        self.data["artifacts"][name] = file_path
         return open(file_path, mode=mode)
 
     def commit_raw(self, name: str, content: str) -> None:
         with self.open(name) as file:
             file.write(content)
 
-    def commit_fig(self, name: str, fig: object, bbox_inches='tight', pad_inches=0.05) -> None:
-        with self.open(name, mode='wb') as file:
-            _, fig_format = name.split('.')
-            fig.savefig(file, format=fig_format, bbox_inches=bbox_inches, pad_inches=pad_inches)
+    def commit_fig(
+        self, name: str, fig: object, bbox_inches="tight", pad_inches=0.05
+    ) -> None:
+        with self.open(name, mode="wb") as file:
+            _, fig_format = name.split(".")
+            fig.savefig(
+                file, format=fig_format, bbox_inches=bbox_inches, pad_inches=pad_inches
+            )
 
     def commit_json(self, name: str, data: dict, indent: int = 4) -> None:
-        with self.open(name, mode='w') as file:
+        with self.open(name, mode="w") as file:
             json.dump(data, file, indent=4)
 
     def write_path(self, path: str) -> None:
-        with open(path, mode='w') as file:
+        with open(path, mode="w") as file:
             file.write(self.path)
 
-    def __enter__(self) -> 'Experiment':
+    def __enter__(self) -> "Experiment":
         super(Experiment, self).__enter__()
         self.args = self.arg_parser.parse_args()
 
@@ -1003,7 +1022,7 @@ class Experiment(AbstractExperiment):
         self.data["monitoring"] = {}
 
         # ~ logging the experiment start
-        template = TEMPLATE_ENV.get_template('experiment_started.text.j2')
+        template = TEMPLATE_ENV.get_template("experiment_started.text.j2")
         self.info_lines(template.render(experiment=self))
 
         # ~ Copying the file dependencies into the archive folder
@@ -1011,13 +1030,15 @@ class Experiment(AbstractExperiment):
         # archive folder of the current experiment run. The purpose of those "dependency" files is the
         # reproducibility of the "snapshot" within that archive folder. These files are potentially files
         # which are needed by the folder.
-        self.meta['dependency_paths'] = {}
+        self.meta["dependency_paths"] = {}
         for name, dependency_path in self.dependency_paths.items():
             if not os.path.exists(dependency_path):
-                raise FileNotFoundError(f'You have specified "{name}"("{dependency_path}") '
-                                        f'as a dependency for the experiment. '
-                                        f'That path does not exist! Please make sure that the '
-                                        f'path exists so it can be copied into the archive folder!')
+                raise FileNotFoundError(
+                    f'You have specified "{name}"("{dependency_path}") '
+                    f"as a dependency for the experiment. "
+                    f"That path does not exist! Please make sure that the "
+                    f"path exists so it can be copied into the archive folder!"
+                )
 
             file_name = os.path.basename(dependency_path)
             destination_path = os.path.join(self.path, file_name)
@@ -1027,11 +1048,11 @@ class Experiment(AbstractExperiment):
             elif os.path.isdir(dependency_path):
                 shutil.copytree(dependency_path, destination_path)
 
-            self.meta['dependency_paths'][name] = destination_path
+            self.meta["dependency_paths"][name] = destination_path
 
         # ~ Creating meta file
-        self.meta['running'] = True
-        self.meta['start_time'] = start_time
+        self.meta["running"] = True
+        self.meta["start_time"] = start_time
         self.status(log=False)
         self.save_experiment_meta()
 
@@ -1049,9 +1070,9 @@ class Experiment(AbstractExperiment):
             self.load_records()
             return True
 
-        self.data['end_time'] = time.time()
-        self.data['elapsed_time'] = self.data['end_time'] - self.data['start_time']
-        self.data['duration'] = self.data['elapsed_time']
+        self.data["end_time"] = time.time()
+        self.data["elapsed_time"] = self.data["end_time"] - self.data["start_time"]
+        self.data["duration"] = self.data["elapsed_time"]
 
         if isinstance(exc_value, Exception):
             self.save_experiment_error(exc_value, exc_tb)
@@ -1067,13 +1088,13 @@ class Experiment(AbstractExperiment):
         self.save_experiment_data()
 
         # ~ Updating meta file
-        self.meta['running'] = False
-        self.meta['end_time'] = self.data['end_time']
-        self.meta['duration'] = self.data['duration']
+        self.meta["running"] = False
+        self.meta["end_time"] = self.data["end_time"]
+        self.meta["duration"] = self.data["duration"]
         self.save_experiment_meta()
 
         # ~ logging the experiment end
-        template = TEMPLATE_ENV.get_template('experiment_ended.text.j2')
+        template = TEMPLATE_ENV.get_template("experiment_ended.text.j2")
         self.info_lines(template.render(experiment=self))
 
         return True
@@ -1103,7 +1124,9 @@ class Experiment(AbstractExperiment):
 
     def save_experiment_error(self, exception_value, exception_traceback) -> None:
         with open(self.error_path, mode="w") as file:
-            file.write(f"{exception_value.__class__.__name__.upper()}: {exception_value}")
+            file.write(
+                f"{exception_value.__class__.__name__.upper()}: {exception_value}"
+            )
             file.write("\n\n")
             tb = traceback.format_tb(exception_traceback)
             file.writelines(tb)
@@ -1112,7 +1135,7 @@ class Experiment(AbstractExperiment):
         self.info("\n".join(tb))
 
     def render_templates(self):
-        self.data['artifacts']['templates'] = {}
+        self.data["artifacts"]["templates"] = {}
         for file_name in self.templates.keys():
             self.render_template(file_name)
 
@@ -1131,24 +1154,22 @@ class Experiment(AbstractExperiment):
         mem = psutil.virtual_memory()
         store = psutil.disk_usage(self.path)
         update = {
-            'ts': ts,
-            'cpu': psutil.cpu_percent(0.1),
-            'memory': {
-                'total': mem.total / 1024**3,
-                'free': mem.free / 1024**3,
+            "ts": ts,
+            "cpu": psutil.cpu_percent(0.1),
+            "memory": {
+                "total": mem.total / 1024**3,
+                "free": mem.free / 1024**3,
             },
-            'storage': {
-                'total': store.total / 1024**3,
-                'free': store.free / 1024**3,
-            }
+            "storage": {
+                "total": store.total / 1024**3,
+                "free": store.free / 1024**3,
+            },
         }
-        self.data['monitoring'][ts] = update
+        self.data["monitoring"][ts] = update
 
         return update
 
-    def status(self,
-               log: bool = True
-               ) -> None:
+    def status(self, log: bool = True) -> None:
         """
         This function primarily updates the metadata of the experiment such as the total runtime up to
         that point as well as some hardware information such as the CPU and RAM usage.
@@ -1160,11 +1181,11 @@ class Experiment(AbstractExperiment):
         # Updating all the hardware monitoring
         monitoring = self.update_monitoring()
 
-        self.meta['elapsed_time'] = time.time() - self.meta['start_time']
-        self.meta['monitoring'] = monitoring
+        self.meta["elapsed_time"] = time.time() - self.meta["start_time"]
+        self.meta["monitoring"] = monitoring
 
         if log:
-            template = TEMPLATE_ENV.get_template('experiment_status.text.j2')
+            template = TEMPLATE_ENV.get_template("experiment_status.text.j2")
             self.info_lines(template.render(experiment=self))
 
         self.save_experiment_meta()
@@ -1173,28 +1194,31 @@ class Experiment(AbstractExperiment):
 
     @property
     def start_time_pretty(self) -> str:
-        start_datetime = datetime.fromtimestamp(self.data['start_time'])
+        start_datetime = datetime.fromtimestamp(self.data["start_time"])
         return start_datetime.strftime(self.DATETIME_FORMAT)
 
     @property
     def end_time_pretty(self) -> str:
-        if 'end_time' not in self.data:
-            raise AttributeError('The experiment appears to still be running, which means there is no '
-                                 '"end_time" that can be accessed yet!')
+        if "end_time" not in self.data:
+            raise AttributeError(
+                "The experiment appears to still be running, which means there is no "
+                '"end_time" that can be accessed yet!'
+            )
 
-        end_datetime = datetime.fromtimestamp(self.data['end_time'])
+        end_datetime = datetime.fromtimestamp(self.data["end_time"])
         return end_datetime.strftime(self.DATETIME_FORMAT)
 
 
 class SubExperiment(AbstractExperiment):
 
-    def __init__(self,
-                 experiment_path: str,
-                 base_path: str,
-                 namespace: str,
-                 glob: dict,
-                 inherit_namespace: bool = False,
-                 ):
+    def __init__(
+        self,
+        experiment_path: str,
+        base_path: str,
+        namespace: str,
+        glob: dict,
+        inherit_namespace: bool = False,
+    ):
         super(SubExperiment, self).__init__(
             base_path=base_path,
             namespace=namespace,
@@ -1231,20 +1255,20 @@ class SubExperiment(AbstractExperiment):
             # This method will place the local dict "data" which contains the updated experiment information
             # into the global experiment data exchange object keyed with the name of the experiment module's
             # path, so that the parent experiment can access that data during it's __enter__ operation.
-            data = {'glob': {'__name__': '__import__'}}
+            data = {"glob": {"__name__": "__import__"}}
             self.experiment_exchange.request(self.experiment_path, data=data)
 
             # This method will dynamically import the experiment given by self.experiment_path
             module = self.dynamic_import_experiment()
 
-            experiment = getattr(module, '__experiment__')
+            experiment = module.__experiment__
             self.update(experiment)
 
         # Only after we did that we call the functionality of AbstractExperiment which would then
         # ultimately trigger the context skip if it was truly being just imported.
         return super(SubExperiment, self).__enter__()
 
-    def get_clean_glob(self) -> t.Dict[str, t.Any]:
+    def get_clean_glob(self) -> dict[str, t.Any]:
         """
         Returns the *cleaned* version of the current globals dictionary ``self.glob``.
 
@@ -1256,7 +1280,7 @@ class SubExperiment(AbstractExperiment):
             # Added __file__ to the list of special values we want to copy, because with that we fix the
             # bug that the copied snapshot file is not actually indeed the sub experiment but the base
             # experiment.
-            if key in ['__name__', '__file__'] or key.isupper():
+            if key in ["__name__", "__file__"] or key.isupper():
                 cleaned[key] = value
 
         return cleaned
@@ -1274,20 +1298,22 @@ class SubExperiment(AbstractExperiment):
             self.experiment_path = os.path.join(self.path, self.experiment_name)
 
             if not os.path.exists(self.experiment_path):
-                raise FileNotFoundError(f'The base experiment "{self.experiment_name}" defined for this '
-                                        f'sub experiment could not be found at the provided location '
-                                        f'{experiment_path}! Please make sure to provide a valid path to '
-                                        f'an existing base experiment module!')
+                raise FileNotFoundError(
+                    f'The base experiment "{self.experiment_name}" defined for this '
+                    f"sub experiment could not be found at the provided location "
+                    f"{experiment_path}! Please make sure to provide a valid path to "
+                    f"an existing base experiment module!"
+                )
 
         data = {
-            'glob': self.get_clean_glob(),
-            'hooks': self.hooks,
+            "glob": self.get_clean_glob(),
+            "hooks": self.hooks,
         }
         # If the flag "inherit_namespace" is set then we want to execute the parent experiment with the
         # original namespace and base path instead of using the one defined for the sub experiment.
         if not self.inherit_namespace:
-            data['base_path'] = self.base_path
-            data['namespace'] = self.namespace
+            data["base_path"] = self.base_path
+            data["namespace"] = self.namespace
 
         # This method will place the local dict "data" which contains the updated experiment information
         # into the global experiment data exchange object keyed with the name of the experiment module's
@@ -1302,7 +1328,7 @@ class SubExperiment(AbstractExperiment):
         # our own internal state. This essentially accomplishes the magic that after the context manager
         # exits the SubExperiment essentially has the same content as if it was the parent experiment which
         # was just executed.
-        experiment = getattr(module, '__experiment__')
+        experiment = module.__experiment__
         self.update(experiment)
 
         # 13.02.2023
@@ -1319,7 +1345,7 @@ class SubExperiment(AbstractExperiment):
         destination_path = os.path.join(self.path, self.experiment_name)
         shutil.copy(self.experiment_path, destination_path)
 
-    def dynamic_import_experiment(self) -> 'ModuleType':
+    def dynamic_import_experiment(self) -> "ModuleType":
         """
         This method dynamically imports the base experiment file which is identified by the absolute path
         given by ``self.experiment_path``. This also means that the top-level code of that module is
@@ -1329,7 +1355,7 @@ class SubExperiment(AbstractExperiment):
         # 24.03.2023 - Added the derivation of the module name, and now we also add that uniquely named
         # module to the sys.modules directory. This is NECESSARY to fix a bug where the "inspect"
         # functionality would not work properly in SubExperiments!
-        module_name = os.path.basename(self.experiment_path).strip('.py')
+        module_name = os.path.basename(self.experiment_path).strip(".py")
         spec = importlib.util.spec_from_file_location(module_name, self.experiment_path)
         module = importlib.util.module_from_spec(spec)
         sys.modules[module_name] = module
@@ -1338,26 +1364,25 @@ class SubExperiment(AbstractExperiment):
         return module
 
 
-def run_experiment(experiment_path: str,
-                   parameters: dict = {},
-                   ) -> AbstractExperiment:
-    """
-
-    """
+def run_experiment(
+    experiment_path: str,
+    parameters: dict = {},
+) -> AbstractExperiment:
+    """ """
     glob = {
         # We need this to make sure that the experiment actually executes.
-        '__name__': '__main__',
-        '__file__': experiment_path,
+        "__name__": "__main__",
+        "__file__": experiment_path,
         # overwriting the default parameters from the original experiment file (optionally)
-        **parameters
+        **parameters,
     }
 
     se = SubExperiment(
         experiment_path=experiment_path,
         glob=glob,
         # With this configuration, the original base path and namespace from the file itself will be used.
-        base_path='',
-        namespace='',
+        base_path="",
+        namespace="",
         inherit_namespace=True,
     )
     with se:
@@ -1366,12 +1391,11 @@ def run_experiment(experiment_path: str,
     return se
 
 
-def run_example(example_name: str,
-                parameters: dict = {},
-                ) -> AbstractExperiment:
-    """
-
-    """
+def run_example(
+    example_name: str,
+    parameters: dict = {},
+) -> AbstractExperiment:
+    """ """
     example_path = os.path.join(EXAMPLES_PATH, example_name)
     return run_experiment(
         experiment_path=example_path,
@@ -1384,16 +1408,15 @@ def run_example(example_name: str,
 
 class ArchivedExperiment:
 
-    def __init__(self,
-                 archive_path: str):
+    def __init__(self, archive_path: str):
         self.path = archive_path
-        self.module_path = os.path.join(self.path, 'snapshot.py')
+        self.module_path = os.path.join(self.path, "snapshot.py")
 
         self.spec = None
         self.module = None
 
     def import_experiment_module(self):
-        self.spec = importlib.util.spec_from_file_location('snapshot', self.module_path)
+        self.spec = importlib.util.spec_from_file_location("snapshot", self.module_path)
         self.module = importlib.util.module_from_spec(self.spec)
         self.spec.loader.exec_module(self.module)
 
@@ -1413,12 +1436,11 @@ class NamespaceFolder:
     class MetaPlaceholder:
         pass
 
-    def __init__(self,
-                 folder_path: str):
+    def __init__(self, folder_path: str):
         self.path = folder_path
-        self.experiments: Dict[str, str] = {}
-        self.experiment_metas: Dict[str, dict] = {}
-        self.experiment_index_map: Dict[int, str] = {}
+        self.experiments: dict[str, str] = {}
+        self.experiment_metas: dict[str, dict] = {}
+        self.experiment_index_map: dict[int, str] = {}
 
         self.meta = self.MetaPlaceholder()
         self.MetaPlaceholder.__contains__ = self.__contains__
@@ -1429,11 +1451,13 @@ class NamespaceFolder:
     def update(self):
         for element_name in os.listdir(self.path):
             element_path = os.path.join(self.path, element_name)
-            if os.path.isdir(element_path) and 'experiment_meta.json' in os.listdir(element_path):
+            if os.path.isdir(element_path) and "experiment_meta.json" in os.listdir(
+                element_path
+            ):
                 self.experiments[element_name] = element_path
 
-                meta_path = os.path.join(element_path, 'experiment_meta.json')
-                with open(meta_path, mode='r') as file:
+                meta_path = os.path.join(element_path, "experiment_meta.json")
+                with open(meta_path) as file:
                     self.experiment_metas[element_name] = json.loads(file.read())
 
                 if element_name.isdigit():
@@ -1456,7 +1480,9 @@ class NamespaceFolder:
             name = self.experiment_index_map[key]
             path = self.experiments[name]
         else:
-            raise TypeError(f'type {type(key)} cannot be used to index {self.__class__.__name__}!')
+            raise TypeError(
+                f"type {type(key)} cannot be used to index {self.__class__.__name__}!"
+            )
 
         archived_experiment = ArchivedExperiment(path)
         return archived_experiment
@@ -1468,16 +1494,16 @@ class NamespaceFolder:
             name = self.experiment_index_map[key]
             meta = self.experiment_metas[name]
         else:
-            raise TypeError(f'type {type(key)} cannot be used to index {self.__class__.__name__}!')
+            raise TypeError(
+                f"type {type(key)} cannot be used to index {self.__class__.__name__}!"
+            )
 
         return meta
 
 
 class ExperimentRegistry:
 
-    def __init__(self,
-                 base_path: str,
-                 max_depth: int = 5):
+    def __init__(self, base_path: str, max_depth: int = 5):
         self.path = base_path
         self.max_depth = max_depth
 
@@ -1486,9 +1512,7 @@ class ExperimentRegistry:
     def load(self):
         self.traverse_folder([], 0)
 
-    def traverse_folder(self,
-                        path_elements: List[str],
-                        recursion_depth: int = 0):
+    def traverse_folder(self, path_elements: list[str], recursion_depth: int = 0):
         if recursion_depth >= self.max_depth:
             return
 
@@ -1501,18 +1525,19 @@ class ExperimentRegistry:
                 # "experiment_meta.json" which identifies it as an experiment archive. That would mean that
                 # the current folder is a namespace folder and needs to be added to the dict. Otherwise
                 # we recurse further into the folder
-                if 'experiment_meta.json' in os.listdir(folder_path):
+                if "experiment_meta.json" in os.listdir(folder_path):
                     # The namespace name in this case is simply the combination of all the sub path sections
                     # we needed to get here except the base path of the registry itself
-                    namespace = '/'.join(path_elements)
+                    namespace = "/".join(path_elements)
                     self.namespaces[namespace] = NamespaceFolder(path)
                     return
 
                 else:
-                    self.traverse_folder(path_elements.copy() + [folder], recursion_depth + 1)
+                    self.traverse_folder(
+                        path_elements.copy() + [folder], recursion_depth + 1
+                    )
 
             return
 
     def __contains__(self, key):
         return key in self.namespaces.keys()
-

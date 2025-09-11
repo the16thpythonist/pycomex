@@ -6,7 +6,7 @@ build-backend = "hatchling.build"
 # Project Metadata
 # ================
 name = "pycomex"
-version = "0.19.1"
+version = "0.20.0"
 description = "Python Computational Experiments"
 readme = "README.rst"
 authors = [
@@ -54,6 +54,7 @@ dependencies = [
     "uv>=0.4.0,<0.5.0",
     "prettytable>=3.7.0,<4.0.0",
     "setuptools<=81.0.0",
+    "joblib>=1.2.0,<2.0.0",
 ]
 
 [project.optional-dependencies]
@@ -62,11 +63,9 @@ dev = [
     "black>=24.3,<25.0",
     "ruff>=0.2,<0.3",
     "mkdocs-material>=9.5,<10.0",
-]
-test = [
     "pytest>=7.0,<8.0",
     "pytest-cov>=4.0,<5.0",
-    "nox>=2023.4,<2025.0",
+    "nox[uv]>=2025.0,<2026.0",
 ]
 
 [project.urls]
@@ -97,7 +96,7 @@ skip_excluded_dirs = true
 # ===============
 
 [tool.bumpversion]
-current_version = "0.19.1"
+current_version = "0.20.0"
 parse = "(?<![=<>])(?P<major>\\d+)\\.(?P<minor>\\d+)\\.(?P<patch>\\d+)"
 serialize = ["{major}.{minor}.{patch}"]
 search = "{current_version}"

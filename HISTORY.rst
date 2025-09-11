@@ -460,3 +460,23 @@ Tests
 
 - Fixed the unittests which were broken
 - Updated the `noxfile.py` to use `uv` instead of `poetry`
+
+0.19.2 (10.09.2025)
+-------------------
+
+- Fixed some problems and styling with the `render_latex_table` util function
+
+0.20.0 (11.09.2025)
+-------------------
+
+- Added the `ExperimentCache` class which can be used to cache the results of expensive function calls 
+  within an experiment. The cache is stored in the experiment archive folder and can be configured to 
+  use different backends such as `joblib` or `pickle`.
+- Added the `Experiment.cache.cached` decorator which can be used to easily cache the results of a function 
+  within an experiment implementation.
+- Added the example `10_caching.py` which demonstrates the caching functionality.
+- Applied Ruff formatting
+
+Tests
+
+- Added unittests for the caching functionality

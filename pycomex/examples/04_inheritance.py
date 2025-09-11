@@ -11,14 +11,16 @@ same as a regular experiment for most cases, but takes another argument
 which is the absolute string path to the parent experiment module, which
 will then be executed.
 """
+
 import os
 import pathlib
 import random
 import tempfile
+
 from pycomex.experiment import SubExperiment
-from pycomex.util import Skippable
 from pycomex.functional.experiment import Experiment
-from pycomex.utils import folder_path, file_namespace
+from pycomex.util import Skippable
+from pycomex.utils import file_namespace, folder_path
 
 # (1) One of the major features of experiment inheritance is the possibility
 #     to overwrite the global parameters (upper case variables in global scope)
@@ -33,10 +35,10 @@ NUM_WORDS = 500
 #     path to another, existing, experiment module that will be used as
 #     the basis
 experiment = Experiment.extend(
-    '03_analysing.py',
+    "03_analysing.py",
     base_path=folder_path(__file__),
     namespace=file_namespace(__file__),
-    glob=globals()
+    glob=globals(),
 )
 
 # (3) Sub experiment implementation rely on so-called hooks. In the base experiment
@@ -53,9 +55,9 @@ experiment = Experiment.extend(
 #       on how the individual hooks were set up in the parent experiment.
 
 
-@experiment.hook('filter_words')
+@experiment.hook("filter_words")
 def remove_random_words(e, words):
-    e.log('removing 10 random words')
+    e.log("removing 10 random words")
     indices = list(range(len(words)))
     remove_indices = random.sample(indices, k=10)
     for index in remove_indices:
@@ -66,17 +68,17 @@ def remove_random_words(e, words):
     return words
 
 
-@experiment.hook('after_experiment')
+@experiment.hook("after_experiment")
 def after_experiment(e):
-    e.log('We can even use the logging here!')
+    e.log("We can even use the logging here!")
 
     # We can simply access all the parameters which have been defined in either
     # beginnings of the experiment modules simply through the main experiment
     # instance "e"
-    e.log(f'Number of repetitions done: {e.REPETITIONS}')
+    e.log(f"Number of repetitions done: {e.REPETITIONS}")
 
     # And we can assign / modify the contents of the experiment data store
-    e['message'] = 'hello from sub experiment!'
+    e["message"] = "hello from sub experiment!"
 
 
 # (4) Analysis extensions:
@@ -88,7 +90,7 @@ def after_experiment(e):
 @experiment.analysis
 def analysis(e):
     # We can also add additional analysis in the sub experiments!
-    e.log('hello from sub experiment analysis!')
+    e.log("hello from sub experiment analysis!")
 
 
 experiment.run_if_main()

@@ -21,6 +21,34 @@ source .venv/bin/activate
 
 Docstrings should use the ReStructuredText (reST) format. This is important for generating documentation and for consistency across the codebase. Docstrings should always start with a one-line summary followed by a more detailed paragraph - also including usage examples, for instance. If appropriate, docstrings should not only describe a method or function but also shed some light on the design rationale.
 
+Documentation should also be *appropriate* in length. For simple functions, a brief docstring is sufficient. For more complex functions or classes, more detailed explanations and examples should be provided.
+
+An example docstring may look like this:
+
+```python
+
+def multiply(a: int, b: int) -> int:
+    """
+    Multiply two integers `a` and `b`.
+
+    This function takes two integers as input and returns their product.
+
+    Example:
+    
+    ... code-block:: python
+
+        result = multiply(3, 4)
+        print(result)  # Output: 12
+
+    :param a: The first integer to multiply.
+    :param b: The second integer to multiply.
+
+    :return: The product of the two integers.
+    """
+    return a * b
+
+```
+
 ## Development Commands
 
 ### Testing

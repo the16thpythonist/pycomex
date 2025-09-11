@@ -1,16 +1,16 @@
 import time
-from typing import List, Tuple, Optional
+from typing import List, Optional, Tuple
 
 
 class AbstractWorkTracker:
     def __init__(self, total_work: int):
         self.total_work = total_work
-        self.work_history: List[Tuple[float, float]] = []
+        self.work_history: list[tuple[float, float]] = []
         self.remaining_work = 0
         self.remaining_time = 0
         self.eta = 0
 
-        self.start_time: Optional[float] = None
+        self.start_time: float | None = None
 
     def set_total_work(self, total_work: int):
         self.total_work = total_work
@@ -48,7 +48,10 @@ class NaiveWorkTracker(AbstractWorkTracker):
         # The first duration, which is measured from start time to first work completion
         durations = [self.work_history[0][0] - self.start_time]
 
-        durations += [self.work_history[i + 1][0] - self.work_history[i][0] for i in range(len(self.work_history) - 1)]
+        durations += [
+            self.work_history[i + 1][0] - self.work_history[i][0]
+            for i in range(len(self.work_history) - 1)
+        ]
         avg_duration = sum(durations) / len(durations)
 
         remaining_time = avg_duration * self.remaining_work
