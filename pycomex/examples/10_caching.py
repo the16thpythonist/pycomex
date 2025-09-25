@@ -13,8 +13,7 @@ import time
 
 import numpy as np
 
-from pycomex.functional.experiment import Experiment
-from pycomex.utils import file_namespace, folder_path
+from pycomex import Experiment, file_namespace, folder_path
 
 # Create the experiment with standard configuration using utility functions
 # - folder_path(__file__): Gets the parent directory of this script as base path

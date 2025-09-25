@@ -4,8 +4,7 @@ This doc string will be saved as the "description" meta data of the experiment r
 
 import os
 
-from pycomex.functional.experiment import Experiment
-from pycomex.utils import file_namespace, folder_path
+from pycomex import Experiment, file_namespace, folder_path
 
 # Experiment parameters can simply be defined as uppercase global variables.
 # These are automatically detected and can possibly be overwritten in command

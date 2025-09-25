@@ -21,6 +21,7 @@ from rich.padding import Padding
 from rich.style import Style
 from rich.syntax import Syntax
 from rich.text import Text
+from rich.columns import Columns
 from uv import find_uv_bin
 
 from pycomex.functional.experiment import Experiment, run_experiment
@@ -74,7 +75,6 @@ TEMPLATE_ENV.globals.update(
     }
 )
 
-
 class RichLogo:
     """
     A rich display which will show the ASlurmX logo in ASCII art when printed.
@@ -83,12 +83,20 @@ class RichLogo:
     STYLE = Style(bold=True, color="white")
 
     def __rich_console__(self, console, options):
-        logo_path = os.path.join(TEMPLATE_PATH, "logo.txt")
-        with open(logo_path) as file:
-            logo_string: str = file.read()
-            text = Text(logo_string, style=self.STYLE)
-            pad = Padding(text, (1, 1))
-            yield pad
+        text_path = os.path.join(TEMPLATE_PATH, "logo_text.txt")
+        with open(text_path) as file:
+            text_string: str = file.read()
+            text = Text(text_string, style=self.STYLE)
+            
+        image_path = os.path.join(TEMPLATE_PATH, "logo_image.txt")
+        with open(image_path) as file:
+            image_string: str = file.read()
+            # Replace \e with actual escape character and create Text from ANSI
+            ansi_string = image_string.replace('\\e', '\033')
+            image = Text.from_ansi(ansi_string)
+            
+        side_by_side = Columns([image, text], equal=True, padding=(0, 3))
+        yield Padding(side_by_side, (1, 3, 0, 3))
 
 
 class RichHelp:

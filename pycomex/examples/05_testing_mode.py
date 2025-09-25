@@ -35,8 +35,7 @@ import time
 import matplotlib.pyplot as plt
 import numpy as np
 
-from pycomex.functional.experiment import Experiment
-from pycomex.utils import file_namespace, folder_path
+from pycomex import Experiment, file_namespace, folder_path
 
 # (1)   Often times an experiment includes parameters like this, which for example determine the number
 #       of iterations of a procedure, or the number of elements to load from a dataset etc.

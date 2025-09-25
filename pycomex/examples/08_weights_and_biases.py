@@ -14,9 +14,7 @@ import time
 import matplotlib.pyplot as plt
 import numpy as np
 
-from pycomex.functional.experiment import Experiment
-from pycomex.testing import random_plot
-from pycomex.utils import file_namespace, folder_path
+from pycomex import Experiment, random_plot, file_namespace, folder_path
 
 # :param N_ELEMENTS:
 #      The number of elements to be randomly generated for the scatter plot.

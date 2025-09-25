@@ -17,10 +17,7 @@ import pathlib
 import random
 import tempfile
 
-from pycomex.experiment import SubExperiment
-from pycomex.functional.experiment import Experiment
-from pycomex.util import Skippable
-from pycomex.utils import file_namespace, folder_path
+from pycomex import SubExperiment, Experiment, Skippable, file_namespace, folder_path
 
 # (1) One of the major features of experiment inheritance is the possibility
 #     to overwrite the global parameters (upper case variables in global scope)

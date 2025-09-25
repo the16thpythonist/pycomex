@@ -24,6 +24,8 @@ from pydantic import BaseModel, field_validator
 from pydantic_core.core_schema import FieldValidationInfo
 from rich.console import Console
 from rich.logging import RichHandler
+from rich.panel import Panel
+from rich.pretty import pretty_repr
 from rich.table import Table
 from rich.text import Text
 from rich_argparse import RichHelpFormatter
@@ -34,6 +36,7 @@ from pycomex.functional.cache import ExperimentCache
 from pycomex.functional.parameter import ActionableParameterType
 from pycomex.utils import (
     TEMPLATE_ENV,
+    AnsiSanitizingFormatter,
     CustomJsonEncoder,
     SetArguments,
     dynamic_import,
@@ -232,6 +235,7 @@ class Experiment:
         debug: bool = False,
         name_format: str = "{date}__{time}__{id}",
         notify: bool = True,
+        console_width: int = 120,
     ) -> None:
 
         self.base_path = base_path
@@ -240,6 +244,7 @@ class Experiment:
         self.debug = debug
         self.name_format = name_format
         self.notify = notify
+        self.console_width = console_width
 
         # 26.06.24
         # The config object is a singleton object which is used to store all the configuration information
@@ -250,6 +255,7 @@ class Experiment:
 
         # --- setting up logging ---
         self.log_formatter = logging.Formatter("%(asctime)s - %(message)s")
+        self.log_formatter_file = AnsiSanitizingFormatter("%(asctime)s - %(message)s")
         stream_handler = logging.StreamHandler(sys.stdout)
         # stream_handler = RichHandler(
         #     show_level=False,
@@ -329,6 +335,14 @@ class Experiment:
                     "used as the prefix for the experiment name and not for the actual folder name."
                 ),
             },
+            "__CACHING__": {
+                "type": "bool",
+                "description": (
+                    "Flag to enable or disable the experiment cache system. When False, cached "
+                    "results will not be loaded even if available, forcing recomputation. "
+                    "New results will still be saved to cache unless explicitly configured otherwise."
+                ),
+            },
         }
         # Then we can also set some default values for these special parameters
         self.parameters.update(
@@ -337,6 +351,7 @@ class Experiment:
                 "__TESTING__": False,
                 "__REPRODUCIBLE__": False,
                 "__PREFIX__": "",
+                "__CACHING__": True,
             }
         )
 
@@ -365,6 +380,19 @@ class Experiment:
         # object before actually starting to load the experiment specific attributes.
         self.config.pm.apply_hook("before_experiment_parameters", experiment=self)
 
+        # --- setting up the cache ---
+        # 11.09.25
+        # The experiment cache object will be able to manage the cache folder, which can be used inside of
+        # an experiment implementation to cache intermediate results - that may be extensive to compute -
+        # between individual experiment runs. So if an experiment is executed multiple times and needs to
+        # run the same (part of a) compuation multiple times, it can use the cache to store the results
+        # of that computation and then load it from the cache in subsequent runs.
+        self.cache_path = os.path.join(self.base_path, ".cache")
+        self.cache = ExperimentCache(
+            path=self.cache_path,
+            experiment=self,
+        )
+
         # This method here actually "discovers" all the parameters (=global variables) of the experiment module.
         # It essentially iterates through all the global variables of the given experiment module and then if it finds
         # a parameter (CAPS) it inserts it into the "self.parameters" dictionary of this object.
@@ -392,19 +420,6 @@ class Experiment:
             parameter_metadata=self.metadata["parameters"],
         )
 
-        # --- setting up the cache ---
-        # 11.09.25
-        # The experiment cache object will be able to manage the cache folder, which can be used inside of
-        # an experiment implementation to cache intermediate results - that may be extensive to compute -
-        # between individual experiment runs. So if an experiment is executed multiple times and needs to
-        # run the same (part of a) compuation multiple times, it can use the cache to store the results
-        # of that computation and then load it from the cache in subsequent runs.
-        self.cache_path = os.path.join(self.base_path, ".cache")
-        self.cache = ExperimentCache(
-            path=self.cache_path,
-            experiment=self,
-        )
-
         # This hook can be used to inject additional functionality at the end of the experiment constructor.
         self.config.pm.apply_hook(
             "experiment_constructed",
@@ -425,8 +440,26 @@ class Experiment:
         return names
 
     def update_parameters_special(self):
+        """
+        Process special parameters that have side effects beyond simple value storage.
+
+        Special parameters are those that begin and end with double underscores (e.g., __DEBUG__).
+        These parameters can trigger specific behaviors or modify experiment state when their
+        values change. This method is called after parameter discovery to apply any necessary
+        side effects based on the current parameter values.
+
+        Currently handles:
+        - __DEBUG__: Enables debug mode which affects archive naming
+        - __CACHING__: Controls whether the cache system loads existing cached results
+
+        :returns: None
+        """
         if "__DEBUG__" in self.parameters:
             self.debug = bool(self.parameters["__DEBUG__"])
+
+        if "__CACHING__" in self.parameters:
+            caching_enabled = bool(self.parameters["__CACHING__"])
+            self.cache.set_enabled(caching_enabled)
 
     def update_parameters(self):
         """
@@ -544,22 +577,214 @@ class Experiment:
 
             self.metadata["hooks"][hook]["description"] = description
 
-    # ~ Logging
+    # --- Logging --- 
+    # The following methods are all related to logging information to the experiment log. This 
+    # log will be printed to the console on the one hand but also ends up in a persistent log file 
+    # in the experiment archive folder as well.
 
     def log(self, message: str, **kwargs):
+        """
+        Log a message to both the console and the experiment log file.
+
+        This is the primary logging method that outputs messages to stdout during
+        experiment execution and also saves them to the persistent log file in the
+        experiment archive folder.
+
+        Example:
+
+        .. code-block:: python
+
+            experiment.log("Starting model training...")
+            experiment.log("Epoch 1 completed with loss: 0.123")
+
+        :param message: The message to log.
+        :param kwargs: Additional keyword arguments passed to the logger.
+        """
         self.logger.info(message, **kwargs)
 
     def log_lines(self, lines: list[str]):
+        """
+        Log multiple lines of text, each as a separate log entry.
+
+        This method is convenient for logging multiple related messages at once,
+        such as the output from a subprocess or a list of status updates.
+
+        Example:
+
+        .. code-block:: python
+
+            status_lines = [
+                "Model initialization complete",
+                "Loading training data",
+                "Starting training loop"
+            ]
+            experiment.log_lines(status_lines)
+
+        :param lines: List of strings, each to be logged as a separate message.
+        """
         for line in lines:
             self.log(line)
 
-    def log_parameters(self):
+    def _create_experiment_start_panel(self) -> Panel:
+        """
+        Create a Rich panel for experiment start information.
 
-        template = TEMPLATE_ENV.get_template("experiment_parameters.text.j2")
-        string = template.render({"parameters": self.parameters})
-        self.log(string)
+        :returns: Rich Panel with experiment start details
+        """
+        start_time = datetime.datetime.fromtimestamp(self.metadata['start_time'])
 
-    # ~ Hook System
+        content_lines = [
+            f"[bold cyan]Namespace:[/bold cyan] {self.namespace}",
+            f"[bold cyan]Start Time:[/bold cyan] {start_time.strftime('%Y-%m-%d %H:%M:%S')}",
+            f"[bold cyan]Archive Path:[/bold cyan] {self.path}",
+            f"[bold cyan]Debug Mode:[/bold cyan] {self.debug}",
+            f"[bold cyan]Parameters:[/bold cyan] {len(self.parameters)} total",
+        ]
+
+        # Add Python version and platform info
+        content_lines.extend([
+            f"[bold cyan]Python Version:[/bold cyan] {sys.version.split()[0]}",
+            f"[bold cyan]Platform:[/bold cyan] {sys.platform}",
+        ])
+
+        content = "\n".join(content_lines)
+
+        return Panel(
+            content,
+            title="🚀 [bold green]EXPERIMENT STARTED[/bold green]",
+            border_style="green",
+            padding=(1, 2),
+            expand=True,
+            width=self.console_width
+        )
+
+    def _create_experiment_end_panel(self) -> Panel:
+        """
+        Create a Rich panel for experiment end information.
+
+        :returns: Rich Panel with experiment end details
+        """
+        start_time = datetime.datetime.fromtimestamp(self.metadata['start_time'])
+        end_time = datetime.datetime.fromtimestamp(self.metadata['end_time'])
+        duration_hrs = self.metadata['duration'] / 3600
+        duration_mins = self.metadata['duration'] / 60
+
+        # Format duration nicely
+        if duration_hrs >= 1:
+            duration_str = f"{duration_hrs:.2f} hours"
+        elif duration_mins >= 1:
+            duration_str = f"{duration_mins:.1f} minutes"
+        else:
+            duration_str = f"{self.metadata['duration']:.1f} seconds"
+
+        content_lines = [
+            f"[bold cyan]Duration:[/bold cyan] {duration_str}",
+            f"[bold cyan]Start Time:[/bold cyan] {start_time.strftime('%Y-%m-%d %H:%M:%S')}",
+            f"[bold cyan]End Time:[/bold cyan] {end_time.strftime('%Y-%m-%d %H:%M:%S')}",
+            f"[bold cyan]Error Occurred:[/bold cyan] {'Yes' if self.error else 'No'}",
+            f"[bold cyan]Parameters Count:[/bold cyan] {len(self.parameters)}",
+        ]
+
+        # Add data size information if available
+        try:
+            if os.path.exists(self.data_path):
+                data_size = os.path.getsize(self.data_path)
+                if data_size >= 1024 * 1024:  # MB
+                    size_str = f"{data_size / (1024 * 1024):.1f} MB"
+                elif data_size >= 1024:  # KB
+                    size_str = f"{data_size / 1024:.1f} KB"
+                else:
+                    size_str = f"{data_size} bytes"
+                content_lines.append(f"[bold cyan]Data Size:[/bold cyan] {size_str}")
+        except (OSError, AttributeError):
+            pass
+
+        content = "\n".join(content_lines)
+
+        # Choose panel style based on whether there was an error
+        if self.error:
+            title = "❌ [bold red]EXPERIMENT ENDED (WITH ERROR)[/bold red]"
+            border_style = "red"
+        else:
+            title = "✅ [bold green]EXPERIMENT COMPLETED[/bold green]"
+            border_style = "green"
+
+        return Panel(
+            content,
+            title=title,
+            border_style=border_style,
+            padding=(1, 2),
+            expand=True,
+            width=self.console_width
+        )
+
+    def log_parameters(self, parameters: Optional[List[str]] = None):
+        """
+        Log either all parameters of the experiment or only those specified in the parameters list.
+
+        Each parameter is logged in the format " * {parameter_name}: {parameter_value}".
+        Complex objects are safely converted to string representations to avoid logging issues.
+
+        Example:
+
+        .. code-block:: python
+
+            # Log all parameters
+            experiment.log_parameters()
+
+            # Log only specific parameters
+            experiment.log_parameters(['LEARNING_RATE', 'BATCH_SIZE'])
+
+        :param parameters: Optional list of parameter names to log. If None, all parameters are logged.
+        """
+        if parameters is None:
+            # Log all parameters
+            params_to_log = self.parameters
+        else:
+            # Log only specified parameters
+            params_to_log = {name: self.parameters[name] for name in parameters if name in self.parameters}
+
+        for param_name, param_value in params_to_log.items():
+            try:
+                # Try to convert to string safely
+                if isinstance(param_value, (str, int, float, bool, type(None))):
+                    # Simple types can be logged directly
+                    value_str = str(param_value)
+                else:
+                    # Complex objects - use repr for safer string conversion
+                    value_str = repr(param_value)
+                    # Truncate very long representations
+                    if len(value_str) > 200:
+                        value_str = value_str[:197] + "..."
+            except Exception:
+                # Fallback for objects that can't be converted safely
+                value_str = f"<{type(param_value).__name__} object>"
+
+            self.log(f" * {param_name}: {value_str}")
+
+    def log_pretty(self, value: Any):
+        """
+        Log a pretty formatted representation of a data structure using rich.pretty.
+
+        This method formats complex data structures in a readable way and logs them
+        to the experiment output.
+
+        Example:
+
+        .. code-block:: python
+
+            data = {"metrics": {"accuracy": 0.95, "loss": 0.05}, "config": {"lr": 0.001}}
+            experiment.log_pretty(data)
+
+        :param value: The data structure to log in pretty format.
+        """
+        pretty_string = pretty_repr(value)
+        self.log(pretty_string)
+
+    # --- Hook System ---
+    # The following methods are related to the hook system of the experiment object, where it 
+    # it possible to attach new functions to the experiemnt object which may be overwritten by 
+    # subsequent sub-experiment implementations.
 
     def hook(self, name: str, replace: bool = True, default: bool = True):
         """
@@ -739,7 +964,7 @@ class Experiment:
 
         # ~ creating the log file
         file_handler = logging.FileHandler(self.log_path)
-        file_handler.setFormatter(self.log_formatter)
+        file_handler.setFormatter(self.log_formatter_file)
         self.logger.addHandler(file_handler)
 
         # ~ creating the track path
@@ -761,8 +986,12 @@ class Experiment:
         self.save_analysis()
 
         # ~ logging the start conditions
-        template = TEMPLATE_ENV.get_template("functional_experiment_start.out.j2")
-        self.log_lines(template.render({"experiment": self}).split("\n"))
+        start_panel = self._create_experiment_start_panel()
+        # Render the panel to string for proper console and log file display
+        console = Console(file=None, width=self.console_width)
+        with console.capture() as capture:
+            console.print(start_panel)
+        self.log_lines(capture.get().split('\n'))
 
     def finalize(self) -> None:
         """
@@ -789,8 +1018,12 @@ class Experiment:
             self.log_lines(template.render({"experiment": self}).split("\n"))
 
         # ~ logging the end conditions
-        template = TEMPLATE_ENV.get_template("functional_experiment_end.out.j2")
-        self.log_lines(template.render({"experiment": self}).split("\n"))
+        end_panel = self._create_experiment_end_panel()
+        # Render the panel to string for proper console and log file display
+        console = Console(file=None, width=self.console_width)
+        with console.capture() as capture:
+            console.print(end_panel)
+        self.log_lines(capture.get().split('\n'))
 
         # ~ potentially packaging reproducible information
         # The "finalize_reproducible" method wraps all the functionality to package the reproduction information
@@ -1359,6 +1592,9 @@ class Experiment:
             # we now also want that value to be exported to the metadata file as well!
             if key in self.metadata["parameters"]:
                 self.metadata["parameters"][key]["value"] = value
+
+            # Apply special parameter side effects (e.g., updating cache enabled state)
+            self.update_parameters_special()
 
         else:
             super(Experiment, self).__setattr__(key, value)

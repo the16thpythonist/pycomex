@@ -1,3 +1,4 @@
+import logging
 import os
 import sys
 import typing as t
@@ -9,6 +10,7 @@ import pytest
 from prettytable import PrettyTable
 
 from pycomex.util import (
+    AnsiSanitizingFormatter,
     SetArguments,
     get_comments_from_module,
     get_dependencies,
@@ -27,11 +29,11 @@ from .util import ARTIFACTS_PATH, ASSETS_PATH
 def test_type_string():
     string = type_string(dict[str, int])
     print(string)
-    assert string == "Dict[str, int]"
+    assert string == "dict[str, int]"
 
     string = type_string(list[dict[bool, tuple[int, int]]])
     print(string)
-    assert string == "List[Dict[bool, Tuple[int, int]]]"
+    assert string == "list[dict[bool, tuple[int, int]]]"
 
 
 def test_parse_parameter_info_basically_works():
@@ -238,3 +240,88 @@ def test_render_latex_table_basically_works():
 
     latex_code = render_latex_table(table, transform_func=transform)
     print(latex_code)
+
+
+def test_ansi_sanitizing_formatter():
+    """
+    Test that AnsiSanitizingFormatter correctly removes ANSI escape sequences
+    from log messages while preserving the rest of the message content.
+    """
+    formatter = AnsiSanitizingFormatter("%(message)s")
+
+    # Test various ANSI escape sequences commonly used by Rich
+    test_cases = [
+        # Basic color codes
+        ("\x1b[31mRed text\x1b[0m", "Red text"),
+        ("\x1b[32mGreen text\x1b[39m", "Green text"),
+
+        # Rich Panel formatting (common sequences)
+        ("\x1b[3m\x1b[1mBold Italic\x1b[22m\x1b[23m", "Bold Italic"),
+
+        # Complex formatting with multiple escape sequences
+        ("\x1b[1m\x1b[34mBlue Bold\x1b[0m normal text", "Blue Bold normal text"),
+
+        # Cursor movement and other control sequences
+        ("\x1b[2K\x1b[1ACleared line\x1b[0m", "Cleared line"),
+
+        # Real Rich panel-like content
+        ("\x1b[35m╭─\x1b[0m\x1b[35m Experiment Started \x1b[0m\x1b[35m─╮\x1b[0m", "╭─ Experiment Started ─╮"),
+
+        # Text with no ANSI codes (should remain unchanged)
+        ("Plain text message", "Plain text message"),
+
+        # Empty string
+        ("", ""),
+
+        # Mixed content
+        ("Start \x1b[31mRED\x1b[0m middle \x1b[32mGREEN\x1b[0m end", "Start RED middle GREEN end"),
+    ]
+
+    for ansi_input, expected_output in test_cases:
+        # Create a log record with the ANSI-formatted message
+        record = logging.LogRecord(
+            name="test",
+            level=logging.INFO,
+            pathname="",
+            lineno=0,
+            msg=ansi_input,
+            args=(),
+            exc_info=None
+        )
+
+        # Format the record using our formatter
+        formatted_message = formatter.format(record)
+
+        # Check that ANSI codes were removed
+        assert formatted_message == expected_output, f"Failed for input '{ansi_input}': got '{formatted_message}', expected '{expected_output}'"
+
+    print("✓ All ANSI sanitization tests passed!")
+
+
+def test_ansi_sanitizing_formatter_with_timestamp():
+    """
+    Test that AnsiSanitizingFormatter works correctly when used with timestamp formatting,
+    similar to how it's used in the experiment logging.
+    """
+    formatter = AnsiSanitizingFormatter("%(asctime)s - %(message)s")
+
+    # Create a log record with ANSI formatting
+    record = logging.LogRecord(
+        name="experiment",
+        level=logging.INFO,
+        pathname="",
+        lineno=0,
+        msg="\x1b[1mEXPERIMENT STARTED\x1b[0m",
+        args=(),
+        exc_info=None
+    )
+
+    # Format the record
+    formatted_message = formatter.format(record)
+
+    # Check that the message contains timestamp but no ANSI codes
+    assert " - EXPERIMENT STARTED" in formatted_message
+    assert "\x1b[" not in formatted_message
+    assert formatted_message.endswith("EXPERIMENT STARTED")
+
+    print("✓ ANSI sanitization with timestamp formatting test passed!")

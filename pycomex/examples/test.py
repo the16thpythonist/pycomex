@@ -14,8 +14,7 @@ import os
 import tempfile
 from typing import *
 
-from pycomex.functional.experiment import Experiment
-from pycomex.utils import file_namespace, folder_path
+from pycomex import Experiment, file_namespace, folder_path
 
 # == INHERITED PARAMETERS ==
 # The following parameters are inherited from the base experiment.

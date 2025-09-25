@@ -469,10 +469,10 @@ Tests
 0.20.0 (11.09.2025)
 -------------------
 
-- Added the `ExperimentCache` class which can be used to cache the results of expensive function calls 
-  within an experiment. The cache is stored in the experiment archive folder and can be configured to 
+- Added the `ExperimentCache` class which can be used to cache the results of expensive function calls
+  within an experiment. The cache is stored in the experiment archive folder and can be configured to
   use different backends such as `joblib` or `pickle`.
-- Added the `Experiment.cache.cached` decorator which can be used to easily cache the results of a function 
+- Added the `Experiment.cache.cached` decorator which can be used to easily cache the results of a function
   within an experiment implementation.
 - Added the example `10_caching.py` which demonstrates the caching functionality.
 - Applied Ruff formatting
@@ -480,3 +480,58 @@ Tests
 Tests
 
 - Added unittests for the caching functionality
+
+0.21.0 (23.09.2025)
+-------------------
+
+Dependencies
+
+- Extended the support of the package from Python 3.8 to Python 3.12 (previously it was only 3.10+)
+
+Cache Control
+
+- Added the ``__CACHING__`` special parameter to control experiment cache behavior. When set to ``False``,
+  the cache system will not load existing cached results, forcing recomputation while still saving new
+  results to cache. Defaults to ``True`` to maintain backward compatibility.
+- Added ``ExperimentCache.set_enabled()`` method to programmatically control cache loading behavior.
+- The ``__CACHING__`` parameter can be changed dynamically during experiment execution and takes effect
+  immediately.
+
+Logging Methods
+
+- Added the `Experiment.log_parameters` method which can be used to log either all experiment parameters
+  or only specific parameters in the format " * {parameter_name}: {parameter_value}". The method includes
+  safeguards for complex objects that cannot be directly logged.
+- Added the `Experiment.log_pretty` method which uses rich.pretty to log pretty formatted representations
+  of complex data structures.
+
+Rich Panel Experiment Logging
+
+- Enhanced experiment start and end logging with Rich panels featuring colored borders, emojis, and improved formatting
+- Replaced plain text templates ``functional_experiment_start.out.j2`` and ``functional_experiment_end.out.j2`` with Rich Panel-based logging
+- Added ``_create_experiment_start_panel()`` method that generates a green-bordered panel with 🚀 emoji showing namespace, start time, archive path, debug mode, parameters count, Python version, and platform information
+- Added ``_create_experiment_end_panel()`` method that generates either a green panel with ✅ emoji (success) or red panel with ❌ emoji (error) showing duration, start/end times, error status, parameters count, and data size
+- Added ``console_width`` parameter to Experiment constructor (default: 120) to control panel width and ensure consistent visual presentation
+- Panels are now forced to use the exact specified console width with ``expand=True`` and ``width`` parameters
+- Duration formatting automatically shows appropriate units (seconds/minutes/hours) based on experiment length
+- Data size is displayed in human-readable format (bytes/KB/MB)
+- Both console output and log files now display properly rendered Rich panels instead of object representations
+
+CLI
+
+- Added A logo image to be printed to the console in ANSII Art
+
+Tests
+
+- Added comprehensive unit tests for both new logging methods
+- Added comprehensive test suite ``TestExperimentRichPanels`` with 8 test cases covering panel creation, console output, log file writing, error handling, duration formatting,
+  and console width customization
+
+Documentation
+
+- Added some more documentation
+  - `docs/introduction.md` - added instructions on the installation and the quickstart guide
+  - `docs/philosophy.md` - added some general information about the philosophy behind the design 
+    of the package.
+  - `docs/basics_hooks.md` - added some more detailed information about the basic usage 
+    of the package and the hook system.

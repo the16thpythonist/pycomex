@@ -85,8 +85,7 @@ Archiving of metadata, file artifacts and error handling is automatically manage
     This doc string will be saved as the "description" meta data of the experiment records
     """
     import os
-    from pycomex.functional.experiment import Experiment
-    from pycomex.utils import folder_path, file_namespace
+    from pycomex import Experiment, folder_path, file_namespace
 
     # Experiment parameters can simply be defined as uppercase global variables.
     # These are automatically detected and can possibly be overwritten in command
@@ -186,7 +185,7 @@ Specifically note these two aspects:
 
     # [...] imports omitted
     from code import *
-    from pycomex.functional.experiment import Experiment
+    from pycomex import Experiment
 
     PATH = pathlib.Path(__file__).parent.absolute()
     # "Experiment.load" is used to load the the experiment data from the

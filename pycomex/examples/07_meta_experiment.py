@@ -24,8 +24,7 @@ import os
 import pathlib
 import typing as t
 
-from pycomex.functional.experiment import Experiment, get_experiment
-from pycomex.utils import file_namespace, folder_path, random_string
+from pycomex import Experiment, get_experiment, file_namespace, folder_path, random_string
 
 PATH = pathlib.Path(__file__).parent.absolute()
 

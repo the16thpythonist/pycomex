@@ -85,6 +85,27 @@ class CustomJsonEncoder(json.encoder.JSONEncoder):
         return super().default(value)
 
 
+class AnsiSanitizingFormatter(logging.Formatter):
+    """
+    Custom logging formatter that removes ANSI escape codes from log messages.
+
+    This formatter is designed to be used with file handlers to ensure that
+    log files contain clean text without ANSI color codes and formatting,
+    while preserving the original formatting for console output.
+    """
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Regex pattern to match ANSI escape sequences
+        self.ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
+
+    def format(self, record):
+        # Get the formatted message from the parent formatter
+        formatted_message = super().format(record)
+        # Remove ANSI escape codes
+        return self.ansi_escape.sub('', formatted_message)
+
+
 # == CUSTOM JINJA FILTERS ==
 
 

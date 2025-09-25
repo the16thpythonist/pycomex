@@ -16,8 +16,7 @@ import textwrap
 import typing as t
 import urllib.request
 
-from pycomex.functional.experiment import Experiment
-from pycomex.utils import file_namespace, folder_path
+from pycomex import Experiment, file_namespace, folder_path
 
 # :param NUM_WORDS:
 #       This is the number of words to be generated each time

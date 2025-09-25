@@ -16,8 +16,7 @@ import tempfile
 import textwrap
 import urllib.request
 
-from pycomex.functional.experiment import Experiment
-from pycomex.utils import file_namespace, folder_path
+from pycomex import Experiment, file_namespace, folder_path
 
 # (1) All variables defined in uppercase are automatically detected as experiment
 #     variables and can be overwritten when externally executing the experiment

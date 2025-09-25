@@ -1,7 +1,7 @@
 import os
 import pathlib
 
-from pycomex.cli import ExperimentCLI
+from pycomex import ExperimentCLI
 
 PATH = pathlib.Path(__file__).parent.absolute()
 

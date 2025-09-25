@@ -209,10 +209,22 @@ class ExperimentCache:
         self.path = path
         self.experiment = experiment
         self.compress = compress
+        self.enabled = True  # Cache is enabled by default
 
         # We want to make sure that this path actually exists on the disk and if it does not
         # we want ot create it.
         os.makedirs(self.path, exist_ok=True)
+
+    def set_enabled(self, enabled: bool) -> None:
+        """Enable or disable cache loading.
+
+        When disabled, the cache will not load existing cached results, forcing
+        recomputation. New results will still be saved to cache.
+
+        :param enabled: True to enable cache loading, False to disable
+        :type enabled: bool
+        """
+        self.enabled = enabled
 
     def _compress_file(self, file_path: str) -> bool:
         """Compress a file using pigz (parallelized gzip) or fallback to gzip.
@@ -362,12 +374,14 @@ class ExperimentCache:
                 # --- Try to load from cache ---
                 # This is the whole point of the cache. If the entity is already cached on the disk
                 # we dont even execute the function but rather load the data from the disk.
-                try:
-                    result = self.load(name=name, scope=current_scope)
-                    self.experiment.log(f'Loaded "{name}" from cache!')
-                    return result
-                except FileNotFoundError:
-                    pass
+                # However, this is only done if caching is enabled.
+                if self.enabled:
+                    try:
+                        result = self.load(name=name, scope=current_scope)
+                        self.experiment.log(f'Loaded "{name}" from cache!')
+                        return result
+                    except FileNotFoundError:
+                        pass
 
                 # --- Call the actual function ---
                 # Only as a fallback option we actually call the function to compute the result.

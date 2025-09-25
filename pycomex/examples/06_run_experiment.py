@@ -5,7 +5,7 @@ This example very simply shows how it is possible to execute an experiment throu
 import os
 import pathlib
 
-from pycomex.functional.experiment import Experiment, get_experiment
+from pycomex import Experiment, get_experiment
 
 PATH = pathlib.Path(__file__).parent.absolute()
 
