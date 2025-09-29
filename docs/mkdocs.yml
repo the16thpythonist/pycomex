@@ -1,17 +1,21 @@
 site_name: pycomex
 site_description: Documentation for the pycomex project
 site_author: Your Name
+docs_dir: docs
 
 theme:
   name: material
   features:
     - content.code.copy
     - content.code.annotate
+    - navigation.expand
+    - toc.integrate
 
 nav:
-  - Home: index.md
   - Introduction: introduction.md
   - Philosophy: philosophy.md
+  - Basics:
+      - Hooks: basics_hooks.md
   - Advanced Usage:
       - Writing Plugins: advanced_plugins.md
       - Plugin Hooks: advanced_hooks.md

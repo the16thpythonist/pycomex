@@ -173,12 +173,12 @@ class RichHelp:
         yield (
             "All experiments that are executed will automatically be archived in a structured way. "
             "The [cyan]archive[/cyan] command group can be used to interact with the archive of completed experiments. "
-            "The [cyan]archive info[/cyan] command can be used to print generic information about the selected archive "
+            "The [cyan]archive overview[/cyan] command can be used to print generic information about the selected archive "
             "folder, for instance."
         )
         yield Padding(
             Syntax(
-                ("pycomex archive info"),
+                ("pycomex archive overview"),
                 lexer="bash",
                 theme="monokai",
                 line_numbers=False,
@@ -380,6 +380,103 @@ class RichExperimentTailInfo:
             if len(short_desc) > 80:
                 short_desc = short_desc[:77] + "..."
             yield f"  [bright_black]{short_desc}[/bright_black]"
+
+
+class RichArchiveInfo:
+
+    def __init__(self, archive_stats: dict):
+        self.stats = archive_stats
+
+    def __rich_console__(
+        self, console: Console, options: ConsoleOptions
+    ) -> RenderResult:
+        import datetime
+
+        # Overview statistics
+        total_experiments = self.stats["total_experiments"]
+        successful_experiments = self.stats["successful_experiments"]
+        failed_experiments = self.stats["failed_experiments"]
+        success_rate = (successful_experiments / total_experiments * 100) if total_experiments > 0 else 0
+
+        overview_content = f"""[bold]Total Experiments:[/bold] {total_experiments}
+[green]✅ Successful:[/green] {successful_experiments} ([green]{success_rate:.1f}%[/green])
+[red]❌ Failed:[/red] {failed_experiments} ([red]{100 - success_rate:.1f}%[/red])"""
+
+        # Add disk space if available
+        if self.stats["total_size_gb"] is not None:
+            overview_content += f"\n[cyan]💾 Estimated Disk Space:[/cyan] {self.stats['total_size_gb']:.2f} GB"
+
+        yield rich.panel.Panel(
+            overview_content,
+            title="📊 Overview",
+            title_align="left",
+            border_style="bright_blue",
+        )
+
+        # Timing statistics
+        timing_content = ""
+        if self.stats["first_experiment_time"]:
+            first_dt = datetime.datetime.fromtimestamp(self.stats["first_experiment_time"])
+            timing_content += f"[bold]First Experiment:[/bold] {first_dt.strftime('%Y-%m-%d %H:%M:%S')}\n"
+
+        if self.stats["last_experiment_time"]:
+            last_dt = datetime.datetime.fromtimestamp(self.stats["last_experiment_time"])
+            timing_content += f"[bold]Last Experiment:[/bold] {last_dt.strftime('%Y-%m-%d %H:%M:%S')}\n"
+
+        if self.stats["avg_duration"] is not None:
+            timing_content += f"[bold]Average Duration:[/bold] {self.stats['avg_duration']:.2f}s\n"
+
+        if self.stats["max_duration"] is not None:
+            timing_content += f"[bold]Max Duration:[/bold] {self.stats['max_duration']:.2f}s\n"
+
+        if self.stats["total_duration"] is not None:
+            total_hours = self.stats['total_duration'] / 3600
+            timing_content += f"[bold]Total Time:[/bold] {self.stats['total_duration']:.2f}s ({total_hours:.2f} hours)"
+
+        if timing_content:
+            yield rich.panel.Panel(
+                timing_content.rstrip(),
+                title="⏱️  Timing Statistics",
+                title_align="left",
+                border_style="bright_yellow",
+            )
+
+        # Content statistics
+        content_content = ""
+
+        # Parameter statistics with range
+        if self.stats["avg_parameters"] is not None:
+            min_params = self.stats["min_parameters"]
+            max_params = self.stats["max_parameters"]
+            avg_params = self.stats["avg_parameters"]
+            total_params = self.stats["total_parameters"]
+
+            if min_params == max_params:
+                # All experiments have the same number of parameters
+                content_content += f"[bold]Parameters per Experiment:[/bold] {min_params} (total: {total_params})\n"
+            else:
+                content_content += f"[bold]Parameters per Experiment:[/bold] {min_params}-{max_params} (avg: {avg_params:.1f}, total: {total_params})\n"
+
+        # Asset statistics with range
+        if self.stats["avg_assets"] is not None:
+            min_assets = self.stats["min_assets"]
+            max_assets = self.stats["max_assets"]
+            avg_assets = self.stats["avg_assets"]
+            total_assets = self.stats["total_assets"]
+
+            if min_assets == max_assets:
+                # All experiments have the same number of assets
+                content_content += f"[bold]Assets per Experiment:[/bold] {min_assets} (total: {total_assets})"
+            else:
+                content_content += f"[bold]Assets per Experiment:[/bold] {min_assets}-{max_assets} (avg: {avg_assets:.1f}, total: {total_assets})"
+
+        if content_content:
+            yield rich.panel.Panel(
+                content_content.rstrip(),
+                title="📁 Content Statistics",
+                title_align="left",
+                border_style="bright_green",
+            )
 
 
 class ExperimentCLI(click.RichGroup):
@@ -588,10 +685,11 @@ class CLI(click.RichGroup):
         self.template_group.add_command(self.template_config_command)
         self.add_command(self.template_group)
 
-        self.archive_group.add_command(self.archive_info_command)
+        self.archive_group.add_command(self.archive_overview_command)
         self.archive_group.add_command(self.archive_delete_command)
         self.archive_group.add_command(self.archive_tail_command)
         self.archive_group.add_command(self.archive_compress_command)
+        self.archive_group.add_command(self.archive_info_command)
         self.add_command(self.archive_group)
 
     def format_help(self, ctx, formatter) -> None:
@@ -1171,7 +1269,7 @@ class CLI(click.RichGroup):
         self.archive_path = path
 
     @click.command(
-        "info",
+        "overview",
         short_help="Print some top-level information about the experiment archive.",
     )
     @click.option(
@@ -1180,7 +1278,7 @@ class CLI(click.RichGroup):
         help="Print more detailed information. Can take a long time.",
     )
     @click.pass_obj
-    def archive_info_command(self, full: bool) -> None:
+    def archive_overview_command(self, full: bool) -> None:
 
         ## --- reading the experiment archive ---
 
@@ -1283,41 +1381,15 @@ class CLI(click.RichGroup):
         elif select is not None:
 
             self.cons.print(f"Selecting based on expression: [cyan]{select}[/cyan] ...")
-            for path in experiment_archive_paths:
-
-                # We load the metadata of the experiment from the archive path.
-                experiment_meta_path: str = os.path.join(
-                    path, Experiment.METADATA_FILE_NAME
+            try:
+                delete_paths = self.filter_experiment_archives_by_select(
+                    experiment_archive_paths, select
                 )
-                with open(experiment_meta_path) as file:
-                    metadata: dict = json.load(file)
-
-                # We then evaluate the select expression with the metadata and parameters of the
-                # experiment as special variables which are available in the expression.
-                m = metadata
-                p = {
-                    param: info["value"]
-                    for param, info in metadata["parameters"].items()
-                    if "value" in info
-                }
-                locals: dict = {
-                    "metadata": m,
-                    "meta": m,
-                    "m": m,
-                    "parameters": p,
-                    "params": p,
-                    "p": p,
-                }
-
-                try:
-                    if eval(select, locals):
-                        delete_paths.append(path)
-
-                except Exception as e:
-                    self.cons.print(
-                        f'[red]Error evaluating "select" expression: {e}[/red]'
-                    )
-                    sys.exit(1)
+            except Exception as e:
+                self.cons.print(
+                    f'[red]Error evaluating "select" expression: {e}[/red]'
+                )
+                sys.exit(1)
 
         elif select is None:
             pass
@@ -1597,6 +1669,80 @@ class CLI(click.RichGroup):
 
         self.cons.print(f"Archive size: [bold]{size_str}[/bold]")
 
+    @click.command(
+        "info", short_help="Display comprehensive statistics about archived experiments."
+    )
+    @click.option(
+        "--select",
+        type=click.STRING,
+        help=(
+            "Criterion by which to select the experiments to analyze. Is implemented as a python boolean "
+            "expression that may use the special variables `m` (metadata dict) and `p` (parameters dict). "
+            "Will be evaluated on all the experiments in the archive."
+        ),
+    )
+    @click.pass_obj
+    def archive_info_command(self, select: str) -> None:
+        """
+        Display comprehensive statistics about archived experiments in the archive.
+
+        This command analyzes the experiments in the archive and provides detailed statistics including:
+        - Success/failure rates
+        - Timing information (first/last experiment, durations)
+        - Parameter and asset statistics
+
+        The --select option determines a snippet of python code which is supposed to evaluate to a boolean
+        value that determines whether or not an experiment should be included in the analysis
+        (True meaning it will be included, False meaning it will not be included). In this expression,
+        the following special variables are available: `m` which is the metadata dictionary of the
+        experiment and `p` which is the parameters value dict of the experiment.
+        """
+
+        ## --- reading the experiment archive ---
+
+        # Get all experiment archive paths
+        experiment_archive_paths: list[str] = self.collect_experiment_archive_paths(
+            self.archive_path
+        )
+
+        if len(experiment_archive_paths) == 0:
+            self.cons.print(
+                f'[red]There are no archived experiments in the given archive path "[bold]{self.archive_path}[/bold]"!'
+                f"Perhaps the wrong folder was selected? Set the --path option to the archive"
+                f"command group to provide a custom path.[/red]"
+            )
+            sys.exit(1)
+
+        # Apply selection filter if provided
+        if select is not None:
+            self.cons.print(f"Applying selection filter: [cyan]{select}[/cyan]")
+            try:
+                experiment_archive_paths = self.filter_experiment_archives_by_select(
+                    experiment_archive_paths, select
+                )
+                if len(experiment_archive_paths) == 0:
+                    self.cons.print(
+                        "[yellow]No experiments match the selection criteria.[/yellow]"
+                    )
+                    return
+            except Exception as e:
+                self.cons.print(f"[red]Error during selection: {e}[/red]")
+                sys.exit(1)
+
+        ## --- computing statistics ---
+
+        stats = self._compute_archive_statistics(experiment_archive_paths)
+
+        ## --- display results ---
+
+        self.cons.print(f"Archive Statistics @ [grey50]{self.archive_path}[/grey50]")
+        if select:
+            self.cons.print(f"[bright_black]Filtered by: {select}[/bright_black]")
+        self.cons.print()
+
+        archive_info = RichArchiveInfo(stats)
+        self.cons.print(archive_info)
+
     ## --- utility methods ---
     # The following methods do not directly implement CLI commands but rather provide utility
     # functionality that can be used throught the CLI commands.
@@ -1629,6 +1775,174 @@ class CLI(click.RichGroup):
                     dirnames.clear()
 
         return experiment_paths
+
+    def filter_experiment_archives_by_select(self, experiment_archive_paths: list[str], select: str) -> list[str]:
+        """
+        Filter experiment archive paths based on a select expression.
+
+        This method takes a list of experiment archive paths and a select expression,
+        loads the metadata for each experiment, and evaluates the select expression
+        to determine which experiments should be included in the result.
+
+        :param experiment_archive_paths: List of absolute string paths to experiment archives
+        :param select: Python boolean expression that can use 'm' (metadata dict) and 'p' (parameters dict)
+
+        :returns: List of experiment archive paths that match the select criteria
+        :raises: Exception if the select expression cannot be evaluated
+        """
+        filtered_paths: list[str] = []
+
+        for path in experiment_archive_paths:
+            # Load the metadata of the experiment from the archive path
+            experiment_meta_path: str = os.path.join(
+                path, Experiment.METADATA_FILE_NAME
+            )
+            with open(experiment_meta_path) as file:
+                metadata: dict = json.load(file)
+
+            # Create the evaluation context with metadata and parameters
+            m = metadata
+            p = {
+                param: info["value"]
+                for param, info in metadata["parameters"].items()
+                if "value" in info
+            }
+            locals_dict: dict = {
+                "metadata": m,
+                "meta": m,
+                "m": m,
+                "parameters": p,
+                "params": p,
+                "p": p,
+            }
+
+            # Evaluate the select expression and include path if it returns True
+            if eval(select, locals_dict):
+                filtered_paths.append(path)
+
+        return filtered_paths
+
+    def _compute_archive_statistics(self, experiment_archive_paths: list[str]) -> dict:
+        """
+        Compute comprehensive statistics for the given experiment archive paths.
+
+        :param experiment_archive_paths: List of absolute string paths to experiment archives
+        :returns: Dictionary containing computed statistics
+        """
+        stats = {
+            "total_experiments": len(experiment_archive_paths),
+            "successful_experiments": 0,
+            "failed_experiments": 0,
+            "first_experiment_time": None,
+            "last_experiment_time": None,
+            "avg_duration": None,
+            "max_duration": None,
+            "total_duration": None,
+            "avg_parameters": None,
+            "total_parameters": None,
+            "min_parameters": None,
+            "max_parameters": None,
+            "avg_assets": None,
+            "total_assets": None,
+            "min_assets": None,
+            "max_assets": None,
+            "total_size_gb": None,
+        }
+
+        if len(experiment_archive_paths) == 0:
+            return stats
+
+        durations = []
+        start_times = []
+        parameter_counts = []
+        asset_counts = []
+        total_size_bytes = 0
+
+        for path in experiment_archive_paths:
+            try:
+                # Load metadata
+                experiment_meta_path = os.path.join(path, Experiment.METADATA_FILE_NAME)
+                with open(experiment_meta_path) as file:
+                    metadata = json.load(file)
+
+                # Success/failure statistics
+                status = metadata.get("status", "unknown")
+                has_error = metadata.get("has_error", False)
+
+                if status == "done" and not has_error:
+                    stats["successful_experiments"] += 1
+                else:
+                    stats["failed_experiments"] += 1
+
+                # Timing statistics
+                start_time = metadata.get("start_time")
+                if start_time is not None:
+                    start_times.append(start_time)
+
+                duration = metadata.get("duration")
+                if duration is not None and duration > 0:
+                    durations.append(duration)
+
+                # Parameter statistics
+                parameters = metadata.get("parameters", {})
+                # Count non-system parameters (exclude __ prefixed)
+                user_param_count = sum(1 for param in parameters.keys() if not param.startswith("__"))
+                parameter_counts.append(user_param_count)
+
+                # Asset statistics and disk space calculation
+                try:
+                    files = [f for f in os.listdir(path) if os.path.isfile(os.path.join(path, f))]
+                    asset_count = len(files)
+                    asset_counts.append(asset_count)
+
+                    # Calculate disk space for this experiment
+                    experiment_size = 0
+                    for file_name in files:
+                        file_path = os.path.join(path, file_name)
+                        try:
+                            experiment_size += os.path.getsize(file_path)
+                        except (OSError, FileNotFoundError):
+                            # Skip files that can't be accessed
+                            pass
+                    total_size_bytes += experiment_size
+                except OSError:
+                    # Skip if can't read directory
+                    pass
+
+            except (FileNotFoundError, json.JSONDecodeError, OSError):
+                # Skip experiments with invalid metadata
+                stats["failed_experiments"] += 1
+                continue
+
+        # Compute timing statistics
+        if start_times:
+            stats["first_experiment_time"] = min(start_times)
+            stats["last_experiment_time"] = max(start_times)
+
+        if durations:
+            stats["avg_duration"] = sum(durations) / len(durations)
+            stats["max_duration"] = max(durations)
+            stats["total_duration"] = sum(durations)
+
+        # Compute parameter statistics
+        if parameter_counts:
+            stats["avg_parameters"] = sum(parameter_counts) / len(parameter_counts)
+            stats["total_parameters"] = sum(parameter_counts)
+            stats["min_parameters"] = min(parameter_counts)
+            stats["max_parameters"] = max(parameter_counts)
+
+        # Compute asset statistics
+        if asset_counts:
+            stats["avg_assets"] = sum(asset_counts) / len(asset_counts)
+            stats["total_assets"] = sum(asset_counts)
+            stats["min_assets"] = min(asset_counts)
+            stats["max_assets"] = max(asset_counts)
+
+        # Compute disk space statistics
+        if total_size_bytes > 0:
+            stats["total_size_gb"] = total_size_bytes / (1024 ** 3)  # Convert bytes to GB
+
+        return stats
 
 
 @click.group(cls=CLI)

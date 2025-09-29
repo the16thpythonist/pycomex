@@ -535,3 +535,13 @@ Documentation
     of the package.
   - `docs/basics_hooks.md` - added some more detailed information about the basic usage 
     of the package and the hook system.
+
+0.22.0 (29.09.2025)
+-------------------
+
+CLI
+
+- Renamed the `archive info` command to `archive overview` to better reflect what it is 
+  about
+- Added a new `archive info` command which can be used to print the summary statistics of the 
+  full experiment archive or a subset of the experiment archive using the `--select` option.

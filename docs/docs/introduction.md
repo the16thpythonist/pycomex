@@ -128,7 +128,7 @@ PyComex provides powerful CLI tools:
 pycomex archive list
 
 # View basic information about experiment archive
-pycomex archive info
+pycomex archive overview
 
 # Create new experiment from template
 pycomex template experiment my_new_experiment.py

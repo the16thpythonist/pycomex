@@ -80,141 +80,113 @@ Archiving of metadata, file artifacts and error handling is automatically manage
 
 .. code-block:: python
 
-    # quickstart.py
+    # my_experiment.py
     """
-    This doc string will be saved as the "description" meta data of the experiment records
+    A minimal example demonstrating PyComex experiment structure.
+    This docstring is saved as experiment metadata.
     """
-    import os
-    from pycomex import Experiment, folder_path, file_namespace
+    from pycomex.functional.experiment import Experiment
+    from pycomex.utils import file_namespace, folder_path
 
-    # Experiment parameters can simply be defined as uppercase global variables.
-    # These are automatically detected and can possibly be overwritten in command
-    # line invocation
-    HELLO = "hello "
-    WORLD = "world!"
+    # Experiment parameters (uppercase variables are auto-detected)
+    MESSAGE: str = "Hello PyComex!"
+    ITERATIONS: int = 5
 
-    # There are certain special parameters which will be detected by the experiment
-    # such as this, which will put the experiment into debug mode.
-    # That means instead of creating a new archive for every execution, it will always
-    # create/overwrite the "debug" archive folder.
+    # Debug mode: reuses same archive folder for development
     __DEBUG__ = True
 
-    # An experiment is essentially a function. All of the code that constitutes
-    # one experiment should ultimately be called from this one function...
+    @Experiment(
+        base_path=folder_path(__file__),     # Results stored relative to this file
+        namespace=file_namespace(__file__),  # Creates folder based on filename
+        glob=globals(),                      # Provides access to parameters
+    )
+    def experiment(e: Experiment) -> None:
+        e.log("Starting experiment...")
 
-    # The main experiment function has to be decorated with the "Experiment"
-    # decorator, which needs three main arguments:
-    # - base_path: The absolute string path to an existing FOLDER, where the
-    #   archive structure should be created
-    # - namespace: This is a relative path which defines the concrete folder
-    #   structure of the specific archive folder for this specific experiment
-    # - glob: The globals() dictionary for the current file
-    @Experiment(base_path=os.getcwd(),
-                namespace='results/quickstart',
-                glob=globals())
-    def experiment(e: Experiment):
-        # Internally saved into automatically created nested dict
-        # {'strings': {'hello_world': '...'}}
-        e["strings/hello_world"] = HELLO + WORLD
+        # Store structured data (creates nested JSON structure)
+        e["config/message"] = MESSAGE
+        e["config/iterations"] = ITERATIONS
 
-        # Alternative to "print". Message is printed to stdout as well as
-        # recorded to log file
-        e.log("some debug message")
+        # Run experiment loop
+        for i in range(ITERATIONS):
+            metric = i * 0.1
+            e.track("metrics/value", metric)  # Track time-series data
+            e.log(f"Iteration {i}: {MESSAGE} (metric: {metric})")
 
-        # Automatically saves text file artifact to the experiment record folder
-        file_name = "hello_world.txt"
-        e.commit_raw(file_name, HELLO + WORLD)
-        # e.commit_fig(file_name, fig)
-        # e.commit_png(file_name, image)
-        # ...
+        # Save final results and artifacts
+        e["results/final_metric"] = metric
+        e.commit_raw("results.txt", f"Final result: {metric}")
 
-
-    @experiment.analysis
-    def analysis(e: Experiment):
-        # And we can access all the internal fields of the experiment object
-        # and the experiment parameters here!
-        print(HELLO, WORLD)
-        print(e['strings/hello_world'])
-        # logging will print to stdout but not modify the log file
-        e.log('analysis done')
-
-
-    # This needs to be put at the end of the experiment. This method will
-    # then actually execute the main experiment code defined in the function
-    # above.
-    # NOTE: The experiment will only be run if this module is directly
-    # executed (__name__ == '__main__'). Otherwise the experiment will NOT
-    # be executed, which implies that the experiment module can be imported
-    # from somewhere else without triggering experiment execution!
+    # Run experiment when executed directly
     experiment.run_if_main()
 
 
+**Running the Experiment:**
+
+.. code-block:: console
+
+    # print help
+    python my_experiment.py --help
+
+    # Basic execution
+    python my_experiment.py
+
+    # Override parameters via command line
+    python my_experiment.py --MESSAGE "Custom message!" --ITERATIONS 10
+
 This example would create the following folder structure:
 
-.. code-block:: python
+.. code-block:: text
 
-    cwd
-    |- results
-       |- quickstart
-          |- debug
-             |+ experiment_out.log     # Contains all the log messages printed by experiment
-             |+ experiment_meta.json   # Meta information about the experiment
-             |+ experiment_data.json   # All the data that was added to the internal exp. dict
-             |+ hello_world.txt        # Text artifact that was committed to the experiment
-             |+ code.py                # Copy of the original experiment python module
-             |+ analysis.py            # boilerplate code to get started with analysis of results
-
-
-The ``analysis.py`` file is of special importance. It is created as a boilerplate starting
-place for additional code, which performs analysis or post processing on the results of the experiment.
-This can for example be used to transform data into a different format or create plots for visualization.
-
-Specifically note these two aspects:
-
-1. The analysis file contains all of the code which was defined in the ``analysis`` function of the
-   original experiment file! This code snippet is automatically transferred at the end of the experiment.
-2. The analysis file actually imports the snapshot copy of the original experiment file. This does not
-   trigger the experiment to be executed again! The ``Experiment`` instance automatically notices that it
-   is being imported and not explicitly executed. It will also populate all of it's internal attributes
-   from the persistently saved data in ``experiment_data.json``, which means it is still possible to access
-   all the data of the experiment without having to execute it again!
-
-.. code-block:: python
-
-    # analysis.py
-
-    # [...] imports omitted
-    from code import *
-    from pycomex import Experiment
-
-    PATH = pathlib.Path(__file__).parent.absolute()
-    # "Experiment.load" is used to load the the experiment data from the
-    # archive. it returns an "Experiment" object which will act exactly the
-    # same way as if the experiment had just finished it's execution!
-    CODE_PATH = os.path.join(PATH, 'code.py')
-    experiment = Experiment.load(CODE_PATH)
-    experiment.analyses = []
-
-    # All of the following code is automatically extracted from main
-    # experiment module itself and can now be edited and re-executed.
-    # Re-execution of this analysis.py file will not trigger an
-    # execution of the experiment but all the stored results will be
-    # available anyways!
-    @experiment.analysis
-    def analysis(e: Experiment):
-        # And we can access all the internal fields of the experiment
-        # object and the experiment parameters here!
-        print(HELLO, WORLD)
-        print(e['strings/hello_world'])
-        # logging will print to stdout but not modify the log file
-        e.info('analysis done')
+    my_experiment/
+    └── debug/
+        ├── experiment_out.log      # Complete execution log
+        ├── experiment_meta.json    # Experiment metadata and parameters
+        ├── experiment_data.json    # All tracked data and stored values
+        ├── experiment_code.py      # Snapshot of the original experiment code
+        ├── results.txt            # Custom artifact saved via commit_raw()
+        └── .track/                # Time-series visualizations
+            └── metrics_value_001.png  # Auto-generated plot of tracked metrics
 
 
-    # This method will execute only the analysis code!
-    experiment.execute_analyses()
+**Key Features:**
 
+* **Automatic Archiving**: Each experiment run creates a timestamped folder with complete execution records
+* **Parameter Management**: Uppercase variables are automatically detected as configurable parameters
+* **Command-line Overrides**: Parameters can be modified without editing code
+* **Structured Data Storage**: Nested data organization using path-like keys (e.g., ``"config/learning_rate"``)
+* **Time-series Tracking**: Built-in support for tracking metrics over time with automatic visualization
+* **Artifact Management**: Easy saving of files, figures, and custom data formats
 
-For an introduction to more advanced features take a look at the examples in
+==========================
+🔧 Command Line Interface
+==========================
+
+PyComex provides a powerful CLI accessible via the ``pycomex`` command:
+
+**Creating New Experiments:**
+
+.. code-block:: console
+
+    # Create a new experiment module from template
+    pycomex template experiment my_new_experiment.py
+
+**Managing Experiment Archives:**
+
+.. code-block:: console
+
+    # List recent experiments
+    pycomex archive list
+
+    # Show detailed information about an experiment
+    pycomex archive overview 
+
+    # Compress and archive old experiments
+    pycomex archive compress results/
+
+For more command line options use ``pycomex --help``.
+ 
+**NOTE.** For an introduction to more advanced features take a look at the examples in 
 ``pycomex/examples`` ( https://github.com/the16thpythonist/pycomex/tree/master/pycomex/examples )
 
 ================
@@ -231,7 +203,21 @@ contains some example modules which illustrate some of the key features of the f
 🤝 Credits
 ==========
 
-This package was created with Cookiecutter_ and the `audreyr/cookiecutter-pypackage`_ project template.
+PyComex is built on top of these excellent open source libraries:
 
-.. _Cookiecutter: https://github.com/audreyr/cookiecutter
-.. _`audreyr/cookiecutter-pypackage`: https://github.com/audreyr/cookiecutter-pypackage
+* Click_ - Command line interface toolkit
+* Rich_ - Rich text and beautiful formatting in the terminal
+* Jinja2_ - Modern and designer-friendly templating language
+* NumPy_ - The fundamental package for scientific computing
+* Matplotlib_ - Comprehensive 2D plotting library
+* pytest_ - Testing framework
+
+.. _Click: https://click.palletsprojects.com/
+.. _Rich: https://rich.readthedocs.io/
+.. _Pydantic: https://docs.pydantic.dev/latest/
+.. _Jinja2: https://palletsprojects.com/p/jinja/
+.. _NumPy: https://numpy.org/
+.. _Matplotlib: https://matplotlib.org/
+.. _PyYAML: https://pyyaml.org/
+.. _Hatchling: https://hatch.pypa.io/latest/
+.. _pytest: https://pytest.org/
