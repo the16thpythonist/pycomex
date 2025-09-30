@@ -118,3 +118,4 @@ wandb/
 .nox
 
 results/
+docs/site/*

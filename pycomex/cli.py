@@ -339,12 +339,20 @@ class RichExperimentTailInfo:
         status = self.metadata.get("status", "unknown")
 
         # Status with emojis and colors
-        if status == "done":
+        has_error = self.metadata.get("has_error", False)
+        if status == "done" and not has_error:
             status_display = "✅ completed"
             status_color = "green"
         elif status == "running":
             status_display = "⏳ running"
             status_color = "yellow"
+        elif status == "failed" or has_error:
+            error_type = self.metadata.get("error_type")
+            if error_type:
+                status_display = f"❌ failed ({error_type})"
+            else:
+                status_display = "❌ failed"
+            status_color = "red"
         else:
             status_display = f"❌ {status}"
             status_color = "red"
@@ -381,6 +389,38 @@ class RichExperimentTailInfo:
                 short_desc = short_desc[:77] + "..."
             yield f"  [bright_black]{short_desc}[/bright_black]"
 
+
+class RichExperimentListInfo:
+
+    def __init__(self, experiment_path: str, metadata: dict):
+        self.experiment_path = experiment_path
+        self.metadata = metadata
+
+    def __rich_console__(
+        self, console: Console, options: ConsoleOptions
+    ) -> RenderResult:
+
+        # Determine status with emojis and colors
+        status = self.metadata.get("status", "unknown")
+        has_error = self.metadata.get("has_error", False)
+
+        if status == "done" and not has_error:
+            status_emoji = "✅"
+        elif status == "running":
+            status_emoji = "⏳"
+        elif status == "failed" or has_error:
+            status_emoji = "❌"
+        else:
+            status_emoji = "❌"
+
+        # Get duration for display
+        duration = self.metadata.get("duration", 0)
+        duration_str = ""
+        if duration > 0:
+            duration_str = f" [bright_black]({duration:.2f}s)[/bright_black]"
+
+        # Create the single line output
+        yield f"{status_emoji} {self.experiment_path}{duration_str}"
 
 class RichArchiveInfo:
 
@@ -477,6 +517,21 @@ class RichArchiveInfo:
                 title_align="left",
                 border_style="bright_green",
             )
+
+        # Error statistics - displayed last
+        if self.stats["error_types"] and failed_experiments > 0:
+            error_content = ""
+            for error_type, count in sorted(self.stats["error_types"].items(), key=lambda x: x[1], reverse=True):
+                percentage = (count / failed_experiments * 100) if failed_experiments > 0 else 0
+                error_content += f"[bold]{error_type}:[/bold] {count} ([red]{percentage:.1f}%[/red] of failures)\n"
+
+            if error_content:
+                yield rich.panel.Panel(
+                    error_content.rstrip(),
+                    title="🚫 Error Types",
+                    title_align="left",
+                    border_style="bright_red",
+                )
 
 
 class ExperimentCLI(click.RichGroup):
@@ -686,6 +741,7 @@ class CLI(click.RichGroup):
         self.add_command(self.template_group)
 
         self.archive_group.add_command(self.archive_overview_command)
+        self.archive_group.add_command(self.archive_list_command)
         self.archive_group.add_command(self.archive_delete_command)
         self.archive_group.add_command(self.archive_tail_command)
         self.archive_group.add_command(self.archive_compress_command)
@@ -1272,13 +1328,8 @@ class CLI(click.RichGroup):
         "overview",
         short_help="Print some top-level information about the experiment archive.",
     )
-    @click.option(
-        "--full",
-        is_flag=True,
-        help="Print more detailed information. Can take a long time.",
-    )
     @click.pass_obj
-    def archive_overview_command(self, full: bool) -> None:
+    def archive_overview_command(self) -> None:
 
         ## --- reading the experiment archive ---
 
@@ -1297,13 +1348,98 @@ class CLI(click.RichGroup):
             )
             sys.exit(1)
 
-        ## --- printing basic information ---
-        # By default we only print very basic information about the archive mainly the number
-        # of experiments that are contained in it.
-        self.cons.print(f"Experiment Archive @ {self.archive_path}")
-        self.cons.print(
-            f"[green]Contains [bold]{len(experiment_archive_paths)}[/bold] experiments.[/green]"
+        ## --- printing detailed information ---
+        # Show detailed statistics using RichArchiveInfo
+        stats = self._compute_archive_statistics(experiment_archive_paths)
+        self.cons.print(f"Experiment Archive @ [grey50]{self.archive_path}[/grey50]")
+        self.cons.print()
+        archive_info = RichArchiveInfo(stats)
+        self.cons.print(archive_info)
+
+    @click.command(
+        "list", short_help="List archived experiments with status and duration."
+    )
+    @click.option(
+        "--select",
+        type=click.STRING,
+        help=(
+            "Criterion by which to select the experiments to list. Is implemented as a python boolean "
+            "expression that may use the special variables `m` (metadata dict) and `p` (parameters dict). "
+            "Will be evaluated on all the experiments in the archive."
+        ),
+    )
+    @click.pass_obj
+    def archive_list_command(self, select: str) -> None:
+        """
+        Lists archived experiments with their status and duration in a compact format.
+
+        Each experiment is displayed on a single line showing:
+        - Status emoji (✅ for success, ❌ for failure, ⏳ for running)
+        - Full path to the experiment archive
+        - Duration in gray if available
+
+        The --select option determines a snippet of python code which is supposed to evaluate to a boolean
+        value that determines whether or not an experiment should be included in the list
+        (True meaning it will be included, False meaning it will not be included). In this expression,
+        the following special variables are available: `m` which is the metadata dictionary of the
+        experiment and `p` which is the parameters value dict of the experiment.
+        """
+
+        ## --- reading the experiment archive ---
+
+        # Get all experiment archive paths
+        experiment_archive_paths: list[str] = self.collect_experiment_archive_paths(
+            self.archive_path
         )
+
+        if len(experiment_archive_paths) == 0:
+            self.cons.print(
+                f'[red]There are no archived experiments in the given archive path "[bold]{self.archive_path}[/bold]"!'
+                f"Perhaps the wrong folder was selected? Set the --path option to the archive"
+                f"command group to provide a custom path.[/red]"
+            )
+            sys.exit(1)
+
+        # Apply selection filter if provided
+        if select is not None:
+            self.cons.print(f"Applying selection filter: [cyan]{select}[/cyan]")
+            try:
+                experiment_archive_paths = self.filter_experiment_archives_by_select(
+                    experiment_archive_paths, select
+                )
+                if len(experiment_archive_paths) == 0:
+                    self.cons.print(
+                        "[yellow]No experiments match the selection criteria.[/yellow]"
+                    )
+                    return
+            except Exception as e:
+                self.cons.print(f"[red]Error during selection: {e}[/red]")
+                sys.exit(1)
+
+        ## --- loading metadata and displaying experiments ---
+
+        self.cons.print(
+            f"Found [bold]{len(experiment_archive_paths)}[/bold] experiments in archive @ [grey50]{self.archive_path}[/grey50]"
+        )
+        if select:
+            self.cons.print(f"[bright_black]Filtered by: {select}[/bright_black]")
+        self.cons.print()
+
+        # Display each experiment
+        for path in experiment_archive_paths:
+            try:
+                experiment_meta_path = os.path.join(path, Experiment.METADATA_FILE_NAME)
+                with open(experiment_meta_path) as file:
+                    metadata = json.load(file)
+
+                experiment_display = RichExperimentListInfo(path, metadata)
+                self.cons.print(experiment_display)
+
+            except Exception:
+                # Skip experiments with invalid metadata, display with unknown status
+                self.cons.print(f"❌ {path} [bright_black](metadata error)[/bright_black]")
+
+        self.cons.print()
 
     @click.command(
         "delete",
@@ -1833,6 +1969,7 @@ class CLI(click.RichGroup):
             "total_experiments": len(experiment_archive_paths),
             "successful_experiments": 0,
             "failed_experiments": 0,
+            "error_types": {},  # Track count of each error type
             "first_experiment_time": None,
             "last_experiment_time": None,
             "avg_duration": None,
@@ -1873,6 +2010,14 @@ class CLI(click.RichGroup):
                     stats["successful_experiments"] += 1
                 else:
                     stats["failed_experiments"] += 1
+                    # Track error types for failed experiments
+                    error_type = metadata.get("error_type")
+                    if error_type:
+                        stats["error_types"][error_type] = stats["error_types"].get(error_type, 0) + 1
+                    else:
+                        # Handle legacy experiments without error_type or experiments that failed without exceptions
+                        if status == "failed":
+                            stats["error_types"]["Unknown"] = stats["error_types"].get("Unknown", 0) + 1
 
                 # Timing statistics
                 start_time = metadata.get("start_time")

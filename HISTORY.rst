@@ -545,3 +545,13 @@ CLI
   about
 - Added a new `archive info` command which can be used to print the summary statistics of the 
   full experiment archive or a subset of the experiment archive using the `--select` option.
+
+0.23.0 (30.09.2025)
+-------------------
+
+CLI
+
+- Added the `archive list` command which can be used to list the archive folder locations of 
+  all the experiments in the archive or a subset using the `--select` option.
+- Added another panel to the `archive overview` command which shows the most common error types 
+  among the failed experiments.

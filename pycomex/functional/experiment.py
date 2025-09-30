@@ -286,6 +286,7 @@ class Experiment:
             "end_time": None,
             "duration": None,
             "has_error": False,
+            "error_type": None,
             "base_path": str(base_path),
             "namespace": str(namespace),
             "description": "",
@@ -1006,7 +1007,14 @@ class Experiment:
         self.metadata["duration"] = (
             self.metadata["end_time"] - self.metadata["start_time"]
         )
-        self.metadata["status"] = "done"
+
+        # ~ updating error information
+        if self.error:
+            self.metadata["has_error"] = True
+            self.metadata["error_type"] = type(self.error).__name__
+            self.metadata["status"] = "failed"
+        else:
+            self.metadata["status"] = "done"
 
         # ~ saving all the data
         self.save_metadata()
