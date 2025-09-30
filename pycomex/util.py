@@ -26,16 +26,15 @@ from typing import Dict, List, Optional
 
 import jinja2 as j2
 import numpy as np
-import pkg_resources
 from prettytable import PrettyTable
 
 # The modern "importlib.metadata" module is only available in Python 3.8 and later.
 # to ensure backwards compatibility with Python 3.7 and earlier, we use the backport / previous
 # version of this module, which is "importlib_metadata", if necessary
 if sys.version_info >= (3, 8):
-    from importlib.metadata import distributions
+    from importlib.metadata import distributions, Distribution
 else:
-    from importlib_metadata import distributions  # backport
+    from importlib_metadata import distributions, Distribution  # backport
 
 # Contains a human readable string of the operating system name, e.g. "Linux" or "Windows"
 OS_NAME: str = platform.system()
@@ -611,34 +610,84 @@ def trigger_notification(
         toaster.show_toast("Notification", message, duration=duration, threaded=True)
 
 
-def is_dist_editable(dist: pkg_resources.EggInfoDistribution) -> bool:
-    location = dist.location
+def is_dist_editable(dist: Distribution) -> bool:
+    """
+    Check if a distribution is installed in editable mode.
 
-    pth_path = os.path.join(location, f"{dist.key}.pth")
-    if os.path.exists(pth_path):
-        return True
+    This function checks for editable installation by looking for:
+    1. direct_url.json file (PEP 610 standard for direct installs)
+    2. .pth files that indicate editable installs
 
-    direct_url_path = os.path.join(
-        dist.location, f"{dist.key}-{dist.version}.dist-info", "direct_url.json"
-    )
-    if os.path.exists(direct_url_path):
-        return True
+    :param dist: The distribution to check
+    :returns: True if the distribution is editable, False otherwise
+    """
+    # Check for direct_url.json (PEP 610 standard)
+    try:
+        direct_url_json = dist.read_text("direct_url.json")
+        if direct_url_json and "editable" in direct_url_json:
+            return True
+    except (FileNotFoundError, AttributeError):
+        pass
+
+    # Check for .pth files in site-packages (alternative method)
+    try:
+        location = str(dist.locate_file(""))
+        if location:
+            pth_path = os.path.join(location, f"{dist.metadata['Name']}.pth")
+            if os.path.exists(pth_path):
+                return True
+    except (AttributeError, KeyError):
+        pass
 
     return False
 
 
 def get_dist_path(
-    dist: pkg_resources.EggInfoDistribution, editable: bool = False
+    dist: Distribution, editable: bool = False
 ) -> str:
-    if editable:
-        pth_path = os.path.join(dist.location, f"{dist.key}.pth")
-        if os.path.exists(pth_path):
-            with open(pth_path) as file:
-                package_path = file.read().strip()
-    else:
-        package_path = os.path.join(dist.location, dist.key)
+    """
+    Get the filesystem path to a distribution.
 
-    return package_path
+    :param dist: The distribution to get the path for
+    :param editable: Whether to look for editable installation paths
+    :returns: The filesystem path to the distribution
+    """
+    if editable:
+        # For editable installs, check direct_url.json first
+        try:
+            direct_url_json = dist.read_text("direct_url.json")
+            if direct_url_json:
+                direct_url_data = json.loads(direct_url_json)
+                if "url" in direct_url_data and direct_url_data["url"].startswith("file://"):
+                    # Extract path from file:// URL
+                    file_path = direct_url_data["url"][7:]  # Remove 'file://' prefix
+                    return file_path
+        except (FileNotFoundError, AttributeError, json.JSONDecodeError):
+            pass
+
+        # Fallback to .pth file method
+        try:
+            location = str(dist.locate_file(""))
+            if location:
+                pth_path = os.path.join(location, f"{dist.metadata['Name']}.pth")
+                if os.path.exists(pth_path):
+                    with open(pth_path) as file:
+                        package_path = file.read().strip()
+                        return package_path
+        except (AttributeError, KeyError):
+            pass
+
+    # For non-editable or fallback case
+    try:
+        location = str(dist.locate_file(""))
+        if location:
+            package_path = os.path.join(location, dist.metadata['Name'])
+            return package_path
+    except (AttributeError, KeyError):
+        pass
+
+    # Final fallback - return empty string if we can't determine path
+    return ""
 
 
 def get_dependencies() -> dict[str, dict]:

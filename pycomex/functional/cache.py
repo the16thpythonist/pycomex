@@ -76,6 +76,7 @@ import gzip
 import os
 import pickle
 import subprocess
+import tempfile
 import time
 from collections.abc import Callable
 from enum import Enum
@@ -267,24 +268,39 @@ class ExperimentCache:
                     os.remove(compressed_path)
                 return False
 
-    def _decompress_file(self, compressed_path: str, output_path: str) -> bool:
-        """Decompress a gzipped file.
+    def _decompress_file(self, compressed_path: str) -> tuple[bool, str | None]:
+        """Decompress a gzipped file to a unique temporary location.
+
+        Creates a unique temporary file in the system's temporary directory
+        to decompress the compressed file. This avoids potential conflicts
+        and permission issues in the cache directory.
 
         :param compressed_path: Path to the compressed file
         :type compressed_path: str
-        :param output_path: Path where the decompressed file should be written
-        :type output_path: str
 
-        :returns: True if decompression was successful, False otherwise
-        :rtype: bool
+        :returns: Tuple of (success_flag, temp_file_path). If successful,
+                 returns (True, path_to_temporary_file). If failed,
+                 returns (False, None).
+        :rtype: tuple[bool, str | None]
         """
         try:
+            # Create a unique temporary file
+            temp_file = tempfile.NamedTemporaryFile(delete=False)
+            temp_file_path = temp_file.name
+            temp_file.close()  # Close the file handle so we can write to it
+
             with gzip.open(compressed_path, "rb") as f_in:
-                with open(output_path, "wb") as f_out:
+                with open(temp_file_path, "wb") as f_out:
                     f_out.writelines(f_in)
-            return True
+            return True, temp_file_path
         except Exception:
-            return False
+            # Clean up temporary file if it was created but decompression failed
+            if 'temp_file_path' in locals() and os.path.exists(temp_file_path):
+                try:
+                    os.remove(temp_file_path)
+                except Exception:
+                    pass  # Ignore cleanup errors
+            return False, None
 
     def cached(
         self,
@@ -588,14 +604,14 @@ class ExperimentCache:
             )
 
         # --- Load data based on discovered backend ---
-        # If file is compressed, decompress it first to a temporary location
+        # If file is compressed, decompress it first to a unique temporary location
         actual_file_path = found_path
         temp_file_path = None
 
         if found_compressed:
-            # Create temporary uncompressed file
-            temp_file_path = found_path[:-3]  # Remove .gz extension
-            if not self._decompress_file(found_path, temp_file_path):
+            # Decompress to a unique temporary file in system temp directory
+            success, temp_file_path = self._decompress_file(found_path)
+            if not success:
                 raise OSError(f"Failed to decompress cache file: {found_path}")
             actual_file_path = temp_file_path
 
@@ -616,7 +632,10 @@ class ExperimentCache:
         finally:
             # Clean up temporary file if it was created
             if temp_file_path and os.path.exists(temp_file_path):
-                os.remove(temp_file_path)
+                try:
+                    os.remove(temp_file_path)
+                except Exception:
+                    pass  # Ignore cleanup errors
 
     def load(
         self,

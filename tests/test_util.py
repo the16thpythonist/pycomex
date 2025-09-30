@@ -14,7 +14,9 @@ from pycomex.util import (
     SetArguments,
     get_comments_from_module,
     get_dependencies,
+    get_dist_path,
     get_version,
+    is_dist_editable,
     parse_parameter_info,
     render_latex_table,
     render_string_table,
@@ -325,3 +327,87 @@ def test_ansi_sanitizing_formatter_with_timestamp():
     assert formatted_message.endswith("EXPERIMENT STARTED")
 
     print("✓ ANSI sanitization with timestamp formatting test passed!")
+
+
+def test_importlib_metadata_migration():
+    """
+    Test that the migration from pkg_resources to importlib.metadata works correctly.
+    This test ensures that our modernized is_dist_editable() and get_dist_path() functions
+    work properly with importlib.metadata.Distribution objects.
+    """
+    if sys.version_info >= (3, 8):
+        from importlib.metadata import distributions
+    else:
+        from importlib_metadata import distributions
+
+    # Get a few distributions to test with
+    test_distributions = list(distributions())[:5]
+    assert len(test_distributions) > 0, "No distributions found to test with"
+
+    for dist in test_distributions:
+        # Test is_dist_editable function
+        editable_result = is_dist_editable(dist)
+        assert isinstance(editable_result, bool), f"is_dist_editable should return bool, got {type(editable_result)}"
+
+        # Test get_dist_path function for non-editable case
+        path_result = get_dist_path(dist, editable=False)
+        assert isinstance(path_result, str), f"get_dist_path should return str, got {type(path_result)}"
+
+        # Test get_dist_path function for editable case
+        editable_path_result = get_dist_path(dist, editable=True)
+        assert isinstance(editable_path_result, str), f"get_dist_path(editable=True) should return str, got {type(editable_path_result)}"
+
+        print(f"✓ Tested {dist.metadata.get('Name', 'unknown')}: editable={editable_result}")
+
+    print("✓ All importlib.metadata migration tests passed!")
+
+
+def test_get_dependencies_without_pkg_resources():
+    """
+    Test that get_dependencies() works correctly without using deprecated pkg_resources.
+    This verifies that the function returns consistent results with our modernized helper functions.
+    """
+    deps = get_dependencies()
+
+    # Basic structure tests
+    assert isinstance(deps, dict), "get_dependencies should return a dict"
+    assert len(deps) > 0, "Should find at least some dependencies"
+
+    # Test structure of dependency info
+    for dep_name, dep_info in list(deps.items())[:3]:  # Test first 3 for performance
+        assert isinstance(dep_name, str), f"Dependency name should be string, got {type(dep_name)}"
+        assert isinstance(dep_info, dict), f"Dependency info should be dict, got {type(dep_info)}"
+
+        # Required fields
+        required_fields = ['name', 'version', 'path', 'requires', 'editable']
+        for field in required_fields:
+            assert field in dep_info, f"Missing required field '{field}' in dependency info for {dep_name}"
+
+        # Field type checks
+        assert isinstance(dep_info['name'], str), f"name should be string for {dep_name}"
+        assert isinstance(dep_info['version'], str), f"version should be string for {dep_name}"
+        assert isinstance(dep_info['path'], str), f"path should be string for {dep_name}"
+        assert isinstance(dep_info['requires'], list), f"requires should be list for {dep_name}"
+        assert isinstance(dep_info['editable'], bool), f"editable should be bool for {dep_name}"
+
+        print(f"✓ Verified dependency info for {dep_name}")
+
+    print("✓ get_dependencies() works correctly without pkg_resources!")
+
+
+def test_no_pkg_resources_import():
+    """
+    Test that our utility module no longer imports pkg_resources.
+    """
+    import pycomex.util as util_module
+
+    # Check that pkg_resources is not in the module's namespace
+    assert not hasattr(util_module, 'pkg_resources'), "pkg_resources should not be imported in util module"
+
+    # Check the source code doesn't contain pkg_resources import
+    import inspect
+    source = inspect.getsource(util_module)
+    assert 'import pkg_resources' not in source, "pkg_resources import should be removed from source"
+    assert 'from pkg_resources' not in source, "pkg_resources import should be removed from source"
+
+    print("✓ Confirmed pkg_resources is no longer imported!")

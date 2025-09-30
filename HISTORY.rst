@@ -555,3 +555,16 @@ CLI
   all the experiments in the archive or a subset using the `--select` option.
 - Added another panel to the `archive overview` command which shows the most common error types 
   among the failed experiments.
+
+0.23.1 (30.09.2025)
+-------------------
+
+Bug Fixes
+
+- Fixed a display bug in the `archive overview` command
+- The `archive list` command is now sorted by the experiment start time
+- The caching mechanism now unzips the files into a unique temporary file which is not inside 
+  the cache folder itself. Because for multiple parallel experiments this previously led to
+  cache collisions and exceptions in some rare cases.
+- Removed the warning about the deprecated pkg_resources library which was printed at the beginning
+  of each command.

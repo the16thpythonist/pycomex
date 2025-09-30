@@ -1328,8 +1328,32 @@ class CLI(click.RichGroup):
         "overview",
         short_help="Print some top-level information about the experiment archive.",
     )
+    @click.option(
+        "--select",
+        type=click.STRING,
+        help=(
+            "Criterion by which to select the experiments to analyze. Is implemented as a python boolean "
+            "expression that may use the special variables `m` (metadata dict) and `p` (parameters dict). "
+            "Will be evaluated on all the experiments in the archive."
+        ),
+    )
     @click.pass_obj
-    def archive_overview_command(self) -> None:
+    def archive_overview_command(self, select: str) -> None:
+        """
+        Display top-level information and comprehensive statistics about the experiment archive.
+
+        This command analyzes the experiments in the archive and provides detailed statistics including:
+        - Success/failure rates
+        - Timing information (first/last experiment, durations)
+        - Parameter and asset statistics
+        - Disk space usage
+
+        The --select option determines a snippet of python code which is supposed to evaluate to a boolean
+        value that determines whether or not an experiment should be included in the analysis
+        (True meaning it will be included, False meaning it will not be included). In this expression,
+        the following special variables are available: `m` which is the metadata dictionary of the
+        experiment and `p` which is the parameters value dict of the experiment.
+        """
 
         ## --- reading the experiment archive ---
 
@@ -1348,10 +1372,28 @@ class CLI(click.RichGroup):
             )
             sys.exit(1)
 
+        # Apply selection filter if provided
+        if select is not None:
+            self.cons.print(f"Applying selection filter: [cyan]{select}[/cyan]")
+            try:
+                experiment_archive_paths = self.filter_experiment_archives_by_select(
+                    experiment_archive_paths, select
+                )
+                if len(experiment_archive_paths) == 0:
+                    self.cons.print(
+                        "[yellow]No experiments match the selection criteria.[/yellow]"
+                    )
+                    return
+            except Exception as e:
+                self.cons.print(f"[red]Error during selection: {e}[/red]")
+                sys.exit(1)
+
         ## --- printing detailed information ---
         # Show detailed statistics using RichArchiveInfo
         stats = self._compute_archive_statistics(experiment_archive_paths)
         self.cons.print(f"Experiment Archive @ [grey50]{self.archive_path}[/grey50]")
+        if select:
+            self.cons.print(f"[bright_black]Filtered by: {select}[/bright_black]")
         self.cons.print()
         archive_info = RichArchiveInfo(stats)
         self.cons.print(archive_info)
@@ -1416,7 +1458,27 @@ class CLI(click.RichGroup):
                 self.cons.print(f"[red]Error during selection: {e}[/red]")
                 sys.exit(1)
 
-        ## --- loading metadata and displaying experiments ---
+        ## --- loading metadata and sorting by start time ---
+
+        experiments_with_metadata = []
+        experiments_without_metadata = []
+
+        for path in experiment_archive_paths:
+            try:
+                experiment_meta_path = os.path.join(path, Experiment.METADATA_FILE_NAME)
+                with open(experiment_meta_path) as file:
+                    metadata = json.load(file)
+                experiments_with_metadata.append((path, metadata))
+            except Exception:
+                # Collect experiments with invalid metadata separately
+                experiments_without_metadata.append(path)
+
+        # Sort experiments with metadata by start_time (oldest first)
+        experiments_with_metadata.sort(
+            key=lambda x: x[1].get("start_time", 0)
+        )
+
+        ## --- displaying experiments ---
 
         self.cons.print(
             f"Found [bold]{len(experiment_archive_paths)}[/bold] experiments in archive @ [grey50]{self.archive_path}[/grey50]"
@@ -1425,19 +1487,14 @@ class CLI(click.RichGroup):
             self.cons.print(f"[bright_black]Filtered by: {select}[/bright_black]")
         self.cons.print()
 
-        # Display each experiment
-        for path in experiment_archive_paths:
-            try:
-                experiment_meta_path = os.path.join(path, Experiment.METADATA_FILE_NAME)
-                with open(experiment_meta_path) as file:
-                    metadata = json.load(file)
+        # Display experiments with metadata first (sorted by start time)
+        for path, metadata in experiments_with_metadata:
+            experiment_display = RichExperimentListInfo(path, metadata)
+            self.cons.print(experiment_display)
 
-                experiment_display = RichExperimentListInfo(path, metadata)
-                self.cons.print(experiment_display)
-
-            except Exception:
-                # Skip experiments with invalid metadata, display with unknown status
-                self.cons.print(f"❌ {path} [bright_black](metadata error)[/bright_black]")
+        # Display experiments with invalid metadata last
+        for path in experiments_without_metadata:
+            self.cons.print(f"❌ {path} [bright_black](metadata error)[/bright_black]")
 
         self.cons.print()
 
