@@ -411,3 +411,586 @@ def test_no_pkg_resources_import():
     assert 'from pkg_resources' not in source, "pkg_resources import should be removed from source"
 
     print("✓ Confirmed pkg_resources is no longer imported!")
+
+
+# === COMPREHENSIVE TESTS FOR render_latex_table ===
+
+
+def test_render_latex_table_mixed_string_int():
+    """
+    Test render_latex_table with mixed string and integer values in the same table.
+    This covers the edge case mentioned by the user.
+    """
+    table = PrettyTable()
+    table.field_names = ["ID", "Name", "Score", "Category"]
+    table.add_row([1, "Alice", 95, "Student"])  # Mixed types: int, str, int, str
+    table.add_row([2, "Bob", 87, "Student"])
+    table.add_row(["N/A", "Charlie", 92, "Alumni"])  # Mixed: str, str, int, str
+    table.add_row([4, "Diana", "Incomplete", "Student"])  # Mixed: int, str, str, str
+
+    latex_code = render_latex_table(table)
+
+    # Verify the table contains our expected values
+    assert "Alice" in latex_code
+    assert "1.00" in latex_code  # Integer 1 should be formatted as float
+    assert "95.00" in latex_code  # Integer 95 should be formatted as float
+    assert "N/A" in latex_code  # String values should remain as strings
+    assert "Incomplete" in latex_code  # String values should remain as strings
+    assert "\\begin{tabular}" in latex_code
+    assert "\\end{tabular}" in latex_code
+
+
+def test_render_latex_table_mixed_types_same_column():
+    """
+    Test render_latex_table with mixed data types in the same column.
+    """
+    table = PrettyTable()
+    table.field_names = ["Mixed Column", "Description"]
+    table.add_row([42, "Integer value"])  # Real integer
+    table.add_row([3.14, "Float value"])  # Real float
+    table.add_row(["Text", "String value"])  # String
+    table.add_row([0, "Zero"])  # Integer zero
+
+    latex_code = render_latex_table(table)
+
+    # Check that different types are handled appropriately
+    assert "42.00" in latex_code  # Integer formatted as float
+    assert "3.14" in latex_code  # Float value
+    assert "Text" in latex_code  # String value
+    assert "0.00" in latex_code  # Zero formatted as float
+
+
+def test_render_latex_table_actual_mixed_types():
+    """
+    Test that the function now properly handles PrettyTable with real mixed types.
+    """
+    table = PrettyTable()
+    table.field_names = ["Mixed", "Description"]
+    # Add actual mixed types - this should now work
+    table.add_row([42, "Integer input"])  # Real integer
+    table.add_row(["text", "String input"])  # String
+    table.add_row([3.14159, "Float input"])  # Real float
+    table.add_row([True, "Boolean input"])  # Boolean
+
+    # The function should now handle mixed types correctly
+    latex_code = render_latex_table(table)
+
+    assert "42.00" in latex_code  # Integer formatted as float
+    assert "text" in latex_code
+    assert "3.14" in latex_code  # Float formatted
+    assert "True" in latex_code  # Boolean converted to string
+    assert "Integer input" in latex_code
+    assert "String input" in latex_code
+    assert "Float input" in latex_code
+    assert "Boolean input" in latex_code
+
+
+def test_render_latex_table_boolean_values():
+    """
+    Test render_latex_table with actual boolean values.
+    """
+    table = PrettyTable()
+    table.field_names = ["Feature", "Enabled"]
+    table.add_row(["Authentication", True])  # Real boolean
+    table.add_row(["Logging", False])  # Real boolean
+    table.add_row(["Debug Mode", True])  # Real boolean
+
+    latex_code = render_latex_table(table)
+
+    # Boolean values should be converted to strings
+    assert "True" in latex_code
+    assert "False" in latex_code
+    assert "Authentication" in latex_code
+
+
+def test_render_latex_table_empty_table():
+    """
+    Test render_latex_table with an empty table (headers only, no rows).
+    """
+    table = PrettyTable()
+    table.field_names = ["Column A", "Column B", "Column C"]
+    # No rows added
+
+    latex_code = render_latex_table(table)
+
+    # Should still generate valid LaTeX table structure
+    assert "\\begin{tabular}" in latex_code
+    assert "\\end{tabular}" in latex_code
+    assert "Column A" in latex_code
+    assert "Column B" in latex_code
+    assert "Column C" in latex_code
+    # Should have header structure but no content rows
+    assert "\\toprule" in latex_code
+    assert "\\midrule" in latex_code
+    assert "\\bottomrule" in latex_code
+
+
+def test_render_latex_table_empty_string_values():
+    """
+    Test render_latex_table with empty string values.
+    """
+    table = PrettyTable()
+    table.field_names = ["Name", "Value", "Description"]
+    table.add_row(["", "123", "Empty name"])
+    table.add_row(["Test", "", "Empty value"])
+    table.add_row(["", "", "All empty"])
+    table.add_row(["Normal", "456", "Normal row"])
+
+    latex_code = render_latex_table(table)
+
+    # Should handle empty strings properly
+    assert "Empty name" in latex_code
+    assert "Empty value" in latex_code
+    assert "All empty" in latex_code
+    assert "Normal" in latex_code
+    assert "123.00" in latex_code  # Numeric value should be formatted
+    assert "456.00" in latex_code
+
+
+def test_render_latex_table_extreme_numbers():
+    """
+    Test render_latex_table with very large and very small numbers.
+    """
+    table = PrettyTable()
+    table.field_names = ["Type", "Value"]
+    table.add_row(["Very large", 1e15])  # Real float
+    table.add_row(["Very small", 1e-10])  # Real float
+    table.add_row(["Negative large", -1e12])  # Real float
+    table.add_row(["Zero", 0])  # Real integer
+    table.add_row(["Infinity string", "inf"])  # String representation
+    table.add_row(["Scientific notation", 1.23e-5])  # Real float
+
+    latex_code = render_latex_table(table)
+
+    # Check that extreme numbers are handled
+    assert "Very large" in latex_code
+    assert "Very small" in latex_code
+    assert "Negative large" in latex_code
+    assert "0.00" in latex_code  # Zero should be formatted as float
+    assert "inf" in latex_code  # String values should remain
+    # Scientific notation numbers get formatted to 2 decimal places
+
+
+def test_render_latex_table_mean_std_variations():
+    """
+    Test render_latex_table with various mean±std patterns and edge cases.
+    """
+    table = PrettyTable()
+    table.field_names = ["Test Case", "Value"]
+    table.add_row(["Standard", "10.5±2.3"])
+    table.add_row(["LaTeX format", r"15.2\pm3.1"])
+    table.add_row(["No decimal", "20±5"])
+    table.add_row(["Negative mean", "-5.5±1.2"])
+    table.add_row(["Negative std", "8.0±-0.5"])  # This might be unusual but should work
+    table.add_row(["Zero std", "12.0±0.0"])
+    table.add_row(["Malformed", "not±valid"])  # Should be treated as string
+
+    latex_code = render_latex_table(table)
+
+    # Check that various mean±std patterns are recognized
+    assert "Standard" in latex_code
+    assert "LaTeX format" in latex_code
+    assert "not±valid" in latex_code  # Malformed should remain as string
+    assert "Zero std" in latex_code
+
+
+def test_render_latex_table_whitespace_handling():
+    """
+    Test render_latex_table with various whitespace scenarios.
+    """
+    table = PrettyTable()
+    table.field_names = ["Input", "Expected"]
+    table.add_row(["  spaced  ", "Should trim"])
+    table.add_row([" 123 ", "Number with spaces"])
+    table.add_row([" 5.5 ± 1.2 ", "Mean std with spaces"])
+    table.add_row(["	tab	", "Tab characters"])
+
+    latex_code = render_latex_table(table)
+
+    # Function should handle whitespace properly via strip() and replace()
+    assert "spaced" in latex_code
+    assert "Should trim" in latex_code
+    assert "123.00" in latex_code  # Numeric value should be detected after stripping
+    assert "tab" in latex_code
+
+
+def test_render_latex_table_special_characters():
+    """
+    Test render_latex_table with LaTeX special characters that might need escaping.
+    Note: The current implementation doesn't perform automatic escaping, but these
+    tests document the current behavior and can be updated if escaping is added.
+    """
+    table = PrettyTable()
+    table.field_names = ["Character", "Description"]
+    table.add_row(["&", "Ampersand"])
+    table.add_row(["%", "Percent"])
+    table.add_row(["$", "Dollar"])
+    table.add_row(["_", "Underscore"])
+    table.add_row(["{", "Left brace"])
+    table.add_row(["}", "Right brace"])
+    table.add_row(["\\", "Backslash"])
+    table.add_row(["#", "Hash"])
+    table.add_row(["^", "Caret"])
+
+    latex_code = render_latex_table(table)
+
+    # These characters appear as-is in the current implementation
+    # In a production system, these might need to be escaped
+    assert "&" in latex_code
+    assert "%" in latex_code
+    assert "$" in latex_code
+    assert "_" in latex_code
+    assert "{" in latex_code
+    assert "}" in latex_code
+    assert "Ampersand" in latex_code
+    assert "Percent" in latex_code
+
+
+def test_render_latex_table_unicode_characters():
+    """
+    Test render_latex_table with Unicode characters.
+    """
+    table = PrettyTable()
+    table.field_names = ["Symbol", "Name"]
+    table.add_row(["α", "Alpha"])
+    table.add_row(["β", "Beta"])
+    table.add_row(["π", "Pi"])
+    table.add_row(["∞", "Infinity"])
+    table.add_row(["→", "Arrow"])
+    table.add_row(["🚀", "Rocket"])  # Emoji
+    table.add_row(["ñ", "N with tilde"])
+
+    latex_code = render_latex_table(table)
+
+    # Unicode characters should be preserved
+    assert "α" in latex_code
+    assert "β" in latex_code
+    assert "π" in latex_code
+    assert "∞" in latex_code
+    assert "→" in latex_code
+    assert "🚀" in latex_code
+    assert "ñ" in latex_code
+    assert "Alpha" in latex_code
+
+
+def test_render_latex_table_mathematical_symbols():
+    """
+    Test render_latex_table with mathematical symbols and expressions.
+    """
+    table = PrettyTable()
+    table.field_names = ["Expression", "Result"]
+    table.add_row(["x² + y²", "25"])
+    table.add_row(["√16", "4"])
+    table.add_row(["∑(1,10)", "55"])
+    table.add_row(["≤ 10", "True"])
+    table.add_row(["≥ 5", "False"])
+    table.add_row(["±3", "Range"])
+
+    latex_code = render_latex_table(table)
+
+    # Mathematical symbols should be preserved
+    assert "x² + y²" in latex_code
+    assert "√16" in latex_code
+    assert "∑(1,10)" in latex_code
+    assert "≤ 10" in latex_code
+    assert "≥ 5" in latex_code
+    assert "25.00" in latex_code  # Numeric result should be formatted
+
+
+def test_render_latex_table_custom_extract_func():
+    """
+    Test render_latex_table with a custom extract_func for non-standard string processing.
+    """
+    table = PrettyTable()
+    table.field_names = ["Raw", "Processed"]
+    table.add_row(["STATUS:ACTIVE", "Normal"])
+    table.add_row(["STATUS:INACTIVE", "Normal"])
+    table.add_row(["123", "Normal"])  # This should still be detected as number
+
+    def custom_extract(value):
+        """Custom extract function that handles STATUS: prefixed values"""
+        if isinstance(value, str) and value.startswith("STATUS:"):
+            status = value.split(":")[1]
+            return {
+                "status": status,
+                "string": f"\\textit{{{status.lower()}}}"  # Italicize status
+            }
+        return {"string": str(value)}
+
+    latex_code = render_latex_table(table, extract_func=custom_extract)
+
+    # Check that custom extraction worked
+    assert "\\textit{active}" in latex_code
+    assert "\\textit{inactive}" in latex_code
+    assert "123.00" in latex_code  # Numbers should still be processed normally
+    assert "Normal" in latex_code
+
+
+def test_render_latex_table_custom_transform_func():
+    """
+    Test render_latex_table with a custom transform_func for post-processing cells.
+    """
+    table = PrettyTable()
+    table.field_names = ["Value", "Category"]
+    table.add_row([95, "High"])  # Real integer
+    table.add_row([75, "Medium"])  # Real integer
+    table.add_row([45, "Low"])  # Real integer
+    table.add_row([100, "Perfect"])  # Real integer
+
+    def custom_transform(cell, rows):
+        """Transform function that highlights high values"""
+        if "number" in cell:
+            if cell["number"] >= 90:
+                return {
+                    "string": f"\\textbf{{\\textcolor{{green}}{{{cell['number']:.1f}}}}}",
+                    "highlight": True
+                }
+            elif cell["number"] < 50:
+                return {
+                    "string": f"\\textcolor{{red}}{{{cell['number']:.1f}}}",
+                    "lowlight": True
+                }
+        return {}  # Return empty dict to keep original cell data
+
+    latex_code = render_latex_table(table, transform_func=custom_transform)
+
+    # Check that transformations were applied
+    assert "\\textbf{\\textcolor{green}" in latex_code  # High values highlighted
+    assert "\\textcolor{red}" in latex_code  # Low values colored red
+    assert "High" in latex_code
+    assert "Perfect" in latex_code
+
+
+def test_render_latex_table_combined_custom_functions():
+    """
+    Test render_latex_table with both custom extract_func and transform_func working together.
+    """
+    table = PrettyTable()
+    table.field_names = ["Input", "Score"]
+    table.add_row(["GRADE:A", "95"])
+    table.add_row(["GRADE:B", "85"])
+    table.add_row(["GRADE:F", "25"])
+    table.add_row(["Regular", "75"])
+
+    def custom_extract(value):
+        """Extract grade information"""
+        if isinstance(value, str) and value.startswith("GRADE:"):
+            grade = value.split(":")[1]
+            return {"grade": grade, "string": grade}
+        return {"string": str(value)}
+
+    def custom_transform(cell, rows):
+        """Transform based on grade or score"""
+        if "grade" in cell:
+            if cell["grade"] in ["A", "B"]:
+                return {"string": f"\\textbf{{{cell['grade']}}}", "bold": True}
+            elif cell["grade"] == "F":
+                return {"string": f"\\textcolor{{red}}{{{cell['grade']}}}", "fail": True}
+        elif "number" in cell and cell["number"] >= 90:
+            return {"string": f"\\textcolor{{blue}}{{{cell['number']:.0f}}}", "excellent": True}
+        return {}
+
+    latex_code = render_latex_table(table, extract_func=custom_extract, transform_func=custom_transform)
+
+    # Check that both functions worked together
+    assert "\\textbf{A}" in latex_code  # Grade A should be bold
+    assert "\\textbf{B}" in latex_code  # Grade B should be bold
+    assert "\\textcolor{red}{F}" in latex_code  # Grade F should be red
+    assert "\\textcolor{blue}{95}" in latex_code  # High score should be blue
+    assert "Regular" in latex_code
+
+
+def test_render_latex_table_transform_with_row_context():
+    """
+    Test render_latex_table transform_func that uses the entire rows context for decisions.
+    """
+    table = PrettyTable()
+    table.field_names = ["Name", "Score1", "Score2"]
+    table.add_row(["Alice", "95", "90"])
+    table.add_row(["Bob", "85", "88"])
+    table.add_row(["Charlie", "92", "94"])
+
+    def context_aware_transform(cell, rows):
+        """Transform function that considers all rows to find the highest score"""
+        if "number" in cell and cell["col_index"] in [1, 2]:  # Score columns
+            # Find the maximum score across all rows for comparison
+            all_scores = []
+            for row in rows:
+                for row_cell in row:
+                    if "number" in row_cell and row_cell["col_index"] in [1, 2]:
+                        all_scores.append(row_cell["number"])
+
+            max_score = max(all_scores) if all_scores else 0
+
+            # Highlight the maximum score(s)
+            if cell["number"] == max_score:
+                return {"string": f"\\textbf{{{cell['number']:.0f}}}", "max_score": True}
+        return {}
+
+    latex_code = render_latex_table(table, transform_func=context_aware_transform)
+
+    # The highest score (95) should be highlighted
+    assert "\\textbf{95}" in latex_code
+    assert "Alice" in latex_code
+    assert "Bob" in latex_code
+    assert "Charlie" in latex_code
+
+
+def test_render_latex_table_output_structure_validation():
+    """
+    Test that render_latex_table produces valid LaTeX table structure.
+    """
+    table = PrettyTable()
+    table.field_names = ["A", "B", "C"]
+    table.add_row([1, 2, 3])  # Real integers
+    table.add_row([4, 5, 6])  # Real integers
+
+    latex_code = render_latex_table(table)
+
+    # Validate basic LaTeX table structure
+    assert latex_code.startswith("\\begin{tabular}")
+    assert latex_code.endswith("\\end{tabular}")
+    assert "\\toprule" in latex_code
+    assert "\\midrule" in latex_code
+    assert "\\bottomrule" in latex_code
+
+    # Count column specifications
+    # Look for the pattern { lll } after \begin{tabular}
+    import re
+    pattern = r'\\begin\{tabular\}\{\s*([l\s]+)\s*\}'
+    match = re.search(pattern, latex_code)
+    assert match is not None, "Could not find tabular column specification"
+    column_spec = match.group(1)
+    # Should have 3 'l' characters for 3 columns
+    assert column_spec.count('l') == 3
+
+    # Validate that we have proper row endings (\\)
+    lines = latex_code.split('\n')
+    row_end_lines = [line for line in lines if line.strip() == '\\\\']
+    # Should have row endings: one for header and one for each data row
+    expected_row_endings = 1 + len(table._rows)  # header + data rows
+    assert len(row_end_lines) >= expected_row_endings, f"Expected at least {expected_row_endings} row endings, found {len(row_end_lines)}"
+
+
+def test_render_latex_table_malformed_mean_std():
+    """
+    Test render_latex_table behavior with malformed mean±std patterns.
+    """
+    table = PrettyTable()
+    table.field_names = ["Test", "Value"]
+    table.add_row(["Valid", "10.5±2.3"])
+    table.add_row(["Missing number", "±2.3"])
+    table.add_row(["Missing std", "10.5±"])
+    table.add_row(["Double ±", "10.5±2.3±1.1"])
+    table.add_row(["Letter in number", "a10.5±2.3"])
+    table.add_row(["No numbers", "abc±def"])
+
+    latex_code = render_latex_table(table)
+
+    # Valid pattern should be processed
+    assert "Valid" in latex_code
+
+    # Malformed patterns should be treated as strings
+    assert "±2.3" in latex_code  # Missing number case
+    assert "10.5±" in latex_code  # Missing std case
+    assert "abc±def" in latex_code  # No numbers case
+
+
+def test_render_latex_table_template_parameter_validation():
+    """
+    Test render_latex_table with different template parameters.
+    """
+    table = PrettyTable()
+    table.field_names = ["Name", "Value"]
+    table.add_row(["Test", "123"])
+
+    # Test default template
+    latex_code = render_latex_table(table)
+    assert "\\begin{tabular}" in latex_code
+
+    # Test with explicit template name (same as default)
+    latex_code_explicit = render_latex_table(table, table_template="latex_table.tex.j2")
+    assert latex_code_explicit == latex_code
+
+
+def test_render_latex_table_numeric_precision():
+    """
+    Test render_latex_table numeric formatting precision.
+    """
+    table = PrettyTable()
+    table.field_names = ["Value", "Description"]
+    table.add_row([3.14159, "Pi"])  # Real float
+    table.add_row([2.71828, "E"])  # Real float
+    table.add_row([1.41421, "Sqrt(2)"])  # Real float
+    table.add_row([1, "Integer"])  # Real integer
+    table.add_row([0, "Zero"])  # Real integer
+
+    latex_code = render_latex_table(table)
+
+    # Check that numeric values are formatted to 2 decimal places by default
+    assert "3.14" in latex_code  # Pi truncated to 2 decimals
+    assert "2.72" in latex_code  # E truncated to 2 decimals
+    assert "1.41" in latex_code  # Sqrt(2) truncated to 2 decimals
+    assert "1.00" in latex_code  # Integer formatted with 2 decimals
+    assert "0.00" in latex_code  # Zero formatted with 2 decimals
+
+
+def test_render_latex_table_edge_case_values():
+    """
+    Test render_latex_table with edge case numeric values.
+    """
+    table = PrettyTable()
+    table.field_names = ["Type", "Value"]
+    table.add_row(["Negative zero", -0.0])  # Real float
+    table.add_row(["Very small positive", 1e-100])  # Real float
+    table.add_row(["Very small negative", -1e-100])  # Real float
+    table.add_row(["Float max", float('inf')])  # Real float infinity
+    table.add_row(["Float NaN", float('nan')])  # Real float NaN
+
+    latex_code = render_latex_table(table)
+
+    # Should handle extreme values gracefully
+    assert "Negative zero" in latex_code
+    assert "Very small positive" in latex_code
+    assert "Very small negative" in latex_code
+    # inf and nan get converted to strings
+    assert "inf" in latex_code
+    assert "nan" in latex_code
+
+
+def test_render_latex_table_column_count_consistency():
+    """
+    Test that render_latex_table maintains consistent column count across rows.
+    """
+    table = PrettyTable()
+    table.field_names = ["A", "B", "C", "D"]
+    table.add_row([1, 2, 3, 4])  # Real integers
+    table.add_row(["a", "b", "c", "d"])  # Strings
+    table.add_row([10.5, "mixed", "12.3±1.1", 99])  # Mixed types
+
+    latex_code = render_latex_table(table)
+
+    # Verify column structure by counting ampersands in data section
+    lines = latex_code.split('\n')
+    # Find content rows (after \midrule but before \bottomrule)
+    in_content = False
+    ampersand_lines = []
+    for line in lines:
+        if '\\midrule' in line:
+            in_content = True
+            continue
+        if '\\bottomrule' in line:
+            break
+        if in_content and '&' in line and not line.strip().startswith('%'):
+            ampersand_lines.append(line)
+
+    # Count total ampersands in content section
+    # For a 4-column table with 3 rows, we expect:
+    # Row 1: 3 ampersands (4 cells = 3 separators)
+    # Row 2: 3 ampersands (4 cells = 3 separators)
+    # Total: 6 ampersands in content section
+    total_ampersands = sum(line.count('&') for line in ampersand_lines)
+
+    # We have 3 data rows (including headers), each with 3 ampersands
+    expected_ampersands = 3 * 3  # 3 rows × 3 ampersands per row
+    assert total_ampersands == expected_ampersands, f"Expected {expected_ampersands} ampersands total, found {total_ampersands}"

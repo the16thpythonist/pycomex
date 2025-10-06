@@ -799,7 +799,8 @@ def render_latex_table(
 
         for col_index, value in enumerate(_row):
 
-            value_clean = value.strip().replace(" ", "")
+            # Convert value to string to handle mixed types (int, float, bool, etc.)
+            value_clean = str(value).strip().replace(" ", "")
             info: dict = {
                 "row_index": row_index,
                 "col_index": col_index,
@@ -837,8 +838,8 @@ def render_latex_table(
 
             # If neither of the special cases apply we apply the `extract_func` from the arguments
             # which implements the fallback version of how to extract the dict information from the given
-            # cell string.
-            info.update(extract_func(value))
+            # cell string. Convert value to string to ensure compatibility.
+            info.update(extract_func(str(value)))
             row.append(info)
 
         rows.append(row)
