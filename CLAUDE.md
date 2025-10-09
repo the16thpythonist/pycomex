@@ -68,6 +68,11 @@ def multiply(a: int, b: int) -> int:
 - `pycomex template experiment` - Create new experiment from template
 - `pycomex archive` - Interact with experiment results
 
+### Documentation
+- `mkdocs serve` - Start local documentation server at http://127.0.0.1:8000
+- `mkdocs build` - Build documentation to `site/` directory
+- Documentation sources are in `docs/` with configuration in `mkdocs.yml`
+
 ## Architecture
 
 ### Core Components
@@ -97,7 +102,8 @@ def multiply(a: int, b: int) -> int:
 - `pycomex/plugins/` - Plugin system for notifications, W&B integration, etc.
 - `pycomex/templates/` - Jinja2 templates for code generation
 - `tests/` - Comprehensive test suite with assets and examples
-- `docs/` - MkDocs documentation source
+- `mkdocs.yml` - MkDocs configuration file (in project root)
+- `docs/` - MkDocs documentation markdown files
 
 **Archive System:**
 - Experiments create nested folder structures: `base_path/namespace/timestamp/`

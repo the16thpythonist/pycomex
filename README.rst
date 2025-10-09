@@ -5,6 +5,10 @@
         :target: https://pycomex.readthedocs.io/en/latest/?version=latest
         :alt: Documentation Status
 
+.. image:: https://img.shields.io/badge/docs-gh--pages-blue.svg
+        :target: https://the16thpythonist.github.io/pycomex/
+        :alt: GitHub Pages Documentation
+
 =============================================
 ☄️ PyComex - Python Computational Experiments
 =============================================
@@ -193,11 +197,12 @@ For more command line options use ``pycomex --help``.
 📖 Documentation
 ================
 
-Unfortunately, there exists no dedicated documentation of the project yet. However, some additional details on some 
-key topics can be found in the ``DOCUMENTATION.rst`` file.
+Complete documentation is available at: https://the16thpythonist.github.io/pycomex/
 
-Aside from that, the ``pycomex/examples`` ( https://github.com/the16thpythonist/pycomex/tree/master/pycomex/examples ) folder 
-contains some example modules which illustrate some of the key features of the framework by practical example.
+Additional details on specific topics can be found in the ``DOCUMENTATION.rst`` file.
+
+The ``pycomex/examples`` ( https://github.com/the16thpythonist/pycomex/tree/master/pycomex/examples ) folder
+contains practical example modules that illustrate key features of the framework.
 
 ==========
 🤝 Credits

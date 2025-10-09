@@ -19,6 +19,8 @@ nav:
   - Advanced Usage:
       - Writing Plugins: advanced_plugins.md
       - Plugin Hooks: advanced_hooks.md
+  - Tools:
+      - VSCode Extension: tools_vscode.md
 
 markdown_extensions:
   - admonition
