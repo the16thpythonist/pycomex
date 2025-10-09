@@ -746,6 +746,7 @@ class CLI(click.RichGroup):
         self.archive_group.add_command(self.archive_tail_command)
         self.archive_group.add_command(self.archive_compress_command)
         self.archive_group.add_command(self.archive_info_command)
+        self.archive_group.add_command(self.archive_modify_command)
         self.add_command(self.archive_group)
 
     def format_help(self, ctx, formatter) -> None:
@@ -1935,6 +1936,264 @@ class CLI(click.RichGroup):
 
         archive_info = RichArchiveInfo(stats)
         self.cons.print(archive_info)
+
+    @click.command(
+        "modify", short_help="Modify parameters or metadata of archived experiments."
+    )
+    @click.option(
+        "--select",
+        type=click.STRING,
+        help=(
+            "Criterion by which to select the experiments to modify. Is implemented as a python boolean "
+            "expression that may use the special variables 'm' (metadata dict) and 'p' (parameters dict). "
+            "Will be evaluated on all the experiments in the archive."
+        ),
+    )
+    @click.option(
+        "--all", is_flag=True, help="Select all experiments for modification."
+    )
+    @click.option(
+        "--modify-parameters",
+        type=click.STRING,
+        help=(
+            "Python code snippet to modify parameters. The variable 'p' (parameters dict) and 'm' (metadata dict) "
+            "are available for use. Example: \"p['LEARNING_RATE'] *= 10\""
+        ),
+    )
+    @click.option(
+        "--modify-metadata",
+        type=click.STRING,
+        help=(
+            "Python code snippet to modify metadata. The variable 'm' (metadata dict) and 'p' (parameters dict) "
+            "are available for use. Example: \"m['tags'] = ['processed']\""
+        ),
+    )
+    @click.option(
+        "--dry-run",
+        is_flag=True,
+        help="Preview changes without actually modifying the files.",
+    )
+    @click.option("-v", "--verbose", is_flag=True, help="Print detailed progress information.")
+    @click.pass_obj
+    def archive_modify_command(
+        self,
+        select: str,
+        all: bool,
+        modify_parameters: str,
+        modify_metadata: str,
+        dry_run: bool,
+        verbose: bool,
+    ) -> None:
+        """
+        This command modifies parameters or metadata of archived experiments.
+
+        The --select option determines a snippet of python code which is supposed to evaluate to a boolean
+        value that determines whether or not an experiment should be selected for modification
+        (True meaning it will be modified, False meaning it will not be modified). In this expression,
+        the following special variables are available: `m` which is the metadata dictionary of the
+        experiment and `p` which is the parameters value dict of the experiment.
+
+        The --modify-parameters option allows you to provide Python code that modifies the parameters
+        dictionary `p`. The modifications will be persisted to the experiment metadata file.
+
+        The --modify-metadata option allows you to provide Python code that modifies the metadata
+        dictionary `m`. The modifications will be persisted to the experiment metadata file.
+
+        If the --dry-run flag is set, the command will preview the changes without actually modifying
+        the files.
+        """
+        # Check that at least one modification option is provided
+        if not modify_parameters and not modify_metadata:
+            self.cons.print(
+                "[red]Error: At least one of --modify-parameters or --modify-metadata must be provided.[/red]"
+            )
+            sys.exit(1)
+
+        # Check that at least one selection option is provided
+        if not select and not all:
+            self.cons.print(
+                "[red]Error: Either --select or --all must be provided to specify which experiments to modify.[/red]"
+            )
+            sys.exit(1)
+
+        ## --- reading the experiment archive ---
+
+        # Collect all experiment archive paths
+        experiment_archive_paths: list[str] = self.collect_experiment_archive_paths(
+            self.archive_path
+        )
+
+        if len(experiment_archive_paths) == 0:
+            self.cons.print(
+                f'[red]There are no archived experiments in the given archive path "[bold]{self.archive_path}[/bold]"!'
+                f"Perhaps the wrong folder was selected? Set the --path option to the archive "
+                f"command group to provide a custom path.[/red]"
+            )
+            sys.exit(1)
+
+        self.cons.print(f"Experiment Archive @ [grey50]{self.archive_path}[/grey50]")
+        self.cons.print(
+            f"Found a total of [bold white]{len(experiment_archive_paths)}[/bold white] experiments"
+        )
+
+        ## --- selecting experiments to modify ---
+
+        modify_paths: list[str] = []
+
+        if all:
+            self.cons.print("Selecting ALL experiments for modification...")
+            modify_paths = experiment_archive_paths
+        elif select is not None:
+            self.cons.print(f"Selecting based on expression: [cyan]{select}[/cyan] ...")
+            try:
+                modify_paths = self.filter_experiment_archives_by_select(
+                    experiment_archive_paths, select
+                )
+            except Exception as e:
+                self.cons.print(
+                    f'[red]Error evaluating "select" expression: {e}[/red]'
+                )
+                sys.exit(1)
+
+        if len(modify_paths) == 0:
+            self.cons.print("[yellow]No experiments match the selection criteria.[/yellow]")
+            return
+
+        self.cons.print(
+            f"Selected [bold white]{len(modify_paths)}[/bold white] experiments for modification."
+        )
+
+        if dry_run:
+            self.cons.print("[yellow]DRY RUN MODE - No changes will be saved[/yellow]")
+
+        ## --- validating modification code ---
+
+        # Validate that the provided code snippets are syntactically correct
+        if modify_parameters:
+            try:
+                compile(modify_parameters, "<modify-parameters>", "exec")
+            except SyntaxError as e:
+                self.cons.print(
+                    f"[red]Syntax error in --modify-parameters: {e}[/red]"
+                )
+                sys.exit(1)
+
+        if modify_metadata:
+            try:
+                compile(modify_metadata, "<modify-metadata>", "exec")
+            except SyntaxError as e:
+                self.cons.print(
+                    f"[red]Syntax error in --modify-metadata: {e}[/red]"
+                )
+                sys.exit(1)
+
+        ## --- modifying experiments ---
+
+        self.cons.print("🔧 Modifying experiments ...")
+        modified_count = 0
+        error_count = 0
+
+        for path in modify_paths:
+            try:
+                # Load the metadata of the experiment
+                experiment_meta_path: str = os.path.join(
+                    path, Experiment.METADATA_FILE_NAME
+                )
+                with open(experiment_meta_path) as file:
+                    metadata: dict = json.load(file)
+
+                # Create the evaluation context with metadata and parameters
+                m = metadata
+                p = {
+                    param: info.get("value")
+                    for param, info in metadata["parameters"].items()
+                    if "value" in info
+                }
+
+                # Store original values for verbose output
+                if verbose or dry_run:
+                    original_p = p.copy()
+                    # Note: original_m kept for future enhancement to show metadata changes
+                    # original_m = json.loads(json.dumps(m))  # Deep copy
+
+                # Create a safe execution environment
+                exec_globals = {"m": m, "p": p}
+
+                # Apply modifications
+                if modify_parameters:
+                    exec(modify_parameters, exec_globals)
+                    # Update the metadata with modified parameter values
+                    for param_name, param_value in p.items():
+                        if param_name in metadata["parameters"]:
+                            metadata["parameters"][param_name]["value"] = param_value
+
+                if modify_metadata:
+                    exec(modify_metadata, exec_globals)
+
+                # Show changes if verbose or dry-run
+                if verbose or dry_run:
+                    # Extract experiment name from path for clearer output
+                    path_parts = path.rstrip("/").split("/")
+                    experiment_id = (
+                        "/".join(path_parts[-2:]) if len(path_parts) >= 2 else path_parts[-1]
+                    )
+
+                    self.cons.print(f"\n📝 [cyan]{experiment_id}[/cyan]")
+
+                    if modify_parameters:
+                        changes_detected = False
+                        for param_name in p.keys():
+                            if param_name in original_p and original_p[param_name] != p[param_name]:
+                                changes_detected = True
+                                self.cons.print(
+                                    f"  [yellow]p['{param_name}'][/yellow]: {original_p[param_name]} → {p[param_name]}"
+                                )
+                        if not changes_detected and verbose:
+                            self.cons.print("  [dim]No parameter changes[/dim]")
+
+                    if modify_metadata and verbose:
+                        # For metadata, just indicate it was modified (could be complex)
+                        self.cons.print("  [green]Metadata modification applied[/green]")
+
+                # Save the modified metadata (unless dry-run)
+                if not dry_run:
+                    with open(experiment_meta_path, mode="w") as file:
+                        content = json.dumps(metadata, indent=4, sort_keys=True)
+                        file.write(content)
+
+                    if verbose:
+                        self.cons.print("  [green]✓ Saved[/green]")
+
+                modified_count += 1
+
+            except Exception as e:
+                error_count += 1
+                # Extract experiment name from path
+                path_parts = path.rstrip("/").split("/")
+                experiment_id = (
+                    "/".join(path_parts[-2:]) if len(path_parts) >= 2 else path_parts[-1]
+                )
+                self.cons.print(
+                    f"[red]✗ Error modifying {experiment_id}: {e}[/red]"
+                )
+                if verbose:
+                    import traceback
+                    self.cons.print(f"[red]{traceback.format_exc()}[/red]")
+
+        ## --- summary ---
+
+        self.cons.print()
+        if dry_run:
+            self.cons.print(
+                f"[yellow]DRY RUN: Would modify {modified_count} experiment(s)[/yellow]"
+            )
+        else:
+            self.cons.print(
+                f"[green]✅ Successfully modified {modified_count} experiment(s)[/green]"
+            )
+
+        if error_count > 0:
+            self.cons.print(f"[red]❌ Failed to modify {error_count} experiment(s)[/red]")
 
     ## --- utility methods ---
     # The following methods do not directly implement CLI commands but rather provide utility

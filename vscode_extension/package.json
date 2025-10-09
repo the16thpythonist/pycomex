@@ -3,11 +3,12 @@
   "displayName": "PyComex",
   "description": "VSCode extension for PyComex - Python Computational Experiments framework",
   "version": "0.1.0",
-  "publisher": "jonseb1998",
+  "publisher": "JonasTeufel",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/the16thpythonist/pycomex/tree/main/vscode_extension"
+    "url": "https://github.com/the16thpythonist/pycomex.git",
+    "directory": "vscode_extension"
   },
   "engines": {
     "vscode": "^1.74.0"

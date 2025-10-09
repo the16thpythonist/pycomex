@@ -568,3 +568,26 @@ Bug Fixes
   cache collisions and exceptions in some rare cases.
 - Removed the warning about the deprecated pkg_resources library which was printed at the beginning
   of each command.
+
+0.24.0 (09.10.2025)
+-------------------
+
+CLI
+
+- Added the ``archive modify`` command which can be used to batch-modify parameters or metadata
+  of archived experiments. Supports ``--select`` for filtering, ``--modify-parameters`` and
+  ``--modify-metadata`` for applying Python code modifications, ``--dry-run`` for previewing
+  changes, and ``--verbose`` for detailed progress output.
+
+Miscellaneous
+
+- Added the `vscode_extension` folder which implements a custom VSCode extension for pycomex 
+  can be used to directly start pycomex config yaml files from the editor window as well as 
+  changes the icon for the results folder archive to a custom icon.
+
+Documentation
+
+- Moved the documentation files from the `docs/docs` folder to the root `docs` folder
+  to make it easier to find them.
+- Moved the `docs/mkdocs.yml` file to the root folder.
+- Added a documentation page which introduces the VSCode extension and explains the features.
