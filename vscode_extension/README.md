@@ -108,7 +108,7 @@ Initial release with two core features:
 
 ## License
 
-MIT License - See the PyComex repository for details.
+This extension is licensed under the MIT License. See [LICENSE.md](LICENSE.md) for details.
 
 ## Links
 
