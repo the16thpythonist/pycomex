@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
-import { PyComexConfigCodeLensProvider } from './codelens/configRunProvider';
 import { runExperimentConfig, runExperimentFromActiveFile } from './commands/runExperiment';
+import * as path from 'path';
 
 /**
  * Checks if a document is a PyComex experiment config file.
@@ -33,6 +33,36 @@ function updatePyComexContext(editor: vscode.TextEditor | undefined): void {
 }
 
 /**
+ * File decoration provider for PyComex experiment folders.
+ * Adds a beaker badge to "results" and "archive" folders.
+ */
+class PyComexFileDecorationProvider implements vscode.FileDecorationProvider {
+    private readonly _onDidChangeFileDecorations = new vscode.EventEmitter<vscode.Uri | vscode.Uri[] | undefined>();
+    readonly onDidChangeFileDecorations = this._onDidChangeFileDecorations.event;
+
+    provideFileDecoration(uri: vscode.Uri): vscode.ProviderResult<vscode.FileDecoration> {
+        // Only decorate folders
+        const basename = path.basename(uri.fsPath);
+
+        // Check if this is a results or archive folder
+        if (basename === 'results' || basename === 'archive') {
+            return {
+                badge: '🗃️',
+                tooltip: 'PyComex experiment archive',
+                color: new vscode.ThemeColor('terminal.ansiCyan'),
+                propagate: false
+            };
+        }
+
+        return undefined;
+    }
+
+    dispose(): void {
+        this._onDidChangeFileDecorations.dispose();
+    }
+}
+
+/**
  * This method is called when the extension is activated.
  * The extension is activated the very first time a command is executed or
  * when a YAML file is opened (as defined in activationEvents in package.json).
@@ -58,11 +88,9 @@ export function activate(context: vscode.ExtensionContext) {
         }
     });
 
-    // Register the CodeLens provider for YAML files
-    const codeLensProvider = vscode.languages.registerCodeLensProvider(
-        { language: 'yaml', scheme: 'file' },
-        new PyComexConfigCodeLensProvider()
-    );
+    // Register the file decoration provider for PyComex folders
+    const fileDecorationProvider = new PyComexFileDecorationProvider();
+    const decorationProviderDisposable = vscode.window.registerFileDecorationProvider(fileDecorationProvider);
 
     // Register the command to run an experiment config
     // This command now uses the active editor's document
@@ -90,7 +118,8 @@ export function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(
         editorChangeListener,
         documentChangeListener,
-        codeLensProvider,
+        decorationProviderDisposable,
+        fileDecorationProvider,
         runConfigCommand,
         runActiveFileCommand
     );

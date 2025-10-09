@@ -26,9 +26,9 @@ code --install-extension pycomex-vscode-0.1.0.vsix
 
 ### 🧪 Experiment Archive Visualization
 
-The extension provides custom folder icons for PyComex archive directories, making experiment results immediately identifiable in your workspace. Folders named `results` or `archive` automatically display with a distinctive beaker icon, eliminating the need to mentally track which directories contain experimental outputs.
+The extension adds distinctive beaker badges (🗃️) and dark teal coloring to PyComex archive directories, making experiment results immediately identifiable in your workspace. Folders named `results` or `archive` automatically display with these visual indicators alongside your existing icon theme, eliminating the need to mentally track which directories contain experimental outputs.
 
-**Configuration:** Enable the icon theme via Command Palette (`Ctrl+Shift+P`) → "File Icon Theme" → "PyComex Icons".
+**Note:** Visual indicators appear automatically - no configuration needed. Works with any VSCode icon theme.
 
 ### ▶️ Quick Experiment Execution
 

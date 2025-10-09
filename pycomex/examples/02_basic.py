@@ -1,10 +1,10 @@
 """
 This experiment will repeatedly create a text made of randomly sampled words.
 
-The words are assembled into a text file, which is supposed to be saved as an
-artifact of the computational experiment. Additionally, information such as the
-total text length / run time of the calculations are to be saved as experiment
-metadata.
+The words are loaded from a local wordlist file and assembled into a text file,
+which is saved as an artifact of the computational experiment. Additionally,
+information such as the total text length / run time of the calculations are
+saved as experiment metadata.
 
 This module-level doc string will automatically be saved as the description
 for this experiment
@@ -14,7 +14,6 @@ import os
 import random
 import tempfile
 import textwrap
-import urllib.request
 
 from pycomex import Experiment, file_namespace, folder_path
 
@@ -24,7 +23,7 @@ from pycomex import Experiment, file_namespace, folder_path
 
 # :param NUM_WORDS:
 #       The number of words to be generated each time
-NUM_WORDS: int = 1000
+NUM_WORDS: int = 50
 # :param REPETITIONS:
 #       The number of times to repeat the generation process
 REPETITIONS: int = 10
@@ -45,9 +44,10 @@ def experiment(e: Experiment):
     e.log("starting experiment...")
     e.log_parameters()
 
-    e.log("downloading word list...")
-    response = urllib.request.urlopen("https://www.mit.edu/~ecprice/wordlist.10000")
-    WORDS = response.read().decode("utf-8").splitlines()
+    e.log("loading word list...")
+    wordlist_path = os.path.join(os.path.dirname(__file__), "wordlist.txt")
+    with open(wordlist_path, "r") as f:
+        WORDS = f.read().splitlines()
     # (1) The uppercase "experiment parameters" are stored in the "parameters"
     #     field of the experiment instance. Alternatively the variables can
     #     also just be used directly.

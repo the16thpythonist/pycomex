@@ -4,9 +4,9 @@ A Visual Studio Code extension for [PyComex](https://github.com/the16thpythonist
 
 ## Features
 
-### 🧪 Custom Icons for Results Folders
+### 🧪 Folder Badges for Experiment Archives
 
-Folders named `results` or `archive` in your PyComex projects will automatically display with a distinctive beaker icon, making it easy to identify experiment output directories.
+Folders named `results` or `archive` in your PyComex projects automatically display with a beaker badge (🗃️) and are colored in dark teal, making it easy to identify experiment output directories. This works alongside any existing icon theme you have installed.
 
 ### ▶️ Run Experiment from Config Files
 
@@ -60,19 +60,6 @@ parameters:
 
 **Note:** If no virtual environment is found, the command runs directly assuming PyComex is in your system PATH.
 
-### Enabling Folder Icons
-
-To enable the PyComex icon theme:
-
-1. Press `Ctrl+Shift+P` (or `Cmd+Shift+P` on Mac)
-2. Type "File Icon Theme"
-3. Select "PyComex Icons"
-
-Or via settings:
-1. Open VS Code settings (`Ctrl+,` or `Cmd+,`)
-2. Search for "File Icon Theme"
-3. Select "PyComex Icons" from the dropdown
-
 ### Available Commands
 
 Access these via Command Palette (`Ctrl+Shift+P`):
@@ -103,8 +90,8 @@ For development setup and technical documentation, see [USAGE.md](USAGE.md).
 ### 0.1.0
 
 Initial release with two core features:
-- Custom folder icons for `results` and `archive` directories
-- Green run button for PyComex experiment config YAML files
+- Folder badges (🗃️) and dark teal coloring for `results` and `archive` directories that work with any icon theme
+- Green run button for PyComex experiment config YAML files with automatic virtual environment activation
 
 ## License
 

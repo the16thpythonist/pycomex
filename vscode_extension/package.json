@@ -2,7 +2,7 @@
   "name": "pycomex-vscode",
   "displayName": "PyComex",
   "description": "VSCode extension for PyComex - Python Computational Experiments framework",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "publisher": "JonasTeufel",
   "license": "MIT",
   "repository": {
@@ -21,13 +21,6 @@
   ],
   "main": "./out/extension.js",
   "contributes": {
-    "iconThemes": [
-      {
-        "id": "pycomex-icons",
-        "label": "PyComex Icons",
-        "path": "./pycomex-icon-theme.json"
-      }
-    ],
     "commands": [
       {
         "command": "pycomex.runConfig",

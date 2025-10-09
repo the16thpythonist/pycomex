@@ -1,4 +1,4 @@
 extend: 02_basic.py
 parameters:
-  NUM_WORDS: 500
+  NUM_WORDS: 20
   REPETITIONS: 5
