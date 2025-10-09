@@ -13,10 +13,8 @@
       
       
       
-        <link rel="prev" href="../advanced_plugins/">
+        <link rel="prev" href="../advanced_hooks/">
       
-      
-        <link rel="next" href="../tools_vscode/">
       
       
       <link rel="icon" href="../assets/images/favicon.png">
@@ -24,7 +22,7 @@
     
     
       
-        <title>Plugin Hooks - pycomex</title>
+        <title>VSCode Extension - pycomex</title>
       
     
     
@@ -66,7 +64,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#plugin-hooks" class="md-skip">
+        <a href="#vscode-extension" class="md-skip">
           Skip to content
         </a>
       
@@ -102,7 +100,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Plugin Hooks
+              VSCode Extension
             
           </span>
         </div>
@@ -311,20 +309,20 @@
       
   
   
-    
   
   
-  
     
     
     
     
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" checked>
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4" >
         
           
           <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
@@ -340,7 +338,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_4">
             <span class="md-nav__icon md-icon"></span>
             Advanced Usage
@@ -374,6 +372,76 @@
                 
   
   
+  
+  
+    <li class="md-nav__item">
+      <a href="../advanced_hooks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Plugin Hooks
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    Tools
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            Tools
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
     
   
   
@@ -391,7 +459,7 @@
   
   
   <span class="md-ellipsis">
-    Plugin Hooks
+    VSCode Extension
     
   </span>
   
@@ -404,7 +472,7 @@
   
   
   <span class="md-ellipsis">
-    Plugin Hooks
+    VSCode Extension
     
   </span>
   
@@ -427,100 +495,37 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#plugin_registered" class="md-nav__link">
+  <a href="#motivation" class="md-nav__link">
     <span class="md-ellipsis">
-      🪝 plugin_registered
+      Motivation
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#plugin_registered__plugin_name" class="md-nav__link">
+  <a href="#installation" class="md-nav__link">
     <span class="md-ellipsis">
-      🪝 plugin_registered__{plugin_name}
+      Installation
     </span>
   </a>
   
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#experiment-hooks" class="md-nav__link">
-    <span class="md-ellipsis">
-      Experiment Hooks
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Experiment Hooks">
+    <nav class="md-nav" aria-label="Installation">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#before_experiment_parameters" class="md-nav__link">
+  <a href="#from-vscode-marketplace" class="md-nav__link">
     <span class="md-ellipsis">
-      🪝 before_experiment_parameters
+      From VSCode Marketplace
     </span>
   </a>
   
 </li>
         
           <li class="md-nav__item">
-  <a href="#experiment_constructed" class="md-nav__link">
+  <a href="#from-vsix-package" class="md-nav__link">
     <span class="md-ellipsis">
-      🪝 experiment_constructed
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#after_experiment_initialize" class="md-nav__link">
-    <span class="md-ellipsis">
-      🪝 after_experiment_initialize
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#after_experiment_finalize" class="md-nav__link">
-    <span class="md-ellipsis">
-      🪝 after_experiment_finalize
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#experiment_commit_fig" class="md-nav__link">
-    <span class="md-ellipsis">
-      🪝 experiment_commit_fig
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#experiment_commit_json" class="md-nav__link">
-    <span class="md-ellipsis">
-      🪝 experiment_commit_json
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#experiment_commit_raw" class="md-nav__link">
-    <span class="md-ellipsis">
-      🪝 experiment_commit_raw
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#experiment_track" class="md-nav__link">
-    <span class="md-ellipsis">
-      🪝 experiment_track
+      From VSIX Package
     </span>
   </a>
   
@@ -532,19 +537,28 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#config-hooks" class="md-nav__link">
+  <a href="#features" class="md-nav__link">
     <span class="md-ellipsis">
-      Config Hooks
+      Features
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Config Hooks">
+    <nav class="md-nav" aria-label="Features">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#after_plugins_loaded" class="md-nav__link">
+  <a href="#experiment-archive-visualization" class="md-nav__link">
     <span class="md-ellipsis">
-      🪝 after_plugins_loaded
+      🧪 Experiment Archive Visualization
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#quick-experiment-execution" class="md-nav__link">
+    <span class="md-ellipsis">
+      ▶️ Quick Experiment Execution
     </span>
   </a>
   
@@ -552,6 +566,24 @@
         
       </ul>
     </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#configuration-detection" class="md-nav__link">
+    <span class="md-ellipsis">
+      Configuration Detection
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#next-steps" class="md-nav__link">
+    <span class="md-ellipsis">
+      Next Steps
+    </span>
+  </a>
   
 </li>
       
@@ -559,76 +591,6 @@
   
 </nav>
       
-    </li>
-  
-
-              
-            
-          </ul>
-        </nav>
-      
-    </li>
-  
-
-    
-      
-      
-  
-  
-  
-  
-    
-    
-    
-    
-    
-    <li class="md-nav__item md-nav__item--nested">
-      
-        
-        
-          
-        
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5" >
-        
-          
-          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
-            
-  
-  
-  <span class="md-ellipsis">
-    Tools
-    
-  </span>
-  
-
-            <span class="md-nav__icon md-icon"></span>
-          </label>
-        
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_5">
-            <span class="md-nav__icon md-icon"></span>
-            Tools
-          </label>
-          <ul class="md-nav__list" data-md-scrollfix>
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../tools_vscode/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    VSCode Extension
-    
-  </span>
-  
-
-      </a>
     </li>
   
 
@@ -657,278 +619,51 @@
 
 
 
-<h1 id="plugin-hooks">Plugin Hooks<a class="headerlink" href="#plugin-hooks" title="Permanent link">&para;</a></h1>
-<p>This page aims to provide a (non-exhaustive) list of the available hooks in the pycomex library. Each hook is described with its name, a brief description, and the parameters it accepts.</p>
-<h3 id="plugin_registered">🪝 <code>plugin_registered</code><a class="headerlink" href="#plugin_registered" title="Permanent link">&para;</a></h3>
-<p>This hook is executed <em>right</em> after a plugin is registerd. The hook receives the name of the plugin that was registered as well as the plugin object itself. This hook can for example be used to hot-swap or replace certain plugins with newer or alternative versions.</p>
-<table>
-<thead>
-<tr>
-<th>Parameter</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>name</code></td>
-<td>The name of the plugin that was registered</td>
-</tr>
-<tr>
-<td><code>plugin</code></td>
-<td>The <code>Plugin</code> object instance that was registered</td>
-</tr>
-<tr>
-<td><code>config</code></td>
-<td>The <code>Config</code> instance that is used by the pycomex library</td>
-</tr>
-</tbody>
-</table>
-<p>Returns: None</p>
-<hr />
-<h3 id="plugin_registered__plugin_name">🪝 <code>plugin_registered__{plugin_name}</code><a class="headerlink" href="#plugin_registered__plugin_name" title="Permanent link">&para;</a></h3>
-<p>This hook is executed right after a plugin is registered. The name of the hook is dynamically derived from the name of the actual plugin. Therefore, only the plugin itself will likely be able to know the name of this hook and be able to register a function to it.</p>
-<table>
-<thead>
-<tr>
-<th>Parameter</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>plugin</code></td>
-<td>The <code>Plugin</code> object instance that was registered</td>
-</tr>
-<tr>
-<td><code>config</code></td>
-<td>The <code>Config</code> instance that is used by the pycomex library</td>
-</tr>
-</tbody>
-</table>
-<h2 id="experiment-hooks"><code>Experiment</code> Hooks<a class="headerlink" href="#experiment-hooks" title="Permanent link">&para;</a></h2>
-<hr />
-<h3 id="before_experiment_parameters">🪝 <code>before_experiment_parameters</code><a class="headerlink" href="#before_experiment_parameters" title="Permanent link">&para;</a></h3>
-<p>This hook is executed within the lifetime of an <code>Experiment</code> instance after its construction - right before the experiment parameters are processed. </p>
-<table>
-<thead>
-<tr>
-<th>Parameter</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>experiment</code></td>
-<td>The <code>Experiment</code> instance itself</td>
-</tr>
-</tbody>
-</table>
-<h3 id="experiment_constructed">🪝 <code>experiment_constructed</code><a class="headerlink" href="#experiment_constructed" title="Permanent link">&para;</a></h3>
-<p>This hook is executed at the end of the <code>Experiment</code> constructor. It can be used
-to perform additional setup steps once the experiment object exists.</p>
-<table>
-<thead>
-<tr>
-<th>Parameter</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>experiment</code></td>
-<td>The <code>Experiment</code> instance that was created</td>
-</tr>
-<tr>
-<td><code>config</code></td>
-<td>The <code>Config</code> instance that is used by the pycomex library</td>
-</tr>
-</tbody>
-</table>
-<h3 id="after_experiment_initialize">🪝 <code>after_experiment_initialize</code><a class="headerlink" href="#after_experiment_initialize" title="Permanent link">&para;</a></h3>
-<p>Executed after the <code>Experiment.initialize</code> method completed. At this point the
-archive folder has been created and the experiment is ready to run.</p>
-<table>
-<thead>
-<tr>
-<th>Parameter</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>experiment</code></td>
-<td>The <code>Experiment</code> instance itself</td>
-</tr>
-<tr>
-<td><code>config</code></td>
-<td>The <code>Config</code> instance that is used by the pycomex library</td>
-</tr>
-</tbody>
-</table>
-<h3 id="after_experiment_finalize">🪝 <code>after_experiment_finalize</code><a class="headerlink" href="#after_experiment_finalize" title="Permanent link">&para;</a></h3>
-<p>Executed after the <code>Experiment.finalize</code> method completed. This allows for
-additional cleanup or post-processing once the experiment is finished.</p>
-<table>
-<thead>
-<tr>
-<th>Parameter</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>experiment</code></td>
-<td>The <code>Experiment</code> instance itself</td>
-</tr>
-<tr>
-<td><code>config</code></td>
-<td>The <code>Config</code> instance that is used by the pycomex library</td>
-</tr>
-</tbody>
-</table>
-<h3 id="experiment_commit_fig">🪝 <code>experiment_commit_fig</code><a class="headerlink" href="#experiment_commit_fig" title="Permanent link">&para;</a></h3>
-<p>Called at the end of <code>Experiment.commit_fig</code> after the figure has been saved to
-the archive folder.</p>
-<table>
-<thead>
-<tr>
-<th>Parameter</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>experiment</code></td>
-<td>The <code>Experiment</code> instance itself</td>
-</tr>
-<tr>
-<td><code>name</code></td>
-<td>The name of the saved figure file</td>
-</tr>
-<tr>
-<td><code>figure</code></td>
-<td>The <code>matplotlib</code> figure instance</td>
-</tr>
-<tr>
-<td><code>config</code></td>
-<td>The <code>Config</code> instance that is used by the pycomex library</td>
-</tr>
-</tbody>
-</table>
-<h3 id="experiment_commit_json">🪝 <code>experiment_commit_json</code><a class="headerlink" href="#experiment_commit_json" title="Permanent link">&para;</a></h3>
-<p>Called at the end of <code>Experiment.commit_json</code> once the JSON file has been
-written.</p>
-<table>
-<thead>
-<tr>
-<th>Parameter</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>experiment</code></td>
-<td>The <code>Experiment</code> instance itself</td>
-</tr>
-<tr>
-<td><code>name</code></td>
-<td>The name of the saved JSON file</td>
-</tr>
-<tr>
-<td><code>data</code></td>
-<td>The original data structure that was saved</td>
-</tr>
-<tr>
-<td><code>content</code></td>
-<td>The string representation that was written to the file</td>
-</tr>
-<tr>
-<td><code>config</code></td>
-<td>The <code>Config</code> instance that is used by the pycomex library</td>
-</tr>
-</tbody>
-</table>
-<h3 id="experiment_commit_raw">🪝 <code>experiment_commit_raw</code><a class="headerlink" href="#experiment_commit_raw" title="Permanent link">&para;</a></h3>
-<p>Called at the end of <code>Experiment.commit_raw</code> after the text file has been
-created.</p>
-<table>
-<thead>
-<tr>
-<th>Parameter</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>experiment</code></td>
-<td>The <code>Experiment</code> instance itself</td>
-</tr>
-<tr>
-<td><code>name</code></td>
-<td>The name of the saved file</td>
-</tr>
-<tr>
-<td><code>content</code></td>
-<td>The text content that was written</td>
-</tr>
-<tr>
-<td><code>config</code></td>
-<td>The <code>Config</code> instance that is used by the pycomex library</td>
-</tr>
-</tbody>
-</table>
-<h3 id="experiment_track">🪝 <code>experiment_track</code><a class="headerlink" href="#experiment_track" title="Permanent link">&para;</a></h3>
-<p>Called at the end of <code>Experiment.track</code>. It receives the tracked name and value
-so that the tracking information can be forwarded to external services.</p>
-<table>
-<thead>
-<tr>
-<th>Parameter</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>experiment</code></td>
-<td>The <code>Experiment</code> instance itself</td>
-</tr>
-<tr>
-<td><code>name</code></td>
-<td>Name under which the value was tracked</td>
-</tr>
-<tr>
-<td><code>value</code></td>
-<td>The tracked value or figure</td>
-</tr>
-<tr>
-<td><code>config</code></td>
-<td>The <code>Config</code> instance that is used by the pycomex library</td>
-</tr>
-</tbody>
-</table>
-<hr />
-<h2 id="config-hooks"><code>Config</code> Hooks<a class="headerlink" href="#config-hooks" title="Permanent link">&para;</a></h2>
-<hr />
-<h3 id="after_plugins_loaded">🪝 <code>after_plugins_loaded</code><a class="headerlink" href="#after_plugins_loaded" title="Permanent link">&para;</a></h3>
-<p>This hook is executed right after the plugins are loaded and before the configuration is finalized. This is one of the earliest possible entry points for any plugin and could for example be used for some early initialization tasks.</p>
-<table>
-<thead>
-<tr>
-<th>Parameter</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>config</code></td>
-<td>The <code>Config</code> instance itself</td>
-</tr>
-<tr>
-<td><code>plugins</code></td>
-<td>A dictionary where the string keys are the plugin names and the values are the corresponding <code>Plugin</code> object instances</td>
-</tr>
-</tbody>
-</table>
+<h1 id="vscode-extension">VSCode Extension<a class="headerlink" href="#vscode-extension" title="Permanent link">&para;</a></h1>
+<p>PyComex provides an official Visual Studio Code extension that streamlines experiment development by integrating experiment execution and archive visualization directly into your editor workflow.</p>
+<h2 id="motivation">Motivation<a class="headerlink" href="#motivation" title="Permanent link">&para;</a></h2>
+<p>When developing computational experiments, you typically work with two key elements: <strong>experiment configuration files</strong> that define parameters and inheritance, and <strong>archive directories</strong> that store experimental results. The PyComex VSCode extension enhances your development experience by making these elements immediately recognizable and actionable within your editor.</p>
+<p>Rather than switching between your editor and terminal to run experiments, or hunting through directories to identify which folders contain archived results, the extension brings these capabilities directly into the VSCode interface. This integration reduces friction in the experimental workflow, allowing you to focus on the science rather than the mechanics.</p>
+<h2 id="installation">Installation<a class="headerlink" href="#installation" title="Permanent link">&para;</a></h2>
+<h3 id="from-vscode-marketplace">From VSCode Marketplace<a class="headerlink" href="#from-vscode-marketplace" title="Permanent link">&para;</a></h3>
+<p>Open the Extensions view in VSCode (<code>Ctrl+Shift+X</code> or <code>Cmd+Shift+X</code>), search for "PyComex", and click Install.</p>
+<h3 id="from-vsix-package">From VSIX Package<a class="headerlink" href="#from-vsix-package" title="Permanent link">&para;</a></h3>
+<p>If you have a <code>.vsix</code> file:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>code<span class="w"> </span>--install-extension<span class="w"> </span>pycomex-vscode-0.1.0.vsix
+</span></code></pre></div>
+<h2 id="features">Features<a class="headerlink" href="#features" title="Permanent link">&para;</a></h2>
+<h3 id="experiment-archive-visualization">🧪 Experiment Archive Visualization<a class="headerlink" href="#experiment-archive-visualization" title="Permanent link">&para;</a></h3>
+<p>The extension provides custom folder icons for PyComex archive directories, making experiment results immediately identifiable in your workspace. Folders named <code>results</code> or <code>archive</code> automatically display with a distinctive beaker icon, eliminating the need to mentally track which directories contain experimental outputs.</p>
+<p><strong>Configuration:</strong> Enable the icon theme via Command Palette (<code>Ctrl+Shift+P</code>) → "File Icon Theme" → "PyComex Icons".</p>
+<h3 id="quick-experiment-execution">▶️ Quick Experiment Execution<a class="headerlink" href="#quick-experiment-execution" title="Permanent link">&para;</a></h3>
+<p>When you open a PyComex experiment configuration YAML file (identified by the presence of <code>extend:</code> and <code>parameters:</code> fields), a green <strong>Run</strong> button appears in the top-right corner of the editor—identical to the interface Python users expect. Clicking this button executes your experiment directly without leaving VSCode.</p>
+<p><strong>Example configuration file:</strong>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="nt">extend</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">base_experiment.py</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="nt">parameters</span><span class="p">:</span>
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">  </span><span class="nt">LEARNING_RATE</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0.01</span>
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="w">  </span><span class="nt">EPOCHS</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">100</span>
+</span></code></pre></div></p>
+<p>The extension intelligently handles your Python environment by automatically detecting and activating virtual environments (<code>.venv</code>, <code>venv</code>, or <code>env</code>) before executing the experiment. This ensures that PyComex and your dependencies are properly loaded without manual intervention.</p>
+<p><strong>Execution flow:</strong>
+1. Opens a new terminal in the config file's directory
+2. Activates the detected virtual environment (if present)
+3. Runs <code>pycomex run &lt;config-file.yml&gt;</code>
+4. Displays execution output in the integrated terminal</p>
+<h2 id="configuration-detection">Configuration Detection<a class="headerlink" href="#configuration-detection" title="Permanent link">&para;</a></h2>
+<p>The extension continuously monitors your active files and automatically enables the run button when it detects valid PyComex configuration files. Detection occurs dynamically as you edit, so the button appears immediately when you add the required <code>extend:</code> and <code>parameters:</code> fields to a YAML file.</p>
+<p>For virtual environment detection, the extension searches your workspace in this order:
+1. <code>.venv</code> (PyComex's default convention)
+2. <code>venv</code>
+3. <code>env</code>
+4. VSCode's configured Python interpreter path</p>
+<p>If no virtual environment is found, the extension runs <code>pycomex run</code> directly, assuming PyComex is available in your system PATH.</p>
+<h2 id="next-steps">Next Steps<a class="headerlink" href="#next-steps" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Explore the <a href="../introduction/">Introduction</a> to learn about PyComex experiment structure</li>
+<li>Review <a href="../basics_hooks/">Experiment Inheritance</a> to understand configuration file extension</li>
+<li>Visit the <a href="https://github.com/the16thpythonist/pycomex">PyComex GitHub repository</a> for the latest updates</li>
+<li>Check the <a href="https://github.com/the16thpythonist/pycomex/tree/main/vscode_extension">extension source code</a> to contribute or report issues</li>
+</ul>
 
 
 
