@@ -1,0 +1,20 @@
+<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Open folder base -->
+  <path d="M2 5C2 3.89543 2.89543 3 4 3H9L11 5H20C21.1046 5 22 5.89543 22 7V8H4L2 19V5Z"
+        fill="#7DAED9"
+        stroke="#6B9BD1"
+        stroke-width="1"/>
+  <path d="M4 8H22L20 20H6L4 8Z"
+        fill="#7DAED9"
+        stroke="#6B9BD1"
+        stroke-width="1"/>
+
+  <!-- Experiment beaker icon overlay -->
+  <g transform="translate(9, 9)">
+    <path d="M3 0L3 4L1 8H7L5 4V0Z"
+          fill="#FFFFFF"
+          stroke="#FFFFFF"
+          stroke-width="0.5"/>
+    <circle cx="4" cy="6" r="0.8" fill="#6B9BD1"/>
+  </g>
+</svg>

@@ -1,0 +1,66 @@
+{
+  "name": "pycomex-vscode",
+  "displayName": "PyComex",
+  "description": "VSCode extension for PyComex - Python Computational Experiments framework",
+  "version": "0.1.0",
+  "publisher": "jonseb1998",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/the16thpythonist/pycomex/tree/main/vscode_extension"
+  },
+  "engines": {
+    "vscode": "^1.74.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onLanguage:yaml"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "iconThemes": [
+      {
+        "id": "pycomex-icons",
+        "label": "PyComex Icons",
+        "path": "./pycomex-icon-theme.json"
+      }
+    ],
+    "commands": [
+      {
+        "command": "pycomex.runConfig",
+        "title": "Run PyComex Experiment",
+        "icon": "$(play)"
+      }
+    ],
+    "menus": {
+      "editor/title/run": [
+        {
+          "command": "pycomex.runConfig",
+          "when": "resourceLangId == yaml && pycomex.isConfigFile",
+          "group": "navigation"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "npm run compile",
+    "lint": "eslint src --ext ts"
+  },
+  "devDependencies": {
+    "@types/node": "^18.x",
+    "@types/vscode": "^1.74.0",
+    "@typescript-eslint/eslint-plugin": "^6.0.0",
+    "@typescript-eslint/parser": "^6.0.0",
+    "eslint": "^8.0.0",
+    "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "@vscode/vsce": "^3.6.2",
+    "js-yaml": "^4.1.0",
+    "vsce": "^2.15.0"
+  }
+}
