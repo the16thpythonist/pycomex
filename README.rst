@@ -29,6 +29,7 @@ experiments, such as machine learning and data science experiments, in Python.
   experiment data after experiments have terminated.
 * Experiment inheritance: Experiment modules can inherit from other modules and extend their functionality
   via parameter overwrites and hooks!
+* Configuration files: Create YAML config files to run parameter variations without duplicating code
 
 ==========================
 📦 Installation by Package
@@ -174,6 +175,19 @@ PyComex provides a powerful CLI accessible via the ``pycomex`` command:
 
     # Create a new experiment module from template
     pycomex template experiment my_new_experiment.py
+
+    # Create a configuration file from an existing experiment
+    pycomex template config -e experiment.py -n config_name
+
+**Running Experiments:**
+
+.. code-block:: console
+
+    # Run an experiment directly
+    pycomex run experiment.py
+
+    # Run a configuration file
+    pycomex run config.yml
 
 **Managing Experiment Archives:**
 
