@@ -1,0 +1,27 @@
+# PyComex Experiment Configuration with Mixin
+#
+# This demonstrates how to use mixins in YAML configuration files.
+# Mixins provide reusable hook implementations that can be shared across experiments.
+
+pycomex: true
+
+# Extend a base experiment
+extend: 02_basic.py
+
+# Include a mixin - this adds the mixin's hooks to your experiment
+# You can also include multiple mixins: include: [mixin1.py, mixin2.py]
+include: 11_experiment_mixin_mixin.py
+
+name: mixin_yaml_example
+
+description: |
+  Simple example showing how to use experiment mixins through YAML configuration.
+
+  The mixin adds logging messages at experiment start and end, demonstrating
+  how reusable functionality can be included without code duplication.
+
+# Override parameters from the base experiment
+parameters:
+  NUM_WORDS: 75
+  REPETITIONS: 3
+  __DEBUG__: true

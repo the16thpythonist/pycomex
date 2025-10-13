@@ -2108,6 +2108,11 @@ class Experiment(ExperimentBase):
             for param_name, param_value in mixin.parameters.items():
                 if param_name not in self.parameters:
                     self.parameters[param_name] = param_value
+                    # Also ensure metadata entry exists for mixin parameter
+                    if param_name not in self.metadata["parameters"]:
+                        self.metadata["parameters"][param_name] = {
+                            "name": param_name,
+                        }
 
             # Merge hooks from the mixin into the experiment using the enhanced merge method
             # This properly respects the replace flag that was used when the mixin hooks were defined

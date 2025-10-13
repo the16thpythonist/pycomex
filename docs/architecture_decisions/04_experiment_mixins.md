@@ -1,8 +1,8 @@
-# Plugin Hook System
+# Experiment Mixins
 
 ## Status
 
-Planning
+Implemented
 
 ## Context
 
@@ -51,3 +51,23 @@ include: experiment_mixin.py
 parameters:
     ...
 ```
+
+## Implementation
+
+The mixin system was implemented through the `ExperimentMixin` class in `pycomex/functional/mixin.py`, which inherits from `ExperimentBase` alongside the `Experiment` class. Mixins use `replace=False` as the default for hook registration, ensuring hooks append rather than replace existing ones. When included via `experiment.include()`, mixin hooks are merged into the experiment's hook map while preserving execution order (base → mixin → experiment). Mixin parameters act as fallback defaults that are only used if not defined in the experiment itself. The system also supports YAML configuration files through the `include` field in experiment config files, allowing both single mixins (`include: mixin.py`) and multiple mixins (`include: [mixin1.py, mixin2.py]`).
+
+## Consequences
+
+### Advantages
+
+**Code Reusability.** Mixins eliminate code duplication by allowing common hook implementations to be defined once and reused across multiple experiments. This is particularly valuable for standardized behaviors like logging, validation, or notifications that need to be consistent across different research projects.
+
+**Composability.** Multiple mixins can be combined in a single experiment, enabling modular composition of functionality. Experiments can selectively include only the mixins they need, avoiding the "God object" anti-pattern where everything is bundled together.
+
+**Consistency.** Mixins promote consistent behavior across experiments by centralizing common functionality. When a change is needed to shared behavior, it only needs to be updated in the mixin rather than in every experiment that uses it.
+
+### Disadvantages
+
+**Additional Abstraction Layer.** Mixins add another level of abstraction to the experiment system, which can make it harder for new users to understand where functionality comes from. Code that executes in an experiment may originate from the base experiment, one or more mixins, or the experiment itself.
+
+**Hook Execution Complexity.** The execution order of hooks becomes more complex with mixins, following the pattern: base experiment → mixin 1 → mixin 2 → current experiment. While this order is deterministic, it can be non-obvious to users and may require careful documentation and debugging when hooks interact in unexpected ways.

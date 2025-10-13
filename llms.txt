@@ -86,6 +86,20 @@ parameters:
 ```
 Run with: `pycomex run config.yml`
 
+**8. Experiment Mixins**
+Reusable hook implementations shared across experiments without code duplication:
+```python
+# Create mixin once
+mixin = ExperimentMixin(glob=globals())
+@mixin.hook("before_run", replace=False)
+def log_start(e):
+    e.log("Starting...")
+
+# Include in any experiment
+experiment.include('mixin.py')
+```
+YAML: `include: mixin.py` or `include: [mixin1.py, mixin2.py]`
+
 ## Quick Reference - Core APIs
 
 ### Experiment Class Methods
@@ -138,7 +152,8 @@ pycomex/
 │   ├── 06_run_experiment.py
 │   ├── 07_meta_experiment.py
 │   ├── 08_weights_and_biases.py
-│   └── 10_caching.py
+│   ├── 10_caching.py
+│   └── 11_experiment_mixin.py
 │
 ├── cli.py                 # Rich-based CLI implementation (2700+ lines)
 ├── config.py              # Global Pydantic-based configuration
@@ -152,6 +167,7 @@ docs/                      # MkDocs documentation
 ├── introduction.md       # Getting started guide
 ├── philosophy.md         # Design rationale and problem solutions
 ├── basics_hooks.md       # Hook system basics
+├── basics_mixins.md      # Experiment mixins (reusable hooks)
 ├── basics_config.md      # Configuration files (YAML) guide
 ├── advanced_hooks.md     # Plugin system hooks reference
 ├── advanced_plugins.md   # Plugin development guide
@@ -207,6 +223,12 @@ docs/                      # MkDocs documentation
 - **API**: `Experiment.from_config(config_path=...)`
 - **Use cases**: Parameter sweeps, quick variations without code duplication
 
+**Experiment Mixins**
+- **Guide**: `docs/basics_mixins.md`
+- **Examples**: `pycomex/examples/11_experiment_mixin.py`, `pycomex/examples/11_experiment_mixin_mixin.py`, `pycomex/examples/12_experiment_mixin.yml`
+- **API**: `experiment.include('mixin.py')` or YAML `include: mixin.py`
+- **Use cases**: Reusable hooks, standardized logging/validation, code deduplication
+
 **Caching**
 - **Example**: `pycomex/examples/10_caching.py`
 - **Implementation**: `pycomex/functional/cache.py`
@@ -243,6 +265,7 @@ docs/                      # MkDocs documentation
 | W&B integration | `08_weights_and_biases.py` | Weights & Biases plugin |
 | Config files | `09_experiment_config.yml` | YAML configuration for parameter variations |
 | Caching | `10_caching.py` | Result caching system |
+| Mixins | `11_experiment_mixin.py` | Reusable hooks via mixins |
 
 ## Common Tasks - Quick Pointers
 

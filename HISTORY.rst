@@ -607,6 +607,11 @@ Refactoring
   - Removed several test cases and test assets
   - Removed the corresponding elements from the `utils.py` module
 
+Experiment Logging
+
+- The experiment start and end panels now use `rich` to make the output look pretty
+- The `log_parameters` now uses `rich` to make the output look pretty
+
 Experiment Mixins
 
 - Added the `ExperimentMixin` class which can be used to define reusable mixins for experiments.
@@ -615,3 +620,5 @@ Experiment Mixins
   outside of the experiment inheritance system.
 - Added the `examples/11_experiment_mixins.py` example which demonstrates the usage of experiment
   experiment mixins.
+- Added documentation about experiment mixins to `docs/basics_mixins.md`
+- Added various unittests for the experiment mixin functionality

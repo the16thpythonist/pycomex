@@ -16,6 +16,7 @@ nav:
   - Philosophy: philosophy.md
   - Basics:
       - Hooks: basics_hooks.md
+      - Mixins: basics_mixins.md
       - Configuration Files: basics_config.md
   - Advanced Usage:
       - Writing Plugins: advanced_plugins.md
