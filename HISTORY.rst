@@ -591,3 +591,27 @@ Documentation
   to make it easier to find them.
 - Moved the `docs/mkdocs.yml` file to the root folder.
 - Added a documentation page which introduces the VSCode extension and explains the features.
+
+0.25.0 (13.10.2025)
+-------------------
+
+Refactoring
+
+- Added the `functional/base.py` module which contains the `ExperimentBase` class which now 
+  acts as the base class for `Experiment` and `ExperimentMixin` to manage the joint features 
+  regarding the hook system and the parameter discovery mechanism.
+- Removed the old, non-functional experiment system which was based on the context manager API
+  from the code completely now.
+  - Removed the `experiment.py` module
+  - Removed the `work.py` module
+  - Removed several test cases and test assets
+  - Removed the corresponding elements from the `utils.py` module
+
+Experiment Mixins
+
+- Added the `ExperimentMixin` class which can be used to define reusable mixins for experiments.
+  Mixins can define parameters and hooks just like experiments and can be added to an experiment
+  with the `Experiment.include` method. These mixins can be used to share hook implementations 
+  outside of the experiment inheritance system.
+- Added the `examples/11_experiment_mixins.py` example which demonstrates the usage of experiment
+  experiment mixins.

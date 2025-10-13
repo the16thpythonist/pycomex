@@ -142,10 +142,13 @@ class TestExperiment:
             # Capture stdout
             captured = capsys.readouterr()
 
-            # Check that all parameters were logged
-            assert " * PARAM1: 10" in captured.out
-            assert " * PARAM2: test" in captured.out
-            assert " * PARAM3: True" in captured.out
+            # Check that all parameters were logged (now in custom Rich format)
+            assert "PARAM1" in captured.out
+            assert "10" in captured.out
+            assert "PARAM2" in captured.out
+            assert "test" in captured.out
+            assert "PARAM3" in captured.out
+            assert "True" in captured.out
 
     def test_log_parameters_specific(self, capsys):
         """
@@ -164,10 +167,12 @@ class TestExperiment:
             # Capture stdout
             captured = capsys.readouterr()
 
-            # Check that only specified parameters were logged
-            assert " * PARAM1: 10" in captured.out
-            assert " * PARAM3: True" in captured.out
-            assert " * PARAM2: test" not in captured.out
+            # Check that only specified parameters were logged (now in Rich table format)
+            assert "PARAM1" in captured.out
+            assert "10" in captured.out
+            assert "PARAM3" in captured.out
+            assert "True" in captured.out
+            assert "PARAM2" not in captured.out
 
     def test_log_parameters_complex_objects(self, capsys):
         """
@@ -192,10 +197,12 @@ class TestExperiment:
             # Capture stdout
             captured = capsys.readouterr()
 
-            # Simple parameter should be logged directly
-            assert " * SIMPLE: 10" in captured.out
+            # Simple parameter should be logged directly (now in Rich table format)
+            assert "SIMPLE" in captured.out
+            assert "10" in captured.out
             # Complex object should be logged using repr
-            assert " * COMPLEX: ComplexObject(42)" in captured.out
+            assert "COMPLEX" in captured.out
+            assert "ComplexObject(42)" in captured.out
 
     def test_log_parameters_unprintable_object(self, capsys):
         """
@@ -223,8 +230,9 @@ class TestExperiment:
             # Capture stdout
             captured = capsys.readouterr()
 
-            # Should fallback to type name
-            assert " * UNPRINTABLE: <UnprintableObject object>" in captured.out
+            # Should fallback to type name (now in Rich table format)
+            assert "UNPRINTABLE" in captured.out
+            assert "<UnprintableObject object>" in captured.out
 
     def test_log_pretty(self, capsys):
         """

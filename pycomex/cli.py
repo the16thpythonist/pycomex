@@ -29,6 +29,7 @@ from pycomex.utils import (
     TEMPLATE_ENV,
     TEMPLATE_PATH,
     dynamic_import,
+    get_environment_info,
     get_version,
     has_file_extension,
     is_experiment_archive,
@@ -534,6 +535,147 @@ class RichArchiveInfo:
                 )
 
 
+class RichEnvironmentComparison:
+    """
+    Rich display class for comparing original and current environment information
+    when reproducing experiments.
+    """
+
+    def __init__(self, original_env: dict, current_env: dict):
+        """
+        Initialize the environment comparison display.
+
+        :param original_env: Environment info from the original experiment
+        :param current_env: Environment info from the current system
+        """
+        self.original_env = original_env
+        self.current_env = current_env
+
+    def __rich_console__(
+        self, console: Console, options: ConsoleOptions
+    ) -> RenderResult:
+        """
+        Render the environment comparison as rich panels.
+        """
+        # Extract OS information
+        orig_os = self.original_env.get("os", {})
+        curr_os = self.current_env.get("os", {})
+
+        # Extract system libraries
+        orig_libs = self.original_env.get("system_libraries", {})
+        curr_libs = self.current_env.get("system_libraries", {})
+
+        # Extract environment variables
+        orig_vars = self.original_env.get("env_vars", {})
+        curr_vars = self.current_env.get("env_vars", {})
+
+        # Build original environment content
+        orig_content_lines = []
+        orig_content_lines.append(f"[bold]OS:[/bold] {orig_os.get('name', 'Unknown')} {orig_os.get('version', '')}")
+        orig_content_lines.append(f"[bold]Architecture:[/bold] {orig_os.get('architecture', 'Unknown')}")
+
+        if "cuda" in orig_libs:
+            orig_content_lines.append(f"[bold]CUDA:[/bold] {orig_libs['cuda']}")
+
+        # Show important env vars
+        for key in ["CUDA_HOME", "CUDA_PATH", "LD_LIBRARY_PATH"]:
+            if key in orig_vars:
+                # Truncate long paths for display
+                value = orig_vars[key]
+                if len(value) > 50:
+                    value = value[:47] + "..."
+                orig_content_lines.append(f"[bold]{key}:[/bold] {value}")
+
+        orig_content = "\n".join(orig_content_lines)
+
+        # Build current environment content
+        curr_content_lines = []
+        curr_content_lines.append(f"[bold]OS:[/bold] {curr_os.get('name', 'Unknown')} {curr_os.get('version', '')}")
+        curr_content_lines.append(f"[bold]Architecture:[/bold] {curr_os.get('architecture', 'Unknown')}")
+
+        if "cuda" in curr_libs:
+            curr_content_lines.append(f"[bold]CUDA:[/bold] {curr_libs['cuda']}")
+
+        # Show important env vars
+        for key in ["CUDA_HOME", "CUDA_PATH", "LD_LIBRARY_PATH"]:
+            if key in curr_vars:
+                # Truncate long paths for display
+                value = curr_vars[key]
+                if len(value) > 50:
+                    value = value[:47] + "..."
+                curr_content_lines.append(f"[bold]{key}:[/bold] {value}")
+
+        curr_content = "\n".join(curr_content_lines)
+
+        # Display original environment (white border)
+        yield rich.panel.Panel(
+            orig_content,
+            title="🔬 Original Environment",
+            title_align="left",
+            border_style="white",
+            padding=(1, 2),
+        )
+
+        # Display current environment (blue border)
+        yield rich.panel.Panel(
+            curr_content,
+            title="💻 Current Environment",
+            title_align="left",
+            border_style="blue",
+            padding=(1, 2),
+        )
+
+        # Detect and display differences (red border)
+        differences = []
+
+        # Check OS differences
+        if orig_os.get('name') != curr_os.get('name'):
+            differences.append(f"• OS: {orig_os.get('name')} → {curr_os.get('name')}")
+        elif orig_os.get('version') != curr_os.get('version'):
+            differences.append(f"• OS Version: {orig_os.get('version')} → {curr_os.get('version')}")
+
+        if orig_os.get('architecture') != curr_os.get('architecture'):
+            differences.append(f"• Architecture: {orig_os.get('architecture')} → {curr_os.get('architecture')}")
+
+        # Check CUDA differences
+        if orig_libs.get('cuda') != curr_libs.get('cuda'):
+            orig_cuda = orig_libs.get('cuda', 'Not installed')
+            curr_cuda = curr_libs.get('cuda', 'Not installed')
+            differences.append(f"• CUDA: {orig_cuda} → {curr_cuda}")
+
+        # Check environment variable differences
+        for key in ["CUDA_HOME", "CUDA_PATH", "LD_LIBRARY_PATH"]:
+            orig_val = orig_vars.get(key)
+            curr_val = curr_vars.get(key)
+            if orig_val != curr_val:
+                # Truncate for display
+                orig_display = orig_val[:40] + "..." if orig_val and len(orig_val) > 40 else orig_val or "Not set"
+                curr_display = curr_val[:40] + "..." if curr_val and len(curr_val) > 40 else curr_val or "Not set"
+                differences.append(f"• {key}:")
+                differences.append(f"  {orig_display}")
+                differences.append(f"  → {curr_display}")
+
+        # Only show differences panel if there are differences
+        if differences:
+            diff_content = "\n".join(differences)
+            yield rich.panel.Panel(
+                diff_content,
+                title="⚠️  Differences Detected",
+                title_align="left",
+                border_style="red",
+                padding=(1, 2),
+            )
+        else:
+            # Show success message if environments match
+            yield rich.panel.Panel(
+                "✅ Environments match!",
+                title="Environment Comparison",
+                title_align="left",
+                border_style="green",
+                padding=(1, 2),
+            )
+
+
 class ExperimentCLI(click.RichGroup):
     """
     This class implements a generic experiment click command line interface. It is "generic" in that
@@ -861,20 +1003,50 @@ class CLI(click.RichGroup):
         # At this point we can now actually be sure that the given experiment path is valid and that the
         # experiment was stored in valid mode. We can now proceed to actually go through the steps for the
         # reproduction of the experiment.
-        # The first of which is the creation of a new virtual environment with the same conditions as
-        # the original experiment.
-        venv_path = os.path.join(experiment_path, ".venv")
-        if not os.path.exists(venv_path):
-            click.secho("... creating virtual environment", fg="bright_black")
-            subprocess.run([uv, "venv", "--python", "3.10", "--seed", venv_path])
 
-        # After creating the virtual env, we want to install all the dependencies into it
+        # Load dependencies first to extract Python version
         dependencies_path = os.path.join(
             experiment_path, Experiment.DEPENDENCIES_FILE_NAME
         )
         with open(dependencies_path) as file:
             content: str = file.read()
             dependencies: dict = json.loads(content)
+
+        # Extract Python version from dependencies
+        python_version = "3.10"  # Fallback default for legacy experiments
+        if "__python__" in dependencies:
+            version_info = dependencies["__python__"]["version_info"]
+            python_version = f"{version_info['major']}.{version_info['minor']}"
+            click.secho(
+                f"... detected Python {python_version} from original experiment",
+                fg="bright_black"
+            )
+        else:
+            click.secho(
+                f"... no Python version info found, using default {python_version}",
+                fg="yellow"
+            )
+
+        # Display environment comparison if environment info is available
+        if "__environment__" in dependencies:
+            click.secho("\n")
+            original_env = dependencies["__environment__"]
+            current_env = get_environment_info()
+
+            env_comparison = RichEnvironmentComparison(original_env, current_env)
+            self.cons.print(env_comparison)
+            click.secho("\n")
+        else:
+            click.secho(
+                "... no environment info found in experiment (legacy experiment)",
+                fg="bright_black"
+            )
+
+        # Create virtual environment with the detected Python version
+        venv_path = os.path.join(experiment_path, ".venv")
+        if not os.path.exists(venv_path):
+            click.secho("... creating virtual environment", fg="bright_black")
+            subprocess.run([uv, "venv", "--python", python_version, "--seed", venv_path])
 
         env = os.environ.copy()
         env["VIRTUAL_ENV"] = venv_path

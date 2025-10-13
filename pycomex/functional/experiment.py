@@ -32,16 +32,21 @@ from rich_argparse import RichHelpFormatter
 from uv import find_uv_bin
 
 from pycomex.config import Config
+from pycomex.functional.base import ExperimentBase
 from pycomex.functional.cache import ExperimentCache
+from pycomex.functional.mixin import ExperimentMixin
 from pycomex.functional.parameter import ActionableParameterType
 from pycomex.utils import (
     TEMPLATE_ENV,
     AnsiSanitizingFormatter,
     CustomJsonEncoder,
     SetArguments,
+    bundle_local_sources,
     dynamic_import,
     file_namespace,
+    find_all_local_dependencies,
     folder_path,
+    generate_requirements_txt,
     get_comments_from_module,
     get_dependencies,
     parse_hook_info,
@@ -68,6 +73,7 @@ class ExperimentConfig(BaseModel):
     base_path: str | None = None
     namespace: str | None = None
     description: str | None = None
+    include: str | list[str] | None = None
 
     @field_validator("name", mode="after")
     @classmethod
@@ -202,7 +208,128 @@ class ExperimentArgumentParser(argparse.ArgumentParser):
         return self.parameter_map
 
 
-class Experiment:
+class RichParameterDisplay:
+    """
+    Rich display component for formatting experiment parameters in a custom styled format.
+
+    This class creates a visually appealing display of experiment parameters with:
+    - Parameter name (bold) and type (magenta) on the first line
+    - Parameter value (gray) on subsequent indented lines
+
+    The display can be rendered both to the console (with ANSI colors) and to log files
+    (with ANSI codes automatically stripped by the AnsiSanitizingFormatter).
+
+    This class implements Rich's console protocol via the __rich_console__ method,
+    making it directly printable with Rich's Console.print().
+
+    Example:
+
+    .. code-block:: python
+
+        display = RichParameterDisplay(
+            experiment=experiment,
+            parameters=None,  # None means all parameters
+            show_type=True,
+        )
+
+        # Can be printed directly or logged
+        experiment.logger.info(display)
+
+    :param experiment: The Experiment instance containing parameters to display
+    :param parameters: Optional list of specific parameter names to display.
+                      If None, all parameters are displayed.
+    :param show_type: Whether to show the type information
+    """
+
+    def __init__(
+        self,
+        experiment: 'Experiment',
+        parameters: Optional[List[str]] = None,
+        show_type: bool = True,
+    ):
+        self.experiment = experiment
+        self.parameters = parameters
+        self.show_type = show_type
+
+    def _format_value(self, value: Any) -> str:
+        """
+        Format a parameter value for display.
+
+        This method safely converts parameter values to strings, handling simple types,
+        complex objects, and unprintable objects. Long representations are truncated
+        to prevent excessive output.
+
+        :param value: The parameter value to format
+
+        :returns: A formatted string representation
+        """
+        try:
+            if isinstance(value, (str, int, float, bool, type(None))):
+                value_str = str(value)
+            else:
+                value_str = repr(value)
+                # Truncate very long representations
+                if len(value_str) > 200:
+                    value_str = value_str[:197] + "..."
+        except Exception:
+            value_str = f"<{type(value).__name__} object>"
+
+        return value_str
+
+    def __rich_console__(self, console: Console, options):
+        """
+        Rich console protocol method for rendering the parameter display.
+
+        This method yields Text objects that Rich will render to the console.
+
+        :param console: The Rich Console instance
+        :param options: Rendering options from Rich
+
+        :yields: Text objects for each parameter
+        """
+        # Determine which parameters to display
+        if self.parameters is None:
+            params_to_display = self.experiment.parameters
+        else:
+            params_to_display = {
+                name: self.experiment.parameters[name]
+                for name in self.parameters
+                if name in self.experiment.parameters
+            }
+
+        # Yield each parameter
+        for param_name, param_value in params_to_display.items():
+            # First line: parameter name (bold) and type (magenta)
+            line = Text()
+            line.append(f"○ {param_name}", style="bold")
+
+            if self.show_type:
+                # Get metadata if available
+                metadata = self.experiment.metadata.get("parameters", {}).get(param_name, {})
+                type_info = metadata.get("type", "")
+
+                # Convert ActionableParameterType to string if needed
+                if type_info and not isinstance(type_info, str):
+                    type_info = str(type_info)
+
+                if type_info:
+                    line.append(" ")
+                    line.append(f'({type_info})', style="magenta")
+
+            yield line
+
+            # Second line(s): parameter value (gray, indented)
+            value_str = self._format_value(param_value)
+
+            # Handle potentially multi-line values
+            value_lines = value_str.split('\n')
+            for value_line in value_lines:
+                value_text = Text()
+                value_text.append("    " + value_line, style="dim")
+                yield value_text
+
+
+class Experiment(ExperimentBase):
     """
     Functional Experiment Implementation. This class acts as a decorator for a function which implements
     the main functionality of a computational experiment. This decorator class primarily handles the
@@ -213,6 +340,10 @@ class Experiment:
     - Automatic discovery of the experiment parameters which are either given as global variables in the
       corresponding experiment module or alternatively can be overwritten through command line arguments.
     """
+
+    # Class attributes for hook system defaults (used by ExperimentBase)
+    _HOOK_REPLACE_DEFAULT = True
+    _HOOK_DEFAULT_DEFAULT = True
 
     # The name of the archive file that will store all of the experiment data that has been directly
     # commited to the experiment object during the runtime of the experiment.
@@ -238,9 +369,11 @@ class Experiment:
         console_width: int = 120,
     ) -> None:
 
+        # Initialize base class (sets up glob, parameters, hook_map)
+        super().__init__(glob)
+
         self.base_path = base_path
         self.namespace = namespace
-        self.glob = glob
         self.debug = debug
         self.name_format = name_format
         self.notify = notify
@@ -278,7 +411,7 @@ class Experiment:
         self.name: str | None = None
 
         self.func: t.Callable | None = None
-        self.parameters: dict = {}
+        # Note: self.parameters is now initialized in ExperimentBase.__init__
         self.data: dict = {}
         self.metadata: dict = {
             "status": None,
@@ -374,8 +507,12 @@ class Experiment:
         # created with the "extend" constructor)
         self.dependencies: list[str] = []
 
+        # This list will contain ExperimentMixin instances that have been included into this experiment
+        # to provide reusable hook implementations
+        self.mixins: list[ExperimentMixin] = []
+
         self.analyses: list[t.Callable] = []
-        self.hook_map: dict[str, list[t.Callable]] = defaultdict(list)
+        # Note: self.hook_map is now initialized in ExperimentBase.__init__
 
         # 01.10.24 - We can use this hook to modify the default attributes / metadata of the experiment
         # object before actually starting to load the experiment specific attributes.
@@ -410,7 +547,7 @@ class Experiment:
         # dict wich contains a reference to the experiment object itself. This will later make it a lot easier when we
         # import an experiment module to actually get the experiment object instance from it, because we can't guarantee
         # what variable name the user will actually give it, but this we can assume to always be there.
-        self.glob["__experiment__"] = self
+        self._register_in_globals("__experiment__")
 
         # 06.09.24
         # This object handles the parsing of the command line arguments in the case that the experiment module is
@@ -471,9 +608,8 @@ class Experiment:
 
         :returns: None
         """
-        for name, value in self.glob.items():
-            if name.isupper():
-                self.parameters[name] = value
+        # Use the base class parameter discovery method
+        self._discover_parameters()
 
         # This method will search through the freshly updated parameters dictionary for "special" keys
         # and then use those values to trigger some more fancy updates based on those.
@@ -723,7 +859,9 @@ class Experiment:
         """
         Log either all parameters of the experiment or only those specified in the parameters list.
 
-        Each parameter is logged in the format " * {parameter_name}: {parameter_value}".
+        This method creates a visually formatted display of parameters using Rich.
+        The display shows parameter name (bold), type (magenta), and value (gray indented).
+        The display appears with colors in the console and as plain text in the log file.
         Complex objects are safely converted to string representations to avoid logging issues.
 
         Example:
@@ -738,30 +876,19 @@ class Experiment:
 
         :param parameters: Optional list of parameter names to log. If None, all parameters are logged.
         """
-        if parameters is None:
-            # Log all parameters
-            params_to_log = self.parameters
-        else:
-            # Log only specified parameters
-            params_to_log = {name: self.parameters[name] for name in parameters if name in self.parameters}
+        display = RichParameterDisplay(
+            experiment=self,
+            parameters=parameters,
+            show_type=True,
+        )
 
-        for param_name, param_value in params_to_log.items():
-            try:
-                # Try to convert to string safely
-                if isinstance(param_value, (str, int, float, bool, type(None))):
-                    # Simple types can be logged directly
-                    value_str = str(param_value)
-                else:
-                    # Complex objects - use repr for safer string conversion
-                    value_str = repr(param_value)
-                    # Truncate very long representations
-                    if len(value_str) > 200:
-                        value_str = value_str[:197] + "..."
-            except Exception:
-                # Fallback for objects that can't be converted safely
-                value_str = f"<{type(param_value).__name__} object>"
+        # Render the display using Rich's console
+        console = Console(width=self.console_width)
+        with console.capture() as capture:
+            console.print(display)
 
-            self.log(f" * {param_name}: {value_str}")
+        # Log the rendered output
+        self.log_lines(capture.get().split('\n'))
 
     def log_pretty(self, value: Any):
         """
@@ -1057,7 +1184,27 @@ class Experiment:
         # into a json file in the experiment archive folder.
         self.log("...exporting dependencies")
         dependencies: dict[str, dict] = get_dependencies()
+
+        # Capture Python version information
+        dependencies["__python__"] = {
+            "version": f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}",
+            "version_info": {
+                "major": sys.version_info.major,
+                "minor": sys.version_info.minor,
+                "micro": sys.version_info.micro,
+            },
+            "version_string": sys.version,
+        }
+
         self.commit_json(self.DEPENDENCIES_FILE_NAME, dependencies)
+
+        # ~ generating requirements.txt
+        # Generate a standard requirements.txt file with version-pinned dependencies for easy reproduction
+        self.log("...generating requirements.txt")
+        requirements_content = generate_requirements_txt(dependencies)
+        requirements_path = os.path.join(self.path, "requirements.txt")
+        with open(requirements_path, "w") as file:
+            file.write(requirements_content)
 
         # ~ exporting source code
         # Besides all the dependencies that can be installed via the source code of the experiment, there is
@@ -1074,6 +1221,10 @@ class Experiment:
         with tempfile.TemporaryDirectory() as temp_path:
 
             for name, info in dependencies.items():
+                # Skip special keys like __python__ and __environment__
+                if name.startswith("__"):
+                    continue
+
                 if info["editable"]:
                     self.log(f' - source "{name}" @ {info["path"]}')
                     subprocess.run(
@@ -1093,14 +1244,30 @@ class Experiment:
                 if file.endswith(".tar.gz"):
                     shutil.move(os.path.join(temp_path, file), os.path.join(path, file))
 
+        # ~ bundling local sources
+        # Bundle all local Python files that are imported by the experiment into the archive.
+        # This ensures that the exact versions of local files are preserved, even if they are
+        # modified or deleted after the experiment completes.
+        self.log("...bundling local source files")
+        local_files = find_all_local_dependencies(
+            experiment_path=self.glob["__file__"],
+            experiment_dependencies=self.dependencies
+        )
+
+        if local_files:
+            bundle_local_sources(self, local_files)
+            self.log(f" - bundled {len(local_files)} local file(s)")
+        else:
+            self.log(" - no local dependencies found")
+
         # There might be some additional operations that need to be performed for specific experiment parameters.
         # These additional actions are implemented in the "on_reproducible" method for those parameters that are
         # annotated by a specific subclass of ActionableParameterType.
         self.log("...post-processing parameters")
         for parameter, info in self.metadata["parameters"].items():
-            if isinstance(info["type"], ActionableParameterType):
-                self.parameters[parameter]["type"].on_reproducible(
-                    experiment=self, value=self.parameters[parameter]["value"]
+            if "type" in info and isinstance(info["type"], ActionableParameterType):
+                info["type"].on_reproducible(
+                    experiment=self, value=self.parameters[parameter]
                 )
 
     def execute(self) -> None:
@@ -1430,10 +1597,18 @@ class Experiment:
         shutil.copy(source_path, destination_path)
 
     def save_dependencies(self) -> None:
+        # Save experiment dependencies (base experiments from extend())
         for path in self.dependencies:
             file_name = os.path.basename(path)
             destination_path = os.path.join(self.path, file_name)
             shutil.copy(path, destination_path)
+
+        # Save mixin files (mixins from include())
+        for mixin in self.mixins:
+            mixin_path = mixin.glob["__file__"]
+            file_name = os.path.basename(mixin_path)
+            destination_path = os.path.join(self.path, file_name)
+            shutil.copy(mixin_path, destination_path)
 
     def save_analysis(self) -> None:
         with open(self.analysis_path, mode="w") as file:
@@ -1870,12 +2045,78 @@ class Experiment:
             **experiment_config.parameters,
         }
 
-        return cls.extend(
+        experiment = cls.extend(
             experiment_path=experiment_config.extend,
             base_path=experiment_config.base_path,
             namespace=experiment_config.namespace,
             glob=glob,
         )
+
+        # Include any mixins specified in the config
+        if experiment_config.include is not None:
+            experiment.include(experiment_config.include)
+
+        return experiment
+
+    def include(self, mixin_paths: str | list[str]) -> None:
+        """
+        Include one or more ExperimentMixins into this experiment.
+
+        Mixins provide reusable hook implementations that can be shared across multiple
+        experiments. This method imports the specified mixin(s) and merges their hooks
+        into the current experiment's hook system.
+
+        Hook execution order with mixins:
+        1. Base experiment hooks (from extend())
+        2. Mixin 1 hooks (first include())
+        3. Mixin 2 hooks (second include())
+        4. Current experiment hooks (defined last)
+
+        Mixin parameters (if any) are merged as fallback defaults. Experiment parameters
+        always take precedence over mixin parameters.
+
+        Example:
+
+        .. code-block:: python
+
+            # Include a single mixin
+            experiment = Experiment.extend(...)
+            experiment.include('logging_mixin.py')
+
+            # Include multiple mixins
+            experiment.include(['logging_mixin.py', 'notification_mixin.py'])
+
+        :param mixin_paths: Either a single string path to a mixin module, or a list
+            of paths to multiple mixin modules. Paths can be relative or absolute.
+
+        :returns: None
+        """
+        # Handle both single path and list of paths
+        if isinstance(mixin_paths, str):
+            mixin_paths = [mixin_paths]
+
+        # Import and process each mixin
+        for mixin_path in mixin_paths:
+            # Import the mixin using the mixin's import_from method
+            mixin = ExperimentMixin.import_from(
+                mixin_path=mixin_path,
+                glob=self.glob,
+            )
+
+            # Merge mixin parameters as fallback defaults
+            # Experiment parameters always take precedence
+            for param_name, param_value in mixin.parameters.items():
+                if param_name not in self.parameters:
+                    self.parameters[param_name] = param_value
+
+            # Merge hooks from the mixin into the experiment using the enhanced merge method
+            # This properly respects the replace flag that was used when the mixin hooks were defined
+            # By default, we use append behavior (replace_behavior=False) to maintain backward compatibility
+            # and proper execution order
+            self.merge_hook_map(mixin.hook_map, replace_behavior=False)
+
+            # Track the mixin for dependency saving
+            self.mixins.append(mixin)
 
     @classmethod
     def is_archive(cls, path: str) -> bool:
