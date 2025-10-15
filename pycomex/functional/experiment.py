@@ -772,11 +772,19 @@ class Experiment(ExperimentBase):
 
         content_lines = [
             f"[bold cyan]Namespace:[/bold cyan] {self.namespace}",
+            f"[bold cyan]Source File:[/bold cyan] {self.glob['__file__']}",
             f"[bold cyan]Start Time:[/bold cyan] {start_time.strftime('%Y-%m-%d %H:%M:%S')}",
             f"[bold cyan]Archive Path:[/bold cyan] {self.path}",
             f"[bold cyan]Debug Mode:[/bold cyan] {self.debug}",
             f"[bold cyan]Parameters:[/bold cyan] {len(self.parameters)} total",
         ]
+
+        # Add mixin information if any mixins are included
+        if self.mixins:
+            total_mixin_hooks = sum(len(mixin.hook_map) for mixin in self.mixins)
+            content_lines.append(
+                f"[bold cyan]Mixins:[/bold cyan] {len(self.mixins)} included ({total_mixin_hooks} hooks total)"
+            )
 
         # Add Python version and platform info
         content_lines.extend([
@@ -2035,9 +2043,36 @@ class Experiment(ExperimentBase):
 
     @classmethod
     def from_config(cls, config_path: str, **kwargs) -> "Experiment":
+        """
+        Create an Experiment instance from a YAML configuration file.
+
+        This method loads a YAML config file, applies environment variable interpolation,
+        and creates an Experiment that extends a base experiment with parameter overrides.
+
+        Environment variables can be interpolated using ${VAR} or ${VAR:-default} syntax.
+
+        Example config:
+
+        .. code-block:: yaml
+
+            extend: training.py
+            parameters:
+              DATA_PATH: ${PROJECT_ROOT}/data
+              BATCH_SIZE: ${BATCH_SIZE:-32}
+
+        :param config_path: Path to the YAML configuration file
+        :param kwargs: Additional keyword arguments (reserved for future use)
+
+        :returns: Experiment instance configured from the YAML file
+        """
+        from pycomex.functional.utils import interpolate_env_vars
 
         with open(config_path) as file:
             config_data = yaml.load(file, Loader=yaml.FullLoader)
+
+        # Apply environment variable interpolation to the entire config data
+        # This allows using ${VAR} and ${VAR:-default} syntax in any string fields
+        config_data = interpolate_env_vars(config_data)
 
         experiment_config = ExperimentConfig(path=config_path, **config_data)
         glob = {

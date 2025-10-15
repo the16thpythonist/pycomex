@@ -91,9 +91,9 @@ All reproducibility information is saved to `.dependencies.json` in the experime
 
 Source tarballs for editable packages are stored in `.sources/*.tar.gz`.
 
-#### 6. CLI Support (`pycomex/cli.py`)
+#### 6. CLI Support (`pycomex/cli/` package)
 
-The `pycomex reproduce` command (in development) provides:
+The `pycomex reproduce` command (implemented in `pycomex/cli/commands/run.py`) provides:
 
 - Archive validation and dependency loading
 - Python version extraction and virtual environment creation

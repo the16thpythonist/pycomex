@@ -80,6 +80,132 @@ A marker flag (typically set to `true`) that explicitly identifies this as a PyC
 pycomex: true
 ```
 
+## Environment Variable Interpolation
+
+PyComex configuration files support environment variable interpolation, allowing you to inject dynamic values from your environment into your configuration. This is particularly useful for:
+
+- **Sensitive Information**: Keeping API keys, passwords, and credentials out of version control
+- **Environment-Specific Paths**: Different data paths for local development vs. production
+- **Dynamic Configuration**: CI/CD pipelines that inject configuration values
+- **Shared Configurations**: Team members using different local paths without modifying config files
+
+### Basic Syntax
+
+Use `${VARIABLE_NAME}` to reference environment variables:
+
+```yaml
+extend: experiment.py
+parameters:
+  DATA_PATH: ${DATA_ROOT}/training_data
+  API_KEY: ${OPENAI_API_KEY}
+  MODEL_NAME: "gpt-4"
+```
+
+When the configuration is loaded, PyComex will replace `${DATA_ROOT}` with the value of the `DATA_ROOT` environment variable and `${OPENAI_API_KEY}` with your API key.
+
+### Default Values
+
+Provide fallback values using the `${VARIABLE_NAME:-default}` syntax:
+
+```yaml
+extend: experiment.py
+parameters:
+  DATA_PATH: ${DATA_ROOT:-/tmp/data}
+  BATCH_SIZE: ${BATCH_SIZE:-32}
+  LOG_LEVEL: ${LOG_LEVEL:-INFO}
+```
+
+If the environment variable is not set, the default value after `:-` will be used. This makes configurations more portable and reduces the need to set every environment variable.
+
+### Escaping Dollar Signs
+
+If you need a literal dollar sign in your configuration, use `$$`:
+
+```yaml
+parameters:
+  PRICE: $$50
+  # Results in: "PRICE: $50"
+```
+
+### Usage Examples
+
+**Development vs. Production:**
+
+```yaml
+# config.yml
+extend: training.py
+base_path: ${EXPERIMENT_BASE_PATH:-./experiments}
+parameters:
+  DATA_PATH: ${DATA_ROOT}/processed
+  MODEL_CHECKPOINT: ${MODEL_DIR}/checkpoints
+  NUM_WORKERS: ${NUM_WORKERS:-4}
+```
+
+Set environment variables differently per environment:
+
+```bash
+# Development
+export DATA_ROOT=/home/user/data
+export MODEL_DIR=/home/user/models
+pycomex run config.yml
+
+# Production
+export DATA_ROOT=/mnt/shared/data
+export MODEL_DIR=/mnt/shared/models
+export NUM_WORKERS=16
+pycomex run config.yml
+```
+
+**Keeping Secrets Out of Version Control:**
+
+```yaml
+# config.yml
+extend: api_experiment.py
+parameters:
+  API_KEY: ${OPENAI_API_KEY}
+  DATABASE_URL: ${DB_CONNECTION_STRING}
+  SECRET_TOKEN: ${AUTH_TOKEN}
+```
+
+Store secrets in a `.env` file (add to `.gitignore`):
+
+```bash
+# .env (NOT committed to version control)
+OPENAI_API_KEY=sk-...
+DB_CONNECTION_STRING=postgresql://...
+AUTH_TOKEN=abc123...
+```
+
+Load environment variables before running:
+
+```bash
+source .env
+pycomex run config.yml
+```
+
+**CI/CD Integration:**
+
+```yaml
+# ci_config.yml
+extend: benchmark.py
+parameters:
+  DATA_PATH: ${CI_DATA_PATH}
+  OUTPUT_DIR: ${CI_ARTIFACT_DIR}
+  COMMIT_SHA: ${CI_COMMIT_SHA:-unknown}
+  BUILD_NUMBER: ${CI_BUILD_NUMBER:-0}
+```
+
+### Error Handling
+
+If you reference an environment variable without providing a default, and that variable is not set, PyComex will raise a clear error:
+
+```
+ConfigInterpolationError: Environment variable "DATA_ROOT" is not set and no default value provided.
+Either set the environment variable or use ${DATA_ROOT:-default} syntax.
+```
+
+This helps catch configuration errors early before experiments start running.
+
 ## Examples
 
 ### Minimal Configuration
@@ -229,6 +355,178 @@ This will:
 4. Add helpful comments and structure
 
 You can then edit the generated file to modify only the parameters you want to change.
+
+## Validating Configuration Files
+
+PyComex provides a comprehensive validation command to check configuration files for errors before running experiments. This helps catch issues early and ensures your configurations are correct.
+
+### Basic Validation
+
+Validate a configuration file:
+
+```bash
+pycomex template validate config.yml
+```
+
+This will check:
+
+- **File Existence**: Config file exists and is readable
+- **YAML Syntax**: Valid YAML formatting
+- **Required Fields**: Presence of `extend` and `parameters` fields
+- **Base Experiment**: Extended experiment file exists and is importable
+- **Parameter Names**: All parameters exist in the base experiment (with typo detection)
+- **Mixins**: All included mixin files exist and are valid
+- **Environment Variables**: Referenced environment variables are available
+- **Path Fields**: No invalid characters in paths
+
+### Validation Output
+
+The validator provides clear, color-coded output:
+
+```
+╭─────────────────────────────────────────────────╮
+│     Config Validation: config.yml               │
+╰─────────────────────────────────────────────────╯
+
+✓ File exists and is readable
+✓ YAML syntax is valid
+✓ Required fields present (extend, parameters)
+✓ Base experiment found: training.py
+⚠ 3 parameters checked (1 warnings)
+    Parameter 'LEARNINNG_RATE' not found (did you mean 'LEARNING_RATE'?)
+✓ No mixins specified
+✓ All 2 environment variables available
+✓ Path fields are valid
+
+Validation: PASSED (1 warning(s))
+```
+
+### Verbose Mode
+
+Get detailed information about all checks:
+
+```bash
+pycomex template validate config.yml --verbose
+```
+
+This shows details for all checks, including successful ones:
+
+```
+✓ File exists and is readable
+    File path: /path/to/config.yml
+    Size: 1.2 KB
+✓ YAML syntax is valid
+    Parsed successfully
+✓ Required fields present (extend, parameters)
+    Found: extend, parameters, name, description
+...
+```
+
+### Warnings vs. Errors
+
+The validator distinguishes between errors (must fix) and warnings (should review):
+
+**Errors** (validation fails):
+- File not found or unreadable
+- Invalid YAML syntax
+- Missing required fields
+- Base experiment not found or not importable
+- Invalid characters in path fields
+- Mixin files not found
+
+**Warnings** (validation passes with warnings):
+- Unknown parameter names
+- Missing environment variables (without defaults)
+- Parameter values that aren't JSON-serializable
+
+### Treating Warnings as Errors
+
+For CI/CD pipelines or strict validation, treat warnings as errors:
+
+```bash
+pycomex template validate config.yml --warnings-as-errors
+```
+
+This will return a non-zero exit code if any warnings are present.
+
+### Integration with CI/CD
+
+Add validation to your CI pipeline:
+
+```yaml
+# .github/workflows/test.yml
+name: Test
+on: [push, pull_request]
+
+jobs:
+  validate-configs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+      - name: Install dependencies
+        run: pip install pycomex
+      - name: Validate configurations
+        run: |
+          for config in configs/*.yml; do
+            pycomex template validate "$config" --warnings-as-errors
+          done
+```
+
+### Common Validation Errors
+
+**Unknown Parameter:**
+
+```
+⚠ Parameter 'LEARNINNG_RATE' not found (did you mean 'LEARNING_RATE'?)
+```
+
+Fix: Correct the typo in your parameter name.
+
+**Missing Environment Variable:**
+
+```
+⚠ Environment variable 'DATA_ROOT' is not set and no default value provided
+```
+
+Fix: Either set the environment variable or add a default value in the config:
+```yaml
+DATA_PATH: ${DATA_ROOT:-/tmp/data}
+```
+
+**Base Experiment Not Found:**
+
+```
+✗ Base experiment not found: ../experiments/training.py
+    File does not exist: /path/to/../experiments/training.py
+```
+
+Fix: Check the relative path to your base experiment file.
+
+**Invalid Path Characters:**
+
+```
+✗ Path validation failed
+    name contains invalid characters: experiment/test
+```
+
+Fix: The `name` field should not contain path separators. Use `namespace` for hierarchical organization.
+
+### Best Practices
+
+1. **Validate Before Committing**: Run validation on all config files before committing to version control
+
+2. **Automate in CI/CD**: Include config validation in your CI pipeline to catch errors early
+
+3. **Use `--warnings-as-errors` in CI**: Enforce strict validation in automated environments
+
+4. **Fix Typos Early**: The validator's typo detection helps catch parameter name mistakes before running experiments
+
+5. **Check Environment Variables**: Validate with environment variables set to ensure they're available
+
+6. **Validate After Generation**: Always validate after generating configs from templates
 
 ## Use Cases
 

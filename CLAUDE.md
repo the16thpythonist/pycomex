@@ -56,6 +56,13 @@ def multiply(a: int, b: int) -> int:
 - `make test` - Run tests via Makefile
 - `nox -s test` - Run tests using Nox sessions
 
+**Test Organization:**
+- `tests/test_bugs.py` - Test-driven bug reproductions and regression tests. When fixing bugs, create a test case here that reproduces the issue, then verify the fix resolves it. This ensures previously fixed bugs remain fixed.
+- `tests/test_functional_*.py` - Tests for functional experiment system components
+- `tests/test_cli*.py` - Tests for CLI commands and functionality
+- `tests/assets/` - Mock experiments and test fixtures
+- `tests/artifacts/` - A folder where test executions can store persistant artifacts such as generated archives or plots
+
 ### Building and Publishing
 - `nox -s build` - Build package using Nox (includes testing wheel)
 - `uv build --python=3.10` - Build with uv
@@ -81,9 +88,17 @@ def multiply(a: int, b: int) -> int:
 - `functional.experiment.Experiment` - Modern functional-style experiment class (primary)
 
 **CLI System:**
-- `cli.py` - Rich-based command line interface with experiment management
+- `cli/` package - Refactored modular CLI implementation
+  - `cli/main.py` - CLI and ExperimentCLI base classes with utility methods
+  - `cli/display.py` - Rich display classes for formatted output
+  - `cli/utils.py` - Helper functions (section, subsection)
+  - `cli/commands/` - Command implementations via mixins
+    - `run.py` - RunCommandsMixin (run, reproduce, inspect commands)
+    - `template.py` - TemplateCommandsMixin (template operations)
+    - `archive.py` - ArchiveCommandsMixin (archive management)
 - `ExperimentCLI` class handles experiment discovery and execution
 - Supports parameter overrides, hook management, and archive inspection
+- All functionality available via mixin inheritance pattern
 
 **Configuration:**
 - `config.py` - Global configuration management using Pydantic
@@ -99,6 +114,11 @@ def multiply(a: int, b: int) -> int:
 **File Organization:**
 - `pycomex/` - Main package code
 - `pycomex/functional/` - Modern functional experiment system
+- `pycomex/cli/` - Refactored CLI package structure
+  - `main.py` - Base CLI classes (CLI, ExperimentCLI)
+  - `display.py` - Rich display components
+  - `utils.py` - Helper functions
+  - `commands/` - Command mixin modules (run, template, archive)
 - `pycomex/plugins/` - Plugin system for notifications, W&B integration, etc.
 - `pycomex/templates/` - Jinja2 templates for code generation
 - `tests/` - Comprehensive test suite with assets and examples

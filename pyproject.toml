@@ -6,7 +6,7 @@ build-backend = "hatchling.build"
 # Project Metadata
 # ================
 name = "pycomex"
-version = "0.24.0"
+version = "0.25.0"
 description = "Python Computational Experiments"
 readme = "README.rst"
 authors = [
@@ -92,11 +92,159 @@ features = ["dev"]
 [tool.hatchling.build]
 skip_excluded_dirs = true
 
+[tool.hatch.build.targets.sdist]
+# Exclude from source distributions (items not needed for building/developing)
+exclude = [
+    # Version control & CI/CD
+    ".git/",
+    ".github/",
+
+    # IDE & editor configs
+    ".claude/",
+    ".vscode/",
+    ".idea/",
+    ".cache/",
+    ".editorconfig",
+    ".flake8",
+
+    # Build artifacts
+    "dist/",
+    "build/",
+    "*.egg-info/",
+    "__pycache__/",
+    "*.pyc",
+    "*.pyo",
+    "*.so",
+
+    # Test & development environments
+    ".pytest_cache/",
+    ".coverage",
+    ".tox/",
+    ".nox/",
+    ".ruff_cache/",
+    "htmlcov/",
+    ".hypothesis/",
+
+    # Virtual environments
+    ".venv/",
+    "venv/",
+    "env/",
+    ".Python",
+
+    # Documentation builds
+    "site/",
+    "docs/_build/",
+    "docs/build/",
+
+    # Development projects & experiment outputs
+    "vscode_extension/",
+    "wandb/",
+    "results/",
+
+    # Development documentation (not for distribution)
+    "CLAUDE.md",
+    "AGENTS.md",
+    "HOOKS.md",
+    "DEVELOP.rst",
+    "TODO.rst",
+    "llms.txt",
+
+    # Build & development configuration files
+    "Makefile",
+    "noxfile.py",
+    "mkdocs.yml",
+    ".readthedocs.yaml",
+    "_pyproject.toml",
+
+    # Package-internal excludes
+    "pycomex/examples/results/",
+    "pycomex/examples/__pycache__/",
+    "pycomex/examples/.cache/",
+]
+
+[tool.hatch.build.targets.wheel]
+# Exclude from wheel distributions (keep wheels lean - runtime code only)
+exclude = [
+    # Everything excluded from sdist, plus:
+
+    # Version control & CI/CD
+    ".git/",
+    ".github/",
+
+    # IDE & editor configs
+    ".claude/",
+    ".vscode/",
+    ".idea/",
+    ".cache/",
+    ".editorconfig",
+    ".flake8",
+
+    # Build artifacts
+    "dist/",
+    "build/",
+    "*.egg-info/",
+    "__pycache__/",
+    "*.pyc",
+    "*.pyo",
+    "*.so",
+
+    # Test & development environments
+    ".pytest_cache/",
+    ".coverage",
+    ".tox/",
+    ".nox/",
+    ".ruff_cache/",
+    "htmlcov/",
+    ".hypothesis/",
+
+    # Virtual environments
+    ".venv/",
+    "venv/",
+    "env/",
+    ".Python",
+
+    # Documentation builds
+    "site/",
+    "docs/_build/",
+    "docs/build/",
+
+    # Development projects & experiment outputs
+    "vscode_extension/",
+    "wandb/",
+    "results/",
+
+    # Development documentation (not for distribution)
+    "CLAUDE.md",
+    "AGENTS.md",
+    "HOOKS.md",
+    "DEVELOP.rst",
+    "TODO.rst",
+    "llms.txt",
+    "CONTRIBUTING.rst",
+
+    # Build & development configuration files
+    "Makefile",
+    "noxfile.py",
+    "mkdocs.yml",
+    ".readthedocs.yaml",
+    "_pyproject.toml",
+    "MANIFEST.in",
+
+    # Package-internal excludes
+    "pycomex/examples/results/",
+    "pycomex/examples/__pycache__/",
+    "pycomex/examples/.cache/",
+
+    # Additional wheel-only exclusions (not needed at runtime)
+    "tests/",
+    "docs/",
+]
+
 # Version Bumping
 # ===============
 
 [tool.bumpversion]
-current_version = "0.24.0"
+current_version = "0.25.0"
 parse = "(?<![=<>])(?P<major>\\d+)\\.(?P<minor>\\d+)\\.(?P<patch>\\d+)"
 serialize = ["{major}.{minor}.{patch}"]
 search = "{current_version}"

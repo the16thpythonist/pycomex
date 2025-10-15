@@ -155,7 +155,16 @@ pycomex/
 │   ├── 10_caching.py
 │   └── 11_experiment_mixin.py
 │
-├── cli.py                 # Rich-based CLI implementation (2700+ lines)
+├── cli/                   # Rich-based CLI implementation (refactored package)
+│   ├── __init__.py       # Public API exports (ExperimentCLI, CLI, cli)
+│   ├── main.py           # CLI and ExperimentCLI base classes + utility methods
+│   ├── display.py        # Rich display classes for output formatting
+│   ├── utils.py          # Helper functions (section, subsection)
+│   └── commands/         # Command implementations via mixins
+│       ├── run.py        # RunCommandsMixin (run, reproduce, inspect)
+│       ├── template.py   # TemplateCommandsMixin (template operations)
+│       └── archive.py    # ArchiveCommandsMixin (archive management)
+│
 ├── config.py              # Global Pydantic-based configuration
 ├── plugin.py              # Plugin base class
 ├── util.py / utils.py     # Utility functions
@@ -244,11 +253,14 @@ docs/                      # MkDocs documentation
 - **Loading experiments**: Use template code in generated `analysis.py`
 
 ### CLI Usage
-- **Implementation**: `pycomex/cli.py`
+- **Implementation**: `pycomex/cli/` package
+  - Main classes: `pycomex/cli/main.py` (CLI and ExperimentCLI)
+  - Command mixins: `pycomex/cli/commands/` (run.py, template.py, archive.py)
+  - Display components: `pycomex/cli/display.py`
 - **Commands**:
-  - Template management: Search for `template` in cli.py
-  - Archive operations: Search for `archive` in cli.py
-  - Experiment execution: ExperimentCLI class
+  - Template management: `pycomex/cli/commands/template.py` (TemplateCommandsMixin)
+  - Archive operations: `pycomex/cli/commands/archive.py` (ArchiveCommandsMixin)
+  - Experiment execution: ExperimentCLI class in `pycomex/cli/main.py`
 - **Help**: Run `pycomex --help` or `pycx --help`
 
 ### Examples by Topic
@@ -334,7 +346,9 @@ Version bump: `bump-my-version bump [patch|minor|major]`
 ## Key Files to Reference
 
 - **Main implementation**: `pycomex/functional/experiment.py` (86k+ bytes)
-- **CLI implementation**: `pycomex/cli.py` (97k+ bytes)
+- **CLI implementation**: `pycomex/cli/` package (refactored into modular structure)
+  - Base classes: `pycomex/cli/main.py`
+  - Command implementations: `pycomex/cli/commands/{run,template,archive}.py`
 - **Configuration**: `pycomex/config.py`
 - **Best practices**: `CLAUDE.md` (project-specific AI instructions)
 - **Human docs**: `docs/` directory with MkDocs site

@@ -16,8 +16,15 @@ nav:
   - Philosophy: philosophy.md
   - Basics:
       - Hooks: basics_hooks.md
-      - Mixins: basics_mixins.md
       - Configuration Files: basics_config.md
+      - Mixins: basics_mixins.md
+      - Special Parameters: basics_special_parameters.md
+  - CLI:
+      - Quick Start: cli_quickstart.md
+      - Running Experiments: cli_run.md
+      - Templates: cli_template.md
+      - Archive Management: cli_archive.md
+      - Quick Reference: cli_reference.md
   - Advanced Usage:
       - Writing Plugins: advanced_plugins.md
       - Plugin Hooks: advanced_hooks.md

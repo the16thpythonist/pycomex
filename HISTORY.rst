@@ -606,6 +606,8 @@ Refactoring
   - Removed the `work.py` module
   - Removed several test cases and test assets
   - Removed the corresponding elements from the `utils.py` module
+- Split the 3000+ lines long monolithic `cli.py` module into several smaller modules within the 
+  new `cli/` sub package.
 
 Experiment Logging
 
@@ -622,3 +624,9 @@ Experiment Mixins
   experiment mixins.
 - Added documentation about experiment mixins to `docs/basics_mixins.md`
 - Added various unittests for the experiment mixin functionality
+
+Bug Fixes
+
+- Fixed a bug where the command line override of experiment parameters with the `pycomex run` command 
+  did not work correctly for the special parameters such as `__DEBUG__` or `__PREFIX__` since it was 
+  not calling the `Experiment.set_special_parameter` method.
