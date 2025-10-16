@@ -630,3 +630,13 @@ Bug Fixes
 - Fixed a bug where the command line override of experiment parameters with the `pycomex run` command 
   did not work correctly for the special parameters such as `__DEBUG__` or `__PREFIX__` since it was 
   not calling the `Experiment.set_special_parameter` method.
+
+
+0.25.1 (16.10.2025)
+-------------------
+
+Bug Fixes
+
+- Fixed a bug where the `pycomex run` command on a config file would produce an archive where the 
+  config yaml file content would be copied into the "experiment_code.py" file instead of the
+  actual base experiment module code.

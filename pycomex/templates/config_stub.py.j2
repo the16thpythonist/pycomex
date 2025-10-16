@@ -1,0 +1,39 @@
+"""
+Experiment run from YAML configuration file.
+
+This file is a minimal stub generated for an experiment that was executed from a YAML
+configuration file. The configuration file extends a base experiment and overrides
+specific parameters.
+
+Configuration File:
+    experiment_config.yml (in this archive directory)
+
+Extended Experiment:
+    {{ extended_path }}
+
+Parameter Overrides:
+{% for param_name, param_value in config_parameters.items() %}
+{% if not param_name.startswith('__') %}
+    {{ param_name }}: {{ param_value }}
+{% endif %}
+{% endfor %}
+
+To reproduce this experiment, load it from the archived configuration:
+    experiment = Experiment.from_config('experiment_config.yml')
+    experiment.run()
+"""
+
+from pycomex.functional.experiment import Experiment
+import os
+
+# Get the archive directory containing this file
+ARCHIVE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# Load the experiment from the archived configuration file
+# This recreates the experiment with the same parameters and base experiment
+experiment = Experiment.from_config(
+    config_path=os.path.join(ARCHIVE_DIR, "experiment_config.yml")
+)
+
+if __name__ == "__main__":
+    experiment.run_if_main()

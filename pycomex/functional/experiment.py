@@ -353,6 +353,8 @@ class Experiment(ExperimentBase):
     METADATA_FILE_NAME: str = "experiment_meta.json"
     # The name of the python module file that will be copied into the experiment archive folder.
     CODE_FILE_NAME: str = "experiment_code.py"
+    # The name of the YAML configuration file when experiments are created from config files.
+    CONFIG_FILE_NAME: str = "experiment_config.yml"
 
     # This is the filename that will be used to save the python dependencies when terminating the
     # experiment in reproducible mode.
@@ -1109,7 +1111,8 @@ class Experiment(ExperimentBase):
 
         # ~ copying all the code into the archive
         self.save_dependencies()
-        self.save_code()
+        self.save_code()       # Copies the actual Python module as experiment_code.py
+        self.save_config()     # Copies the YAML config file as experiment_config.yml (if applicable)
 
         # ~ updating the metadata
         self.metadata["status"] = "running"
@@ -1448,6 +1451,16 @@ class Experiment(ExperimentBase):
         self.check_path()
         return os.path.join(str(self.path), "analysis.py")
 
+    @property
+    def config_path(self) -> str:
+        """
+        Returns the absolute path to the experiment configuration YAML file in the archive.
+
+        :returns: Absolute path to experiment_config.yml
+        """
+        self.check_path()
+        return os.path.join(str(self.path), self.CONFIG_FILE_NAME)
+
     def prepare_path(self):
         """
         This method will for one thing create the actual path to the archive folder of the current expriment. This
@@ -1600,9 +1613,48 @@ class Experiment(ExperimentBase):
             file.write(content)
 
     def save_code(self) -> None:
-        source_path = self.glob["__file__"]
+        """
+        Save the experiment code to the archive folder.
+
+        For config-based experiments (those created via Experiment.from_config()),
+        this generates a minimal stub file that documents the config and can reload
+        the experiment from the archived config file.
+
+        For regular experiments, this copies the source Python file.
+
+        :returns: None
+        """
         destination_path = self.code_path
-        shutil.copy(source_path, destination_path)
+
+        # Check if this is a config-based experiment
+        if "__config_file__" in self.glob:
+            # Generate a minimal stub for config-based experiments
+            template = TEMPLATE_ENV.get_template("config_stub.py.j2")
+
+            # Get the extended experiment path (the base experiment being extended)
+            extended_path = self.glob["__file__"]
+
+            # Get config parameters (non-special parameters from glob that were set by the config)
+            # We'll show all parameters for documentation, filtering out special __ parameters
+            config_parameters = {
+                key: value
+                for key, value in self.parameters.items()
+                if not key.startswith("__")
+            }
+
+            # Render the stub template
+            stub_content = template.render({
+                "extended_path": extended_path,
+                "config_parameters": config_parameters,
+            })
+
+            # Write the stub to the code file
+            with open(destination_path, "w") as file:
+                file.write(stub_content)
+        else:
+            # Regular experiment: copy the source file
+            source_path = self.glob["__file__"]
+            shutil.copy(source_path, destination_path)
 
     def save_dependencies(self) -> None:
         # Save experiment dependencies (base experiments from extend())
@@ -1617,6 +1669,22 @@ class Experiment(ExperimentBase):
             file_name = os.path.basename(mixin_path)
             destination_path = os.path.join(self.path, file_name)
             shutil.copy(mixin_path, destination_path)
+
+    def save_config(self) -> None:
+        """
+        Save the YAML configuration file to the archive folder if this experiment
+        was created from a config file.
+
+        If the experiment glob contains a '__config_file__' entry, the config file
+        will be copied to the archive as 'experiment_config.yml'. This preserves the
+        original YAML configuration alongside the Python code for reference.
+
+        :returns: None
+        """
+        if "__config_file__" in self.glob:
+            config_path = self.glob["__config_file__"]
+            destination_path = self.config_path
+            shutil.copy(config_path, destination_path)
 
     def save_analysis(self) -> None:
         with open(self.analysis_path, mode="w") as file:
@@ -2075,8 +2143,17 @@ class Experiment(ExperimentBase):
         config_data = interpolate_env_vars(config_data)
 
         experiment_config = ExperimentConfig(path=config_path, **config_data)
+
+        # Resolve the extend path to an absolute path if it's relative
+        extend_path = experiment_config.extend
+        if not os.path.isabs(extend_path):
+            # Make it relative to the config file's directory
+            config_dir = os.path.dirname(os.path.abspath(config_path))
+            extend_path = os.path.join(config_dir, extend_path)
+
         glob = {
-            "__file__": config_path,
+            "__file__": extend_path,       # Point to actual Python module (absolute path)
+            "__config_file__": config_path,  # Track config file separately
             **experiment_config.parameters,
         }
 
