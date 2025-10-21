@@ -8,6 +8,7 @@ import shutil
 import sys
 import zipfile
 
+import rich.box
 import rich_click as click
 
 from pycomex.functional.experiment import Experiment
@@ -929,3 +930,297 @@ class ArchiveCommandsMixin:
 
         if error_count > 0:
             self.cons.print(f"[red]❌ Failed to modify {error_count} experiment(s)[/red]")
+
+    @click.command(
+        "scan", short_help="Scan archive and display experiment distribution statistics."
+    )
+    @click.option(
+        "--group",
+        type=click.STRING,
+        default="p.get('__PREFIX__', 'unknown')",
+        help=(
+            "Python expression to define grouping key. Variables available: 'm' (metadata dict) and 'p' (parameters dict). "
+            "Default groups by __PREFIX__ parameter."
+        ),
+    )
+    @click.option(
+        "--select",
+        type=click.STRING,
+        help=(
+            "Criterion by which to select experiments to scan. Implemented as a python boolean "
+            "expression that may use 'm' (metadata dict) and 'p' (parameters dict). "
+            "Will be evaluated on all experiments before grouping."
+        ),
+    )
+    @click.pass_obj
+    def archive_scan_command(self, group: str, select: str) -> None:
+        """
+        Scan the experiment archive and display distribution statistics grouped by a custom criterion.
+
+        This command analyzes all experiments in the archive and groups them according to a Python expression.
+        For each group, it displays:
+        - Number of experiments in the group
+        - Time since the last completed experiment
+        - Average runtime across experiments in the group
+
+        The --group option defines a Python expression that returns the grouping key. The expression
+        has access to 'm' (metadata dict) and 'p' (parameters dict) for each experiment.
+        Default: Groups by the __PREFIX__ parameter
+
+        The --select option filters which experiments to include before grouping (same as other archive commands).
+
+        Example:
+
+            pycomex archive scan
+
+            pycomex archive scan --group="p.get('MODEL_TYPE', 'unknown')"
+
+            pycomex archive scan --select="p.get('__PREFIX__') == 'test'"
+        """
+
+        ## --- reading the experiment archive ---
+
+        # Collect all experiment archive paths
+        experiment_archive_paths: list[str] = self.collect_experiment_archive_paths(
+            self.archive_path
+        )
+
+        if len(experiment_archive_paths) == 0:
+            self.cons.print(
+                f'[red]There are no archived experiments in the given archive path "[bold]{self.archive_path}[/bold]"!'
+                f"Perhaps the wrong folder was selected? Set the --path option to the archive "
+                f"command group to provide a custom path.[/red]"
+            )
+            sys.exit(1)
+
+        # Apply selection filter if provided (before grouping)
+        if select is not None:
+            self.cons.print(f"Applying selection filter: [cyan]{select}[/cyan]")
+            try:
+                experiment_archive_paths = self.filter_experiment_archives_by_select(
+                    experiment_archive_paths, select
+                )
+                if len(experiment_archive_paths) == 0:
+                    self.cons.print(
+                        "[yellow]No experiments match the selection criteria.[/yellow]"
+                    )
+                    return
+            except Exception as e:
+                self.cons.print(f"[red]Error during selection: {e}[/red]")
+                sys.exit(1)
+
+        ## --- loading metadata and grouping experiments ---
+
+        # Dictionary to store experiments grouped by the grouping key
+        # Each key maps to a list of (path, metadata) tuples
+        groups: dict = {}
+        skipped_count = 0
+
+        for path in experiment_archive_paths:
+            try:
+                # Load metadata
+                experiment_meta_path = os.path.join(path, Experiment.METADATA_FILE_NAME)
+                with open(experiment_meta_path) as file:
+                    metadata = json.load(file)
+
+                # Create the evaluation context
+                m = metadata
+                p = {
+                    param: info.get("value")
+                    for param, info in metadata.get("parameters", {}).items()
+                    if "value" in info
+                }
+
+                # Evaluate the grouping expression
+                exec_globals = {"m": m, "p": p}
+                try:
+                    group_key = eval(group, exec_globals)
+                    # Convert to string for consistent grouping
+                    group_key = str(group_key)
+                except Exception as e:
+                    self.cons.print(
+                        f"[yellow]Warning: Failed to evaluate group expression for {path}: {e}[/yellow]"
+                    )
+                    group_key = "error"
+
+                # Add to appropriate group
+                if group_key not in groups:
+                    groups[group_key] = []
+                groups[group_key].append((path, metadata))
+
+            except Exception:
+                # Skip experiments with invalid metadata
+                skipped_count += 1
+                continue
+
+        if len(groups) == 0:
+            self.cons.print(
+                "[yellow]No experiments with valid metadata found in the archive.[/yellow]"
+            )
+            if skipped_count > 0:
+                self.cons.print(
+                    f"[bright_black]Skipped {skipped_count} experiment(s) with invalid metadata.[/bright_black]"
+                )
+            return
+
+        ## --- computing statistics for each group ---
+
+        import time
+        from rich.table import Table
+
+        group_stats = []
+
+        for group_key, experiments in groups.items():
+            count = len(experiments)
+
+            # Find the most recent end_time
+            last_end_time = None
+            for _, metadata in experiments:
+                end_time = metadata.get("end_time")
+                if end_time is not None:
+                    if last_end_time is None or end_time > last_end_time:
+                        last_end_time = end_time
+
+            # Calculate time since last completed
+            time_since_last = None
+            if last_end_time is not None:
+                time_since_last = time.time() - last_end_time
+
+            # Calculate average runtime (for all completed experiments)
+            durations = []
+            for _, metadata in experiments:
+                duration = metadata.get("duration")
+                if duration is not None and duration > 0:
+                    durations.append(duration)
+
+            avg_runtime = sum(durations) / len(durations) if durations else None
+
+            # Calculate success rate
+            successful_count = 0
+            for _, metadata in experiments:
+                status = metadata.get("status", "unknown")
+                has_error = metadata.get("has_error", False)
+                if status == "done" and not has_error:
+                    successful_count += 1
+
+            success_rate = (successful_count / count * 100) if count > 0 else 0
+
+            # Calculate disk usage
+            total_size_bytes = 0
+            for path, _ in experiments:
+                try:
+                    for dirpath, dirnames, filenames in os.walk(path):
+                        for filename in filenames:
+                            file_path = os.path.join(dirpath, filename)
+                            if os.path.exists(file_path):
+                                total_size_bytes += os.path.getsize(file_path)
+                except Exception:
+                    # Skip if we can't access the path
+                    pass
+
+            group_stats.append(
+                {
+                    "key": group_key,
+                    "count": count,
+                    "time_since_last": time_since_last,
+                    "avg_runtime": avg_runtime,
+                    "success_rate": success_rate,
+                    "successful_count": successful_count,
+                    "disk_usage_bytes": total_size_bytes,
+                }
+            )
+
+        # Sort by group key alphabetically
+        group_stats.sort(key=lambda x: x["key"])
+
+        ## --- display results ---
+
+        self.cons.print(
+            f"Experiment Archive Scan @ [grey50]{self.archive_path}[/grey50]"
+        )
+        if select:
+            self.cons.print(f"[bright_black]Filtered by: {select}[/bright_black]")
+        self.cons.print(f"[bright_black]Grouped by: {group}[/bright_black]")
+        self.cons.print()
+
+        # Create results table
+        table = Table(
+            show_header=True,
+            header_style="bold white",
+            border_style="bright_black",
+            expand=True,
+            box=rich.box.HORIZONTALS,
+        )
+
+        table.add_column("Group", style="cyan", no_wrap=True)
+        table.add_column("Experiments", justify="right", style="white")
+        table.add_column("Success Rate", justify="right", style="green")
+        table.add_column("Last Completed", justify="right", style="yellow")
+        table.add_column("Avg Runtime", justify="right", style="magenta")
+        table.add_column("Disk Usage", justify="right", style="blue")
+
+        for stats in group_stats:
+            # Format time since last
+            if stats["time_since_last"] is not None:
+                seconds = stats["time_since_last"]
+                hours = seconds / 3600
+                days = hours / 24
+
+                if hours < 48:
+                    time_since_str = f"{hours:.1f} hours ago"
+                else:
+                    time_since_str = f"{days:.1f} days ago"
+            else:
+                time_since_str = "N/A"
+
+            # Format average runtime
+            if stats["avg_runtime"] is not None:
+                runtime = stats["avg_runtime"]
+                hours = runtime / 3600
+                minutes = runtime / 60
+
+                if hours >= 1:
+                    runtime_str = f"{hours:.2f} hours"
+                elif minutes >= 1:
+                    runtime_str = f"{minutes:.1f} minutes"
+                else:
+                    runtime_str = f"{runtime:.1f} seconds"
+            else:
+                runtime_str = "N/A"
+
+            # Format success rate
+            success_rate_str = f"{stats['successful_count']}/{stats['count']} ({stats['success_rate']:.1f}%)"
+
+            # Format disk usage
+            size_bytes = stats["disk_usage_bytes"]
+            if size_bytes >= 1024**3:  # GB
+                disk_usage_str = f"{size_bytes / (1024**3):.2f} GB"
+            elif size_bytes >= 1024**2:  # MB
+                disk_usage_str = f"{size_bytes / (1024**2):.1f} MB"
+            elif size_bytes >= 1024:  # KB
+                disk_usage_str = f"{size_bytes / 1024:.1f} KB"
+            else:
+                disk_usage_str = f"{size_bytes} bytes"
+
+            table.add_row(
+                stats["key"],
+                str(stats["count"]),
+                success_rate_str,
+                time_since_str,
+                runtime_str,
+                disk_usage_str,
+            )
+
+        self.cons.print(table)
+        self.cons.print()
+
+        # Summary
+        total_groups = len(group_stats)
+        total_experiments = sum(s["count"] for s in group_stats)
+        self.cons.print(
+            f"[bold]Summary:[/bold] {total_groups} group(s), {total_experiments} experiment(s)"
+        )
+        if skipped_count > 0:
+            self.cons.print(
+                f"[bright_black]Skipped {skipped_count} experiment(s) with invalid metadata.[/bright_black]"
+            )

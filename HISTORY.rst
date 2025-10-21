@@ -640,3 +640,14 @@ Bug Fixes
 - Fixed a bug where the `pycomex run` command on a config file would produce an archive where the 
   config yaml file content would be copied into the "experiment_code.py" file instead of the
   actual base experiment module code.
+
+0.26.0 (21.10.2025)
+-------------------
+
+Command Line Interface
+
+- Added the "pycomex archive scan" command which can be used to analyze the contents of an 
+  experiment archive by grouping the experiments by certain group selection keys and
+  showing the properties of these groups in a table in the output.
+- Changed the --help string to now display all of the commands in a flat manner instead 
+  of the individual command groups.

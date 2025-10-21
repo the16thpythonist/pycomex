@@ -106,6 +106,7 @@ import rich.console
 import rich_click as click
 from click.globals import get_current_context
 from rich.console import Console
+from rich.table import Table
 
 from pycomex.functional.experiment import Experiment, run_experiment
 from pycomex.utils import (
@@ -335,6 +336,9 @@ class CLI(RunCommandsMixin, TemplateCommandsMixin, ArchiveCommandsMixin, click.R
         # This command can be used to reproduce previously executed experiments
         self.add_command(self.reproduce_command)
 
+        # This command can be used to inspect terminated experiments
+        self.add_command(self.inspect_command)
+
         self.template_group.add_command(self.template_analysis_command)
         self.template_group.add_command(self.template_experiment_command)
         self.template_group.add_command(self.template_extend_command)
@@ -349,7 +353,16 @@ class CLI(RunCommandsMixin, TemplateCommandsMixin, ArchiveCommandsMixin, click.R
         self.archive_group.add_command(self.archive_compress_command)
         self.archive_group.add_command(self.archive_info_command)
         self.archive_group.add_command(self.archive_modify_command)
+        self.archive_group.add_command(self.archive_scan_command)
         self.add_command(self.archive_group)
+
+    def format_commands(self, ctx, formatter) -> None:
+        """
+        Override the default format_commands to suppress it, since we're
+        formatting commands ourselves in custom panels in format_help.
+        """
+        # Do nothing - we handle command formatting in format_help
+        pass
 
     def format_help(self, ctx, formatter) -> None:
         """
@@ -360,7 +373,148 @@ class CLI(RunCommandsMixin, TemplateCommandsMixin, ArchiveCommandsMixin, click.R
         rich.print(RichLogo())
         rich.print(RichHelp())
 
+        # Print usage before command panels
         self.format_usage(ctx, formatter)
+
+        # Separate direct commands from groups and collect subcommands
+        # Store commands in dictionaries for custom ordering
+        direct_commands_dict = {}
+        template_commands_dict = {}
+        archive_commands_dict = {}
+
+        for cmd_name, cmd in self.commands.items():
+            if isinstance(cmd, click.Group):
+                # It's a group, get its subcommands
+                if cmd_name == "template":
+                    for sub_name, sub_cmd in cmd.commands.items():
+                        template_commands_dict[sub_name] = sub_cmd.short_help or ""
+                elif cmd_name == "archive":
+                    for sub_name, sub_cmd in cmd.commands.items():
+                        archive_commands_dict[sub_name] = sub_cmd.short_help or ""
+            else:
+                # It's a direct command
+                direct_commands_dict[cmd_name] = cmd.short_help or ""
+
+        # Order commands according to specification
+        # Direct commands: run, reproduce, inspect
+        direct_commands = []
+        for cmd_name in ["run", "reproduce", "inspect"]:
+            if cmd_name in direct_commands_dict:
+                direct_commands.append((cmd_name, direct_commands_dict[cmd_name]))
+
+        # Template commands: experiment, config, extend, analysis, validate
+        template_commands = []
+        for cmd_name in ["experiment", "config", "extend", "analysis", "validate"]:
+            if cmd_name in template_commands_dict:
+                template_commands.append((cmd_name, template_commands_dict[cmd_name]))
+
+        # Archive global commands: info, tail, compress
+        archive_global_commands = []
+        for cmd_name in ["info", "tail", "compress"]:
+            if cmd_name in archive_commands_dict:
+                archive_global_commands.append((cmd_name, archive_commands_dict[cmd_name]))
+
+        # Archive local commands: list, overview, delete, modify, scan
+        archive_local_commands = []
+        for cmd_name in ["list", "overview", "delete", "modify", "scan"]:
+            if cmd_name in archive_commands_dict:
+                archive_local_commands.append((cmd_name, archive_commands_dict[cmd_name]))
+
+        # Create panels for each command group
+
+        # Direct commands panel
+        if direct_commands:
+            commands_table = Table(
+                show_header=False,
+                box=None,
+                padding=(0, 1),
+                expand=True,
+            )
+            # Force fixed width by setting both min and max to the same value
+            commands_table.add_column("Command", style="cyan", min_width=20, max_width=20, no_wrap=True)
+            commands_table.add_column("Description", style="white", ratio=1)
+
+            for name, help_text in direct_commands:
+                display_name = f"[bold]{name}[/bold]" if name == "run" else name
+                commands_table.add_row(display_name, help_text)
+
+            panel = rich.panel.Panel(
+                commands_table,
+                title="Commands",
+                title_align="left",
+                border_style="bright_black"
+            )
+            self.cons.print(panel)
+
+        # Template commands panel
+        if template_commands:
+            template_table = Table(
+                show_header=False,
+                box=None,
+                padding=(0, 1),
+                expand=True,
+            )
+            # Force fixed width by setting both min and max to the same value
+            template_table.add_column("Command", style="cyan", min_width=20, max_width=20, no_wrap=True)
+            template_table.add_column("Description", style="white", ratio=1)
+
+            for name, help_text in template_commands:
+                template_table.add_row(f"template {name}", help_text)
+
+            panel = rich.panel.Panel(
+                template_table,
+                title="Template Commands",
+                title_align="left",
+                border_style="bright_black"
+            )
+            self.cons.print(panel)
+
+        # Archive Global Commands panel
+        if archive_global_commands:
+            archive_global_table = Table(
+                show_header=False,
+                box=None,
+                padding=(0, 1),
+                expand=True,
+            )
+            # Force fixed width by setting both min and max to the same value
+            archive_global_table.add_column("Command", style="cyan", min_width=20, max_width=20, no_wrap=True)
+            archive_global_table.add_column("Description", style="white", ratio=1)
+
+            for name, help_text in archive_global_commands:
+                archive_global_table.add_row(f"archive {name}", help_text)
+
+            panel = rich.panel.Panel(
+                archive_global_table,
+                title="Archive Global Commands",
+                title_align="left",
+                border_style="bright_black"
+            )
+            self.cons.print(panel)
+
+        # Archive Local Commands panel
+        if archive_local_commands:
+            archive_local_table = Table(
+                show_header=False,
+                box=None,
+                padding=(0, 1),
+                expand=True,
+            )
+            # Force fixed width by setting both min and max to the same value
+            archive_local_table.add_column("Command", style="cyan", min_width=20, max_width=20, no_wrap=True)
+            archive_local_table.add_column("Description", style="white", ratio=1)
+
+            for name, help_text in archive_local_commands:
+                archive_local_table.add_row(f"archive {name}", help_text)
+
+            panel = rich.panel.Panel(
+                archive_local_table,
+                title="Archive Local Commands",
+                title_align="left",
+                border_style="bright_black"
+            )
+            self.cons.print(panel)
+
         self.format_options(ctx, formatter)
         self.format_epilog(ctx, formatter)
 
