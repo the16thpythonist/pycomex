@@ -217,12 +217,13 @@ class ExperimentCache:
         os.makedirs(self.path, exist_ok=True)
 
     def set_enabled(self, enabled: bool) -> None:
-        """Enable or disable cache loading.
+        """Enable or disable cache loading and saving.
 
-        When disabled, the cache will not load existing cached results, forcing
-        recomputation. New results will still be saved to cache.
+        When disabled (False), the cache will neither load existing cached results
+        nor save new results to disk, effectively bypassing the cache system entirely.
+        When enabled (True), normal caching behavior resumes.
 
-        :param enabled: True to enable cache loading, False to disable
+        :param enabled: True to enable cache loading and saving, False to disable both
         :type enabled: bool
         """
         self.enabled = enabled
@@ -365,9 +366,12 @@ class ExperimentCache:
             def wrapper(*args, **kwargs):
                 """Wrapper function that implements the caching logic.
 
-                This function first attempts to load cached results, and only
-                executes the original function if no valid cache is found.
-                After execution, results are automatically saved to cache.
+                This function first attempts to load cached results if caching is enabled,
+                and only executes the original function if no valid cache is found.
+                After execution, results are automatically saved to cache if caching is enabled.
+
+                When caching is disabled (self.enabled=False), the function executes normally
+                without any cache interaction, neither loading from nor saving to cache.
 
                 :param args: Positional arguments passed to the original function
                 :param kwargs: Keyword arguments passed to the original function
@@ -406,16 +410,18 @@ class ExperimentCache:
                 # --- Save to cache ---
                 # After we computed the result we want to save it to the disk so that next time
                 # we can load it from the disk instead of recomputing it.
-                time_start = time.time()
-                self.save(
-                    data=result,
-                    name=name,
-                    scope=current_scope,
-                    backend=backend,
-                )
-                self.experiment.log(
-                    f'Saved "{name}" to cache in {time.time() - time_start:.2f} seconds!'
-                )
+                # However, this is only done if caching is enabled.
+                if self.enabled:
+                    time_start = time.time()
+                    self.save(
+                        data=result,
+                        name=name,
+                        scope=current_scope,
+                        backend=backend,
+                    )
+                    self.experiment.log(
+                        f'Saved "{name}" to cache in {time.time() - time_start:.2f} seconds!'
+                    )
 
                 return result
 

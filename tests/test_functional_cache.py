@@ -434,3 +434,199 @@ class TestExperimentCache:
             # Verify cache file exists
             cache_file = os.path.join(temp_dir, "arg_function.pkl")
             assert os.path.exists(cache_file)
+
+    def test_set_enabled_false_prevents_loading(self):
+        """
+        set_enabled(False) should prevent loading from cache
+        """
+        with tempfile.TemporaryDirectory() as temp_dir:
+            cache = ExperimentCache(path=temp_dir, compress=False)
+            test_data = "cached_data"
+
+            # Save data with caching enabled
+            cache.save_at(
+                data=test_data,
+                name="test_file",
+                folder_path=temp_dir,
+                backend=CacheBackend.PICKLE,
+            )
+
+            # Verify file exists
+            assert os.path.exists(os.path.join(temp_dir, "test_file.pkl"))
+
+            # Now disable caching
+            cache.set_enabled(False)
+
+            # Try to load - should raise FileNotFoundError despite file existing
+            # Actually, load_from doesn't check enabled, so let's test via decorator
+            call_count = 0
+
+            @cache.cached("test_function")
+            def test_function():
+                nonlocal call_count
+                call_count += 1
+                return "new_result"
+
+            # First, save with caching enabled
+            cache.set_enabled(True)
+            result1 = test_function()
+            assert result1 == "new_result"
+            assert call_count == 1
+
+            # Second call should use cache
+            result2 = test_function()
+            assert result2 == "new_result"
+            assert call_count == 1  # Not called again
+
+            # Disable caching
+            cache.set_enabled(False)
+
+            # Third call should bypass cache and execute function
+            result3 = test_function()
+            assert result3 == "new_result"
+            assert call_count == 2  # Function called again!
+
+    def test_set_enabled_false_prevents_saving(self):
+        """
+        set_enabled(False) should prevent saving to cache
+        """
+        with tempfile.TemporaryDirectory() as temp_dir:
+            cache = ExperimentCache(path=temp_dir, compress=False)
+
+            # Disable caching before creating decorator
+            cache.set_enabled(False)
+
+            call_count = 0
+
+            @cache.cached("disabled_function")
+            def disabled_function():
+                nonlocal call_count
+                call_count += 1
+                return "computed_result"
+
+            # Call function with caching disabled
+            result1 = disabled_function()
+            assert result1 == "computed_result"
+            assert call_count == 1
+
+            # Verify NO cache file was created
+            cache_file = os.path.join(temp_dir, "disabled_function.pkl")
+            assert not os.path.exists(
+                cache_file
+            ), "Cache file should not exist when caching is disabled"
+
+            # Second call should execute function again (no cache)
+            result2 = disabled_function()
+            assert result2 == "computed_result"
+            assert call_count == 2  # Function called again
+
+            # Still no cache file should exist
+            assert not os.path.exists(cache_file)
+
+    def test_set_enabled_can_be_toggled(self):
+        """
+        set_enabled can be toggled during execution and takes effect immediately
+        """
+        with tempfile.TemporaryDirectory() as temp_dir:
+            cache = ExperimentCache(path=temp_dir, compress=False)
+            call_count = 0
+
+            @cache.cached("toggle_function")
+            def toggle_function(value):
+                nonlocal call_count
+                call_count += 1
+                return f"result_{value}"
+
+            # Start with caching enabled (default)
+            result1 = toggle_function("first")
+            assert result1 == "result_first"
+            assert call_count == 1
+
+            # Verify cache file exists
+            assert os.path.exists(os.path.join(temp_dir, "toggle_function.pkl"))
+
+            # Call again - should use cache
+            result2 = toggle_function("different_arg")
+            assert result2 == "result_first"  # Returns cached result
+            assert call_count == 1
+
+            # Disable caching
+            cache.set_enabled(False)
+
+            # Call again - should bypass cache and execute
+            result3 = toggle_function("third")
+            assert result3 == "result_third"
+            assert call_count == 2  # Function executed
+
+            # Re-enable caching
+            cache.set_enabled(True)
+
+            # Call again - should use old cache
+            result4 = toggle_function("fourth")
+            assert result4 == "result_first"  # Old cached result
+            assert call_count == 2  # No new execution
+
+    def test_caching_disabled_with_scoped_function(self):
+        """
+        Disabled caching should work correctly with scoped functions
+        """
+        with tempfile.TemporaryDirectory() as temp_dir:
+            cache = ExperimentCache(path=temp_dir, compress=False)
+            cache.set_enabled(False)
+
+            call_count = 0
+
+            @cache.cached("scoped_disabled", scope=("test", "scope"))
+            def scoped_disabled():
+                nonlocal call_count
+                call_count += 1
+                return "scoped_result"
+
+            # Call function
+            result = scoped_disabled()
+            assert result == "scoped_result"
+            assert call_count == 1
+
+            # Verify no cache file in scoped directory
+            scoped_cache_file = os.path.join(
+                temp_dir, "test", "scope", "scoped_disabled.pkl"
+            )
+            # The directory might not even exist
+            assert not os.path.exists(
+                scoped_cache_file
+            ), "Scoped cache file should not exist when caching is disabled"
+
+            # Call again - should execute again
+            result2 = scoped_disabled()
+            assert result2 == "scoped_result"
+            assert call_count == 2
+
+    def test_caching_disabled_with_different_backends(self):
+        """
+        Disabled caching should work with all backends
+        """
+        with tempfile.TemporaryDirectory() as temp_dir:
+            cache = ExperimentCache(path=temp_dir, compress=False)
+            cache.set_enabled(False)
+
+            @cache.cached("pickle_disabled", backend=CacheBackend.PICKLE)
+            def pickle_disabled():
+                return {"backend": "pickle"}
+
+            @cache.cached("joblib_disabled", backend=CacheBackend.JOBLIB)
+            def joblib_disabled():
+                return ["joblib"]
+
+            @cache.cached("json_disabled", backend=CacheBackend.JSON)
+            def json_disabled():
+                return {"backend": "json"}
+
+            # Call all functions
+            pickle_disabled()
+            joblib_disabled()
+            json_disabled()
+
+            # Verify NO cache files were created for any backend
+            assert not os.path.exists(os.path.join(temp_dir, "pickle_disabled.pkl"))
+            assert not os.path.exists(os.path.join(temp_dir, "joblib_disabled.joblib"))
+            assert not os.path.exists(os.path.join(temp_dir, "json_disabled.json"))

@@ -651,3 +651,8 @@ Command Line Interface
   showing the properties of these groups in a table in the output.
 - Changed the --help string to now display all of the commands in a flat manner instead 
   of the individual command groups.
+
+Bug Fixes
+
+- When the `__CACHING__ = False` is set, the cached functions no longer save to the cache, which
+  was previously the case.

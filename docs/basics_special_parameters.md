@@ -67,11 +67,11 @@ __PREFIX__ = "ablation_study"
 **Type:** `bool`
 **Default:** `True`
 
-Controls whether the experiment cache system loads existing cached results. When `False`, cached results will not be loaded even if available, forcing recomputation. New results will still be saved to the cache unless explicitly configured otherwise in your cache usage.
+Controls whether the experiment cache system loads and saves cached results. When `False`, the cache system is completely bypassed: cached results will not be loaded even if available, and new results will not be saved to the cache. This forces complete recomputation without any cache interaction.
 
 ```python
 # In experiment file
-__CACHING__ = False  # Force recomputation, ignore cached results
+__CACHING__ = False  # Disable all cache operations (loading and saving)
 ```
 
 ## Usage
