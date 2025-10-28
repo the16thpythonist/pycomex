@@ -55,3 +55,142 @@ To complete the plugin, you'll need to ensure that the package is installed in y
 3. Implement a subclass that inherits from the `pycomex.plugins.Plugin` class inside the `main.py` module.
 4. Register the necessary hooks inside of this subclass.
 
+## Adding CLI Commands
+
+Plugins can extend the PyComex CLI by registering custom commands using the `cli_register_commands` hook. This allows plugins to add their own subcommands to the `pycomex` command-line interface.
+
+### Basic Example
+
+Here's a simple example of a plugin that adds a custom CLI command:
+
+```python title="pycomex_mycli/main.py"
+import rich_click as click
+from pycomex.plugin import Plugin, hook
+
+class MyCliPlugin(Plugin):
+
+    @hook("cli_register_commands", priority=0)
+    def register_cli_commands(self, config, cli):
+        """Register custom CLI commands."""
+
+        # Define the command using the closure pattern
+        # This allows access to both 'self' (plugin) and 'cli_instance' (CLI object)
+        @click.command("hello", short_help="Say hello from the plugin")
+        @click.option("--name", default="World", help="Name to greet")
+        @click.pass_obj
+        def hello_command(cli_instance, name):
+            """
+            A simple hello command added by the plugin.
+
+            This command demonstrates how plugins can add custom CLI functionality.
+            """
+            # Access CLI utilities like the Rich console
+            cli_instance.cons.print(f"[bold green]Hello, {name}![/bold green]")
+            cli_instance.cons.print("This message comes from a plugin command!")
+
+        # Register the command with the CLI
+        cli.add_command(hello_command)
+```
+
+After installing this plugin, users can run:
+
+```bash
+$ pycomex hello --name Alice
+Hello, Alice!
+This message comes from a plugin command!
+```
+
+The command will also appear in the help output under "Plugin Commands":
+
+```bash
+$ pycomex --help
+...
+╭─ Plugin Commands ────────────────────────────────────────────────────────╮
+│ hello                Say hello from the plugin                           │
+╰──────────────────────────────────────────────────────────────────────────╯
+```
+
+### Command Groups
+
+For more complex functionality, plugins can register command groups with multiple subcommands:
+
+```python title="pycomex_analysis/main.py"
+import rich_click as click
+from pycomex.plugin import Plugin, hook
+
+class AnalysisPlugin(Plugin):
+
+    @hook("cli_register_commands", priority=0)
+    def register_cli_commands(self, config, cli):
+        """Register analysis command group."""
+
+        # Create a command group
+        @click.group("analyze", short_help="Analysis tools from plugin")
+        @click.pass_obj
+        def analyze_group(cli_instance):
+            """Analysis commands provided by the plugin."""
+            pass
+
+        # Add subcommands to the group
+        @click.command("stats", short_help="Show statistics")
+        @click.option("--select", help="Filter experiments")
+        @click.pass_obj
+        def stats_command(cli_instance, select):
+            """Display statistics about experiments."""
+            archives = cli_instance.collect_experiment_archive_paths(
+                config['archive_path']
+            )
+
+            if select:
+                archives = cli_instance.filter_experiment_archives_by_select(
+                    archives, select
+                )
+
+            cli_instance.cons.print(f"[bold]Found {len(archives)} experiments[/bold]")
+            # Plugin-specific analysis logic here...
+
+        @click.command("export", short_help="Export results")
+        @click.argument("output", type=click.Path())
+        @click.pass_obj
+        def export_command(cli_instance, output):
+            """Export analysis results to a file."""
+            cli_instance.cons.print(f"Exporting to {output}...")
+            # Plugin-specific export logic here...
+
+        # Register subcommands to group
+        analyze_group.add_command(stats_command)
+        analyze_group.add_command(export_command)
+
+        # Register group to CLI
+        cli.add_command(analyze_group)
+```
+
+Usage:
+
+```bash
+$ pycomex analyze stats --select "p.accuracy > 0.9"
+$ pycomex analyze export results.json
+```
+
+The command group appears expanded in the help output, showing all subcommands:
+
+```bash
+$ pycomex --help
+...
+╭─ Plugin Commands ────────────────────────────────────────────────────────╮
+│ analyze stats        Show statistics                                     │
+│ analyze export       Export results                                      │
+╰──────────────────────────────────────────────────────────────────────────╯
+```
+
+### Key Points
+
+- **Closure Pattern**: Commands are defined inside the hook method to capture `self` (plugin instance) via closure
+- **CLI Access**: Use `@click.pass_obj` to receive the CLI instance, which provides access to:
+    - `cli_instance.cons` - Rich Console for formatted output
+    - `cli_instance.collect_experiment_archive_paths()` - Collect experiment archives
+    - `cli_instance.filter_experiment_archives_by_select()` - Filter archives with Python expressions
+- **Integration**: Plugin commands automatically appear in the help output under "Plugin Commands"
+
+For more details about available hooks, see the [Plugin Hooks](advanced_hooks.md#cli_register_commands) documentation.
+

@@ -108,6 +108,7 @@ from click.globals import get_current_context
 from rich.console import Console
 from rich.table import Table
 
+from pycomex.config import Config
 from pycomex.functional.experiment import Experiment, run_experiment
 from pycomex.utils import (
     dynamic_import,
@@ -356,6 +357,22 @@ class CLI(RunCommandsMixin, TemplateCommandsMixin, ArchiveCommandsMixin, click.R
         self.archive_group.add_command(self.archive_scan_command)
         self.add_command(self.archive_group)
 
+        # ~ plugin CLI command registration
+        # Allow plugins to register custom CLI commands through the hook system.
+        # This list tracks commands registered by plugins for help formatting.
+        self.plugin_commands: list[str] = []
+
+        # Get the Config singleton which loads all plugins on first instantiation.
+        # By the time we get here, all plugins have been loaded and registered.
+        config = Config()
+
+        # Fire hook to allow plugins to register CLI commands.
+        # Plugins receive the CLI instance and can call cli.add_command() to register.
+        config.pm.apply_hook(
+            "cli_register_commands",
+            cli=self
+        )
+
     def format_commands(self, ctx, formatter) -> None:
         """
         Override the default format_commands to suppress it, since we're
@@ -510,6 +527,47 @@ class CLI(RunCommandsMixin, TemplateCommandsMixin, ArchiveCommandsMixin, click.R
             panel = rich.panel.Panel(
                 archive_local_table,
                 title="Archive Local Commands",
+                title_align="left",
+                border_style="bright_black"
+            )
+            self.cons.print(panel)
+
+        # Plugin commands panel
+        # Collect commands that are not built-in (run, reproduce, inspect, template, archive)
+        # For command groups, expand to show all subcommands
+        plugin_commands_list = []
+        builtin_command_names = ['run', 'reproduce', 'inspect', 'template', 'archive']
+
+        for cmd_name, cmd in self.commands.items():
+            if cmd_name not in builtin_command_names:
+                # This is a plugin-registered command
+                if isinstance(cmd, click.Group):
+                    # Plugin command group - expand to show all subcommands
+                    for sub_name, sub_cmd in cmd.commands.items():
+                        full_name = f"{cmd_name} {sub_name}"
+                        plugin_commands_list.append((full_name, sub_cmd.short_help or ""))
+                else:
+                    # Plugin direct command
+                    plugin_commands_list.append((cmd_name, cmd.short_help or ""))
+
+        # Display plugin commands panel if any plugin commands exist
+        if plugin_commands_list:
+            plugin_table = Table(
+                show_header=False,
+                box=None,
+                padding=(0, 1),
+                expand=True,
+            )
+            # Force fixed width by setting both min and max to the same value
+            plugin_table.add_column("Command", style="cyan", min_width=20, max_width=20, no_wrap=True)
+            plugin_table.add_column("Description", style="white", ratio=1)
+
+            for name, help_text in sorted(plugin_commands_list):
+                plugin_table.add_row(name, help_text)
+
+            panel = rich.panel.Panel(
+                plugin_table,
+                title="Plugin Commands",
                 title_align="left",
                 border_style="bright_black"
             )

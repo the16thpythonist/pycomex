@@ -67,6 +67,10 @@ dev = [
     "pytest-cov>=4.0,<5.0",
     "nox[uv]>=2025.0,<2026.0",
 ]
+full = [
+    "wandb>=0.16.0,<1.0.0",
+    "optuna>=4.0.0,<5.0.0",
+]
 
 [project.urls]
 Homepage = "https://github.com/the16thpythonist/pycomex"

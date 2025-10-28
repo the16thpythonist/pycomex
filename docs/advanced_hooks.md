@@ -140,3 +140,61 @@ This hook is executed right after the plugins are loaded and before the configur
 | `config` | The `Config` instance itself     |
 | `plugins` | A dictionary where the string keys are the plugin names and the values are the corresponding `Plugin` object instances |
 
+---
+
+### 🪝 `cli_register_commands`
+
+This hook is executed during CLI initialization, right after all built-in commands have been registered. It allows plugins to register custom CLI commands that will appear in the PyComex command-line interface. Plugin commands have full access to CLI utilities including the Rich console, archive collection helpers, and filtering functions.
+
+Plugins should define Click commands using the closure pattern to maintain access to both the plugin instance (`self`) and the CLI instance (`cli_instance` via `@click.pass_obj`).
+
+| Parameter | Description                |
+|-----------|----------------------------|
+| `cli` | The `CLI` instance that is being initialized. Plugins can call `cli.add_command()` to register commands. |
+| `config` | The `Config` instance that is used by the pycomex library |
+
+**Example Usage:**
+
+```python
+import rich_click as click
+from pycomex.plugin import Plugin, hook
+
+class MyPlugin(Plugin):
+
+    @hook("cli_register_commands", priority=0)
+    def register_cli_commands(self, config, cli):
+        """Register custom CLI commands."""
+
+        # Define command using closure pattern
+        @click.command("my-command", short_help="My plugin command")
+        @click.option("--name", help="Name parameter")
+        @click.pass_obj
+        def my_command(cli_instance, name):
+            # Access CLI utilities
+            cli_instance.cons.print(f"[bold]Hello {name}![/bold]")
+
+            # Access plugin state via closure
+            self.process(name)
+
+        # Register the command
+        cli.add_command(my_command)
+```
+
+**Supported Command Patterns:**
+
+1. **Direct Command**: Registers a top-level command like `pycomex my-command`
+2. **Command Group**: Registers a group with subcommands like `pycomex my-group subcommand`
+3. **Extend Existing Group**: Adds subcommands to existing groups like `template` or `archive`
+
+**Help Output:**
+
+Plugin commands appear in a dedicated "Plugin Commands" section in the help output. Command groups are automatically expanded to show all their subcommands:
+
+```
+╭─ Plugin Commands ─────────────────────────────────────────────╮
+│  my-command            My plugin command                      │
+│  my-group analyze      Analyze data                           │
+│  my-group export       Export results                         │
+╰───────────────────────────────────────────────────────────────╯
+```
+
