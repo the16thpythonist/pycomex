@@ -479,6 +479,15 @@ class Experiment(ExperimentBase):
                     "New results will still be saved to cache unless explicitly configured otherwise."
                 ),
             },
+            "__OPTUNA__": {
+                "type": "bool",
+                "description": (
+                    "Flag to enable Optuna hyperparameter optimization mode. When True, the experiment "
+                    "will use parameter values suggested by Optuna's optimization algorithm instead of "
+                    "the default values. The experiment must define __optuna_parameters__ and "
+                    "__optuna_objective__ hooks. This flag is automatically set by 'pycomex optuna run'."
+                ),
+            },
         }
         # Then we can also set some default values for these special parameters
         self.parameters.update(
@@ -488,6 +497,7 @@ class Experiment(ExperimentBase):
                 "__REPRODUCIBLE__": False,
                 "__PREFIX__": "",
                 "__CACHING__": True,
+                "__OPTUNA__": False,
             }
         )
 
@@ -1097,6 +1107,13 @@ class Experiment(ExperimentBase):
 
         :returns: None
         """
+        # This hook is called at the very beginning of initialize(), after all parameter
+        # overrides (including CLI arguments) have been applied. This is the ideal place
+        # for plugins to react to parameter values that may have been set via CLI.
+        self.config.pm.apply_hook(
+            "before_experiment_initialize",
+            experiment=self,
+        )
         # ~ creating archive
         self.prepare_path()
 

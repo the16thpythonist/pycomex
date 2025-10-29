@@ -651,6 +651,17 @@ Command Line Interface
   showing the properties of these groups in a table in the output.
 - Changed the --help string to now display all of the commands in a flat manner instead 
   of the individual command groups.
+- Modified the command line interface to now also load the Plugin Manager during the construction
+  of the `CLI` class and added a system hook which allows plugins to inject custom command line
+  commands to the CLI.
+
+Plugins 
+
+- Added the `OptunaPlugin` which can be used to directly facilitate Optuna hyperparameter optimization
+  for experiment modules.
+  - Extended the command line interface with the new `optuna` command group which can be used to 
+    start optimization experiments, inspect existing studies, view information about hyperparameter sweeps etc.
+  - Is not installed by default - can be installed with the `pycomex[full]` suite
 
 Bug Fixes
 

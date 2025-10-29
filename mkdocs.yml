@@ -28,6 +28,7 @@ nav:
   - Advanced Usage:
       - Writing Plugins: advanced_plugins.md
       - Plugin Hooks: advanced_hooks.md
+      - Hyperparameter Optimization: advanced_optuna.md
   - Tools:
       - VSCode Extension: tools_vscode.md
 

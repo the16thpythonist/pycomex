@@ -30,6 +30,7 @@ experiments, such as machine learning and data science experiments, in Python.
 * Experiment inheritance: Experiment modules can inherit from other modules and extend their functionality
   via parameter overwrites and hooks!
 * Configuration files: Create YAML config files to run parameter variations without duplicating code
+* Built-in hyperparameter optimization with Optuna integration (available with full installation)
 
 ==========================
 📦 Installation by Package
