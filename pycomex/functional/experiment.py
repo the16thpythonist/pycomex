@@ -488,6 +488,14 @@ class Experiment(ExperimentBase):
                     "__optuna_objective__ hooks. This flag is automatically set by 'pycomex optuna run'."
                 ),
             },
+            "__OPTUNA_REPETITIONS__": {
+                "type": "int",
+                "description": (
+                    "Number of times to repeat each Optuna trial for stochastic experiments. "
+                    "The objective values are averaged across repetitions to get a more robust estimate. "
+                    "Default: 1 (no repetition)."
+                ),
+            },
         }
         # Then we can also set some default values for these special parameters
         self.parameters.update(
@@ -498,6 +506,7 @@ class Experiment(ExperimentBase):
                 "__PREFIX__": "",
                 "__CACHING__": True,
                 "__OPTUNA__": False,
+                "__OPTUNA_REPETITIONS__": 1,
             }
         )
 

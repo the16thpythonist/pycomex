@@ -17,6 +17,8 @@ DROPOUT_RATE: float = 0.5
 NUM_EPOCHS: int = 10
 __DEBUG__: bool = True  # Use debug mode to create reusable archives
 
+__OPTUNA_REPETITIONS__ = 2
+
 # ~ Experiment setup
 experiment = Experiment(
     base_path=folder_path(__file__),

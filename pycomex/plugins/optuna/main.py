@@ -234,7 +234,39 @@ class OptunaPlugin(Plugin):
         # Current trial tracking
         self.current_study: Optional[Any] = None
         self.current_trial: Optional[Any] = None
-        
+
+        # Repetition state (unified for single and multi-run)
+        self.total_repetitions: int = 1
+        self.current_repetition_index: int = 0
+        self.collected_objectives: list[float] = []
+        self.trial_parameters: Optional[dict] = None
+
+    def prepare_trial_repetitions(self, repetitions: int):
+        """
+        Prepare for a trial with N repetitions.
+
+        This resets the repetition state and should be called before starting
+        a new trial (whether single or multi-run).
+
+        :param repetitions: Number of repetitions (>= 1)
+        """
+        self.total_repetitions = repetitions
+        self.current_repetition_index = 0
+        self.collected_objectives = []
+        self.trial_parameters = None
+
+    def is_first_repetition(self) -> bool:
+        """Check if this is the first repetition of the current trial."""
+        return self.current_repetition_index == 0
+
+    def is_last_repetition(self) -> bool:
+        """Check if this is the last repetition of the current trial."""
+        return self.current_repetition_index == (self.total_repetitions - 1)
+
+    def advance_repetition(self):
+        """Advance to the next repetition."""
+        self.current_repetition_index += 1
+
     @hook("cli_register_commands", priority=0)
     def register_cli_commands(self, config, cli):
         """Register custom CLI commands."""
@@ -268,11 +300,16 @@ class OptunaPlugin(Plugin):
             optimization algorithm. The experiment must define the __optuna_parameters__ and
             __optuna_objective__ hooks.
 
+            If __OPTUNA_REPETITIONS__ is greater than 1, the experiment will be run multiple times
+            with the same parameters and the objective values will be averaged.
+
             Example usage:
 
                 pycomex optuna run experiment.py
 
                 pycomex optuna run experiment.py NUM_EPOCHS=20
+
+                pycomex optuna run experiment.py --__OPTUNA_REPETITIONS__ 5
             """
             from pycomex.utils import dynamic_import
 
@@ -299,8 +336,34 @@ class OptunaPlugin(Plugin):
                 # Sync special parameters like __DEBUG__, __OPTUNA__, etc.
                 experiment.update_parameters_special()
 
-                # Run the experiment
-                experiment.run()
+                # Get number of repetitions (always >= 1)
+                repetitions = max(1, experiment.parameters.get("__OPTUNA_REPETITIONS__", 1))
+
+                # Initialize plugin state for this trial (unified for single/multi-run)
+                self.prepare_trial_repetitions(repetitions)
+
+                if repetitions > 1:
+                    cli_instance.cons.print(f"[dim]Running {repetitions} repetitions per trial[/dim]")
+
+                # Execute all repetitions
+                for rep_idx in range(repetitions):
+                    if repetitions > 1:
+                        cli_instance.cons.print(f"[dim]Repetition {rep_idx + 1}/{repetitions}[/dim]")
+
+                    # For repetitions after the first, re-import the module to get a fresh experiment instance
+                    if rep_idx > 0:
+                        module = dynamic_import(path)
+                        experiment = module.__experiment__
+
+                        # Re-apply CLI arguments
+                        experiment.arg_parser.parse(extra_args)
+                        experiment.update_parameters_special()
+
+                    # Run the experiment
+                    experiment.run()
+
+                    # Advance to next repetition (plugin will track this)
+                    self.advance_repetition()
 
             except Exception as e:
                 cli_instance.cons.print(f"[bold red]Error:[/bold red] {e}")
@@ -449,13 +512,11 @@ class OptunaPlugin(Plugin):
         This hook is called at the beginning of Experiment.initialize(), after all parameter
         overrides (including CLI arguments) have been applied.
 
-        If Optuna mode is enabled (__OPTUNA__ parameter is True), this hook:
-        1. Initializes the StudyManager with the experiment base path
-        2. Checks for required experiment hooks (__optuna_parameters__, __optuna_objective__)
-        3. Gets or creates the study using the experiment name
-        4. Creates a new trial
-        5. Calls the experiment's __optuna_parameters__ hook to get parameter suggestions
-        6. Replaces experiment parameters with the trial suggestions
+        For unified multi-run architecture:
+        - On first repetition: Creates trial, gets parameter suggestions, caches them
+        - On subsequent repetitions: Reuses cached parameters from first repetition
+
+        This ensures all repetitions use the same trial parameters for proper averaging.
         """
         # Check if Optuna mode is enabled by checking the parameter value
         optuna_enabled = experiment.parameters.get("__OPTUNA__", False)
@@ -473,97 +534,121 @@ class OptunaPlugin(Plugin):
             experiment.logger.error("Optuna is not installed but __OPTUNA__ flag is set")
             return
 
-        experiment.logger.info("Initializing Optuna optimization...")
+        # === FIRST REPETITION: Create trial and get parameters ===
+        if self.is_first_repetition():
+            experiment.logger.info("Initializing Optuna optimization...")
 
-        # Initialize StudyManager
-        self.study_manager = StudyManager(experiment.base_path)
+            # Initialize StudyManager
+            self.study_manager = StudyManager(experiment.base_path)
 
-        # Check for required hooks
-        if "__optuna_parameters__" not in experiment.hook_map:
-            experiment.logger.error(
-                "Optuna optimization requires __optuna_parameters__ hook to be defined. "
-                "See documentation for details."
-            )
-            experiment.metadata["__optuna__"] = False
-            return
-
-        if "__optuna_objective__" not in experiment.hook_map:
-            experiment.logger.error(
-                "Optuna optimization requires __optuna_objective__ hook to be defined. "
-                "See documentation for details."
-            )
-            experiment.metadata["__optuna__"] = False
-            return
-
-        # Get sampler from experiment hook or use default
-        sampler = experiment.apply_hook("__optuna_sampler__", default=None)
-        if sampler is None:
-            sampler = TPESampler(n_startup_trials=10, multivariate=True)
-            experiment.logger.debug("Using default TPESampler")
-
-        # Determine optimization direction (default: maximize)
-        direction = experiment.apply_hook("__optuna_direction__", default="maximize")
-
-        # Get or create study
-        study_name = experiment.metadata["name"]
-        try:
-            self.current_study = self.study_manager.get_or_create_study(
-                study_name=study_name,
-                sampler=sampler,
-                direction=direction
-            )
-            experiment.logger.info(f"Loaded study '{study_name}' with {len(self.current_study.trials)} existing trials")
-        except Exception as e:
-            experiment.logger.error(f"Failed to create/load Optuna study: {e}")
-            experiment.metadata["__optuna__"] = False
-            return
-
-        # Create a new trial
-        try:
-            self.current_trial = self.current_study.ask()
-            experiment.logger.info(f"Created trial #{self.current_trial.number}")
-        except Exception as e:
-            experiment.logger.error(f"Failed to create trial: {e}")
-            experiment.metadata["__optuna__"] = False
-            return
-
-        # Get parameter suggestions from experiment hook
-        try:
-            param_suggestions = experiment.apply_hook(
-                "__optuna_parameters__",
-                trial=self.current_trial
-            )
-
-            if not isinstance(param_suggestions, dict):
+            # Check for required hooks
+            if "__optuna_parameters__" not in experiment.hook_map:
                 experiment.logger.error(
-                    f"__optuna_parameters__ hook must return a dictionary, got {type(param_suggestions)}"
+                    "Optuna optimization requires __optuna_parameters__ hook to be defined. "
+                    "See documentation for details."
                 )
                 experiment.metadata["__optuna__"] = False
                 return
 
-            # Replace experiment parameters with trial suggestions
-            for param_name, param_value in param_suggestions.items():
-                if param_name in experiment.parameters:
-                    old_value = experiment.parameters[param_name]
-                    experiment.parameters[param_name] = param_value
-                    # Also update the attribute for direct access
-                    setattr(experiment, param_name, param_value)
-                    experiment.logger.debug(
-                        f"Parameter '{param_name}': {old_value} -> {param_value}"
+            if "__optuna_objective__" not in experiment.hook_map:
+                experiment.logger.error(
+                    "Optuna optimization requires __optuna_objective__ hook to be defined. "
+                    "See documentation for details."
+                )
+                experiment.metadata["__optuna__"] = False
+                return
+
+            # Get sampler from experiment hook or use default
+            sampler = experiment.apply_hook("__optuna_sampler__", default=None)
+            if sampler is None:
+                sampler = TPESampler(n_startup_trials=10, multivariate=True)
+                experiment.logger.debug("Using default TPESampler")
+
+            # Determine optimization direction (default: maximize)
+            direction = experiment.apply_hook("__optuna_direction__", default="maximize")
+
+            # Get or create study
+            study_name = experiment.metadata["name"]
+            try:
+                self.current_study = self.study_manager.get_or_create_study(
+                    study_name=study_name,
+                    sampler=sampler,
+                    direction=direction
+                )
+                experiment.logger.info(f"Loaded study '{study_name}' with {len(self.current_study.trials)} existing trials")
+            except Exception as e:
+                experiment.logger.error(f"Failed to create/load Optuna study: {e}")
+                experiment.metadata["__optuna__"] = False
+                return
+
+            # Create a new trial
+            try:
+                self.current_trial = self.current_study.ask()
+                experiment.logger.info(f"Created trial #{self.current_trial.number}")
+            except Exception as e:
+                experiment.logger.error(f"Failed to create trial: {e}")
+                experiment.metadata["__optuna__"] = False
+                return
+
+            # Get parameter suggestions from experiment hook
+            try:
+                param_suggestions = experiment.apply_hook(
+                    "__optuna_parameters__",
+                    trial=self.current_trial
+                )
+
+                if not isinstance(param_suggestions, dict):
+                    experiment.logger.error(
+                        f"__optuna_parameters__ hook must return a dictionary, got {type(param_suggestions)}"
                     )
+                    experiment.metadata["__optuna__"] = False
+                    return
+
+                # Cache parameters for subsequent repetitions
+                self.trial_parameters = param_suggestions.copy()
+
+                # Replace experiment parameters with trial suggestions
+                for param_name, param_value in param_suggestions.items():
+                    if param_name in experiment.parameters:
+                        old_value = experiment.parameters[param_name]
+                        experiment.parameters[param_name] = param_value
+                        # Also update the attribute for direct access
+                        setattr(experiment, param_name, param_value)
+                        experiment.logger.debug(
+                            f"Parameter '{param_name}': {old_value} -> {param_value}"
+                        )
+                    else:
+                        experiment.logger.warning(
+                            f"Parameter '{param_name}' from __optuna_parameters__ not found in experiment parameters"
+                        )
+
+                experiment.logger.info(f"Applied {len(param_suggestions)} parameter suggestions from Optuna trial")
+
+            except Exception as e:
+                experiment.logger.error(f"Error applying Optuna parameters: {e}")
+                import traceback
+                experiment.logger.debug(traceback.format_exc())
+                experiment.metadata["__optuna__"] = False
+                return
+
+        # === SUBSEQUENT REPETITIONS: Reuse cached parameters ===
+        else:
+            if self.trial_parameters is None:
+                experiment.logger.error("No cached trial parameters found for repetition")
+                experiment.metadata["__optuna__"] = False
+                return
+
+            experiment.logger.debug(f"Reusing cached parameters for repetition {self.current_repetition_index + 1}/{self.total_repetitions}")
+
+            # Apply cached parameters
+            for param_name, param_value in self.trial_parameters.items():
+                if param_name in experiment.parameters:
+                    experiment.parameters[param_name] = param_value
+                    setattr(experiment, param_name, param_value)
                 else:
                     experiment.logger.warning(
-                        f"Parameter '{param_name}' from __optuna_parameters__ not found in experiment parameters"
+                        f"Cached parameter '{param_name}' not found in experiment parameters"
                     )
-
-            experiment.logger.info(f"Applied {len(param_suggestions)} parameter suggestions from Optuna trial")
-
-        except Exception as e:
-            experiment.logger.error(f"Error applying Optuna parameters: {e}")
-            import traceback
-            experiment.logger.debug(traceback.format_exc())
-            experiment.metadata["__optuna__"] = False
-            return
 
     @hook("after_experiment_finalize", priority=0)
     def after_experiment_finalize(
@@ -575,10 +660,11 @@ class OptunaPlugin(Plugin):
         """
         This hook is called after the experiment finalization.
 
-        If Optuna mode is enabled, this hook:
-        1. Calls the experiment's __optuna_objective__ hook to extract the objective value
-        2. Reports the objective value to the current trial
-        3. Completes the trial in the study database
+        For unified multi-run architecture:
+        - On all repetitions: Collects objective values
+        - On last repetition only: Reports averaged objective to Optuna study
+
+        This ensures stochastic experiments can be properly evaluated across multiple runs.
         """
         # Only proceed if Optuna mode is enabled
         if not experiment.metadata.get("__optuna__", False):
@@ -587,41 +673,64 @@ class OptunaPlugin(Plugin):
         if not OPTUNA_AVAILABLE or self.current_trial is None or self.current_study is None:
             return
 
-        experiment.logger.info("Finalizing Optuna trial...")
-
         try:
             # Get objective value from experiment hook
             objective_value = experiment.apply_hook("__optuna_objective__")
 
             if objective_value is None:
                 experiment.logger.error("__optuna_objective__ hook returned None")
-                # Mark trial as failed
-                self.current_study.tell(self.current_trial, state=optuna.trial.TrialState.FAIL)
+                # Mark trial as failed (only on last repetition)
+                if self.is_last_repetition():
+                    self.current_study.tell(self.current_trial, state=optuna.trial.TrialState.FAIL)
                 return
 
             if not isinstance(objective_value, (int, float)):
                 experiment.logger.error(
                     f"__optuna_objective__ must return a numeric value, got {type(objective_value)}"
                 )
-                self.current_study.tell(self.current_trial, state=optuna.trial.TrialState.FAIL)
+                # Mark trial as failed (only on last repetition)
+                if self.is_last_repetition():
+                    self.current_study.tell(self.current_trial, state=optuna.trial.TrialState.FAIL)
                 return
 
-            # Report objective value and complete trial
-            self.current_study.tell(self.current_trial, objective_value)
-            experiment.logger.info(f"Trial #{self.current_trial.number} completed with objective value: {objective_value}")
+            # Collect objective value
+            self.collected_objectives.append(objective_value)
 
-            # Log if this is the best trial so far
-            if len(self.current_study.trials) > 0:
-                best_value = self.current_study.best_value
-                if objective_value == best_value:
-                    experiment.logger.info("🎉 This is the best trial so far!")
+            if self.total_repetitions > 1:
+                experiment.logger.info(
+                    f"Repetition {self.current_repetition_index + 1}/{self.total_repetitions} "
+                    f"objective: {objective_value}"
+                )
+
+            # === LAST REPETITION: Report averaged objective to Optuna ===
+            if self.is_last_repetition():
+                # Calculate average objective value
+                avg_objective = sum(self.collected_objectives) / len(self.collected_objectives)
+
+                experiment.logger.info("Finalizing Optuna trial...")
+                if self.total_repetitions > 1:
+                    experiment.logger.info(
+                        f"Averaged objective over {len(self.collected_objectives)} repetitions: "
+                        f"{avg_objective:.6f} (values: {[f'{v:.6f}' for v in self.collected_objectives]})"
+                    )
+
+                # Report averaged objective value and complete trial
+                self.current_study.tell(self.current_trial, avg_objective)
+                experiment.logger.info(f"Trial #{self.current_trial.number} completed with objective value: {avg_objective}")
+
+                # Log if this is the best trial so far
+                if len(self.current_study.trials) > 0:
+                    best_value = self.current_study.best_value
+                    if avg_objective == best_value:
+                        experiment.logger.info("🎉 This is the best trial so far!")
 
         except Exception as e:
             experiment.logger.error(f"Error finalizing Optuna trial: {e}")
             import traceback
             experiment.logger.debug(traceback.format_exc())
-            # Mark trial as failed
-            try:
-                self.current_study.tell(self.current_trial, state=optuna.trial.TrialState.FAIL)
-            except Exception:
-                pass
+            # Mark trial as failed (only on last repetition)
+            if self.is_last_repetition():
+                try:
+                    self.current_study.tell(self.current_trial, state=optuna.trial.TrialState.FAIL)
+                except Exception:
+                    pass

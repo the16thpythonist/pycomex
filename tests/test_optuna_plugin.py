@@ -327,6 +327,8 @@ class TestOptunaPluginIntegration(unittest.TestCase):
         experiment.apply_hook = mock_apply_hook
 
         # Test before_experiment_initialize
+        # Note: Need to prepare repetitions (unified multi-run architecture)
+        plugin.prepare_trial_repetitions(1)
         plugin.before_experiment_initialize(config, experiment)
 
         # Verify __optuna__ flag is set
@@ -336,19 +338,20 @@ class TestOptunaPluginIntegration(unittest.TestCase):
         self.assertIsNotNone(plugin.current_trial)
         self.assertIsNotNone(plugin.current_study)
 
-        # Verify parameters were replaced
-        self.assertNotEqual(experiment.parameters['PARAM_A'], 1.0)
-        self.assertNotEqual(experiment.parameters['PARAM_B'], 2.0)
-
         # Store trial values
         trial_param_a = experiment.parameters['PARAM_A']
         trial_param_b = experiment.parameters['PARAM_B']
 
         # Verify parameter values are within expected ranges
+        # (Don't use assertNotEqual because trial might randomly suggest the default value)
         self.assertGreaterEqual(trial_param_a, 0.0)
         self.assertLessEqual(trial_param_a, 10.0)
         self.assertGreaterEqual(trial_param_b, 1)
         self.assertLessEqual(trial_param_b, 10)
+
+        # Verify parameters were updated in the experiment
+        self.assertIn('PARAM_A', experiment.parameters)
+        self.assertIn('PARAM_B', experiment.parameters)
 
         # Test after_experiment_finalize
         plugin.after_experiment_finalize(config, experiment)
@@ -362,6 +365,217 @@ class TestOptunaPluginIntegration(unittest.TestCase):
         # Verify parameters match
         self.assertEqual(trial.params['PARAM_A'], trial_param_a)
         self.assertEqual(trial.params['PARAM_B'], trial_param_b)
+
+
+@unittest.skipIf(not OPTUNA_AVAILABLE, "Optuna not available")
+class TestOptunaMultiRunFeature(unittest.TestCase):
+    """Test cases for the multi-run repetition feature."""
+
+    def setUp(self):
+        """Set up test fixtures."""
+        Config().reset_state()
+        self.config = Config()
+        self.plugin = OptunaPlugin(self.config)
+        self.plugin.register()
+        self.test_dir = tempfile.mkdtemp()
+
+    def tearDown(self):
+        """Clean up test fixtures."""
+        if os.path.exists(self.test_dir):
+            shutil.rmtree(self.test_dir)
+        Config().reset_state()
+
+    def test_repetition_state_initialization(self):
+        """Test that repetition state is correctly initialized."""
+        self.assertEqual(self.plugin.total_repetitions, 1)
+        self.assertEqual(self.plugin.current_repetition_index, 0)
+        self.assertEqual(self.plugin.collected_objectives, [])
+        self.assertIsNone(self.plugin.trial_parameters)
+
+    def test_prepare_trial_repetitions(self):
+        """Test prepare_trial_repetitions method."""
+        self.plugin.prepare_trial_repetitions(5)
+        self.assertEqual(self.plugin.total_repetitions, 5)
+        self.assertEqual(self.plugin.current_repetition_index, 0)
+        self.assertEqual(self.plugin.collected_objectives, [])
+        self.assertIsNone(self.plugin.trial_parameters)
+
+    def test_is_first_repetition(self):
+        """Test is_first_repetition method."""
+        self.plugin.prepare_trial_repetitions(3)
+        self.assertTrue(self.plugin.is_first_repetition())
+        self.plugin.current_repetition_index = 1
+        self.assertFalse(self.plugin.is_first_repetition())
+
+    def test_is_last_repetition(self):
+        """Test is_last_repetition method."""
+        self.plugin.prepare_trial_repetitions(3)
+        self.assertFalse(self.plugin.is_last_repetition())
+        self.plugin.current_repetition_index = 2
+        self.assertTrue(self.plugin.is_last_repetition())
+
+    def test_advance_repetition(self):
+        """Test advance_repetition method."""
+        self.plugin.prepare_trial_repetitions(3)
+        self.assertEqual(self.plugin.current_repetition_index, 0)
+        self.plugin.advance_repetition()
+        self.assertEqual(self.plugin.current_repetition_index, 1)
+        self.plugin.advance_repetition()
+        self.assertEqual(self.plugin.current_repetition_index, 2)
+
+    def test_parameter_caching_across_repetitions(self):
+        """Test that parameters are cached on first repetition and reused on subsequent ones."""
+        # Create mock experiment for first repetition
+        experiment = Mock(spec=Experiment)
+        experiment.base_path = self.test_dir
+        experiment.parameters = {
+            '__OPTUNA__': True,
+            '__OPTUNA_REPETITIONS__': 3,
+            'PARAM_A': 1.0,
+        }
+        experiment.metadata = {'name': 'test_multi_run'}
+        experiment.logger = Mock()
+        experiment.hook_map = {
+            '__optuna_parameters__': Mock(),
+            '__optuna_objective__': Mock()
+        }
+
+        # Mock the apply_hook method for parameter suggestions
+        def mock_apply_hook(hook_name, **kwargs):
+            if hook_name == '__optuna_parameters__':
+                return {'PARAM_A': 5.5}
+            elif hook_name == '__optuna_sampler__':
+                return None
+            elif hook_name == '__optuna_direction__':
+                return 'maximize'
+            return None
+
+        experiment.apply_hook = Mock(side_effect=mock_apply_hook)
+
+        # Prepare for 3 repetitions
+        self.plugin.prepare_trial_repetitions(3)
+
+        # === FIRST REPETITION ===
+        self.plugin.before_experiment_initialize(self.config, experiment)
+
+        # Verify trial was created and parameters cached
+        self.assertIsNotNone(self.plugin.current_trial)
+        self.assertIsNotNone(self.plugin.trial_parameters)
+        self.assertEqual(self.plugin.trial_parameters, {'PARAM_A': 5.5})
+        self.assertEqual(experiment.parameters['PARAM_A'], 5.5)
+
+        # === SECOND REPETITION ===
+        self.plugin.advance_repetition()
+        experiment.parameters['PARAM_A'] = 1.0  # Reset to default
+
+        self.plugin.before_experiment_initialize(self.config, experiment)
+
+        # Verify cached parameters were reused (no new trial created)
+        self.assertEqual(experiment.parameters['PARAM_A'], 5.5)
+        # Only one call to __optuna_parameters__ hook (from first repetition)
+        self.assertEqual(experiment.apply_hook.call_count, 3)  # sampler, direction, parameters
+
+    def test_objective_collection_across_repetitions(self):
+        """Test that objectives are collected across all repetitions."""
+        # Create mock experiment
+        experiment = Mock(spec=Experiment)
+        experiment.metadata = {'__optuna__': True}
+        experiment.logger = Mock()
+
+        # Setup plugin with study and trial
+        self.plugin.current_study = Mock()
+        self.plugin.current_trial = Mock()
+        self.plugin.current_trial.number = 0
+        self.plugin.current_study.trials = []
+        self.plugin.prepare_trial_repetitions(3)
+
+        # Mock the apply_hook to return different objectives
+        objectives = [0.8, 0.85, 0.82]
+        call_count = [0]
+
+        def mock_objective_hook(hook_name):
+            if hook_name == '__optuna_objective__':
+                result = objectives[call_count[0]]
+                call_count[0] += 1
+                return result
+            return None
+
+        experiment.apply_hook = Mock(side_effect=mock_objective_hook)
+
+        # === REPETITION 1 ===
+        self.plugin.after_experiment_finalize(self.config, experiment)
+        self.assertEqual(len(self.plugin.collected_objectives), 1)
+        self.assertEqual(self.plugin.collected_objectives[0], 0.8)
+
+        # === REPETITION 2 ===
+        self.plugin.advance_repetition()
+        self.plugin.after_experiment_finalize(self.config, experiment)
+        self.assertEqual(len(self.plugin.collected_objectives), 2)
+        self.assertEqual(self.plugin.collected_objectives[1], 0.85)
+
+        # === REPETITION 3 (LAST) ===
+        self.plugin.advance_repetition()
+        self.plugin.after_experiment_finalize(self.config, experiment)
+        self.assertEqual(len(self.plugin.collected_objectives), 3)
+        self.assertEqual(self.plugin.collected_objectives[2], 0.82)
+
+        # Verify averaged objective was reported to study
+        expected_avg = (0.8 + 0.85 + 0.82) / 3
+        self.plugin.current_study.tell.assert_called_once()
+        call_args = self.plugin.current_study.tell.call_args
+        self.assertEqual(call_args[0][0], self.plugin.current_trial)
+        self.assertAlmostEqual(call_args[0][1], expected_avg, places=5)
+
+    def test_single_repetition_behaves_normally(self):
+        """Test that single repetition (default) behaves like original implementation."""
+        # Create mock experiment
+        experiment = Mock(spec=Experiment)
+        experiment.base_path = self.test_dir
+        experiment.parameters = {
+            '__OPTUNA__': True,
+            '__OPTUNA_REPETITIONS__': 1,
+            'PARAM_A': 1.0,
+        }
+        experiment.metadata = {'name': 'test_single_run', '__optuna__': True}
+        experiment.logger = Mock()
+        experiment.hook_map = {
+            '__optuna_parameters__': Mock(),
+            '__optuna_objective__': Mock()
+        }
+
+        # Mock hooks
+        def mock_apply_hook(hook_name, **kwargs):
+            if hook_name == '__optuna_parameters__':
+                return {'PARAM_A': 5.5}
+            elif hook_name == '__optuna_sampler__':
+                return None
+            elif hook_name == '__optuna_direction__':
+                return 'maximize'
+            elif hook_name == '__optuna_objective__':
+                return 0.9
+            return None
+
+        experiment.apply_hook = Mock(side_effect=mock_apply_hook)
+
+        # Prepare for 1 repetition (default)
+        self.plugin.prepare_trial_repetitions(1)
+
+        # Test initialization
+        self.plugin.before_experiment_initialize(self.config, experiment)
+        self.assertTrue(self.plugin.is_first_repetition())
+        self.assertTrue(self.plugin.is_last_repetition())
+
+        # Setup study mock
+        self.plugin.current_study = Mock()
+        self.plugin.current_study.trials = []
+
+        # Test finalization
+        self.plugin.after_experiment_finalize(self.config, experiment)
+
+        # Verify objective was reported (not averaged, just the single value)
+        self.plugin.current_study.tell.assert_called_once()
+        call_args = self.plugin.current_study.tell.call_args
+        self.assertEqual(call_args[0][1], 0.9)
 
 
 if __name__ == '__main__':
