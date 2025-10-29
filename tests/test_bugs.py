@@ -342,3 +342,180 @@ class TestYAMLConfigExperimentCodeFile:
             assert loaded_experiment is not None
             assert loaded_experiment.parameters['PARAMETER'] == 'config_test'
             assert loaded_experiment.parameters.get('NUM_VALUES') == 100
+
+
+class TestOptunaConfigFileStudyNaming:
+    """
+    Test that config files create Optuna studies with the config name, not the base experiment name.
+
+    BUG DESCRIPTION (Fixed on 2025-10-29):
+    =====================================
+
+    When using `pycomex optuna run` on a YAML config file that extends a base experiment,
+    the Optuna study name was incorrectly set to the base experiment's name instead of the
+    config file's name. This caused multiple config files extending the same base to share
+    the same Optuna study, making it impossible to run separate optimizations for different
+    configurations.
+
+    Example scenario:
+        base_experiment.py          <- Base experiment with Optuna hooks
+        config_variant_1.yml        <- Extends base_experiment.py
+        config_variant_2.yml        <- Also extends base_experiment.py
+
+    When running:
+        pycomex optuna run config_variant_1.yml
+        pycomex optuna run config_variant_2.yml
+
+    Both would incorrectly create/use a study named "base_experiment" instead of
+    "config_variant_1" and "config_variant_2" respectively.
+
+    ROOT CAUSE:
+    ----------
+    In pycomex/functional/experiment.py, the Experiment.from_config() method would:
+    1. Parse the config file and extract the name field (or default to config filename)
+    2. Call cls.extend() to create an experiment from the base
+    3. Return the experiment
+
+    The problem was that cls.extend() would set experiment.metadata["name"] to the base
+    experiment's module name, and this was never overridden with the config's name.
+
+    The Optuna plugin uses experiment.metadata["name"] to determine the study name
+    (see pycomex/plugins/optuna/main.py:570), so all configs would share the same study.
+
+    FIX:
+    ---
+    After calling cls.extend(), explicitly override experiment.metadata["name"] with
+    experiment_config.name to ensure the config's name is used instead of the base's name:
+
+        experiment.metadata["name"] = experiment_config.name
+
+    This test ensures that different config files create separate Optuna studies with
+    the correct names.
+    """
+
+    def test_config_files_create_separate_optuna_studies(self):
+        """Test that config files create studies with config name, not base experiment name."""
+        import tempfile
+        import shutil
+        import yaml
+
+        # Check if Optuna is available
+        try:
+            import optuna
+            from pycomex.plugins.optuna import OptunaPlugin
+            from pycomex.config import Config
+        except ImportError:
+            import pytest
+            pytest.skip("Optuna not available")
+
+        # Create temporary directory
+        test_dir = tempfile.mkdtemp()
+
+        try:
+            # Create a simple base experiment
+            base_experiment_code = """
+from pycomex.functional.experiment import Experiment
+from pycomex.utils import folder_path, file_namespace
+
+PARAM_A: float = 1.0
+
+experiment = Experiment(
+    base_path=folder_path(__file__),
+    namespace=file_namespace(__file__),
+    glob=globals()
+)
+
+@experiment.hook('__optuna_parameters__')
+def define_search_space(e: Experiment, trial):
+    return {'PARAM_A': trial.suggest_float('PARAM_A', 0.0, 10.0)}
+
+@experiment.hook('__optuna_objective__')
+def extract_objective(e: Experiment) -> float:
+    return e.PARAM_A
+
+@experiment
+def run_experiment(e: Experiment):
+    e['result'] = e.PARAM_A
+
+experiment.run_if_main()
+"""
+
+            # Write base experiment to file
+            base_exp_path = os.path.join(test_dir, "base_experiment.py")
+            with open(base_exp_path, "w") as f:
+                f.write(base_experiment_code)
+
+            # Create two different config files extending the same base
+            config1_data = {
+                "name": "config_variant_1",
+                "extend": "base_experiment.py",
+                "parameters": {"PARAM_A": 2.0}
+            }
+            config1_path = os.path.join(test_dir, "config_variant_1.yml")
+            with open(config1_path, "w") as f:
+                yaml.dump(config1_data, f)
+
+            config2_data = {
+                "name": "config_variant_2",
+                "extend": "base_experiment.py",
+                "parameters": {"PARAM_A": 3.0}
+            }
+            config2_path = os.path.join(test_dir, "config_variant_2.yml")
+            with open(config2_path, "w") as f:
+                yaml.dump(config2_data, f)
+
+            # Load both experiments from configs
+            experiment1 = Experiment.from_config(config_path=config1_path)
+            experiment2 = Experiment.from_config(config_path=config2_path)
+
+            # Verify each config has its own name, not the base experiment's name
+            name1 = experiment1.metadata.get("name")
+            name2 = experiment2.metadata.get("name")
+
+            assert name1 == "config_variant_1", (
+                f"Config 1 should have name 'config_variant_1' but got '{name1}'. "
+                f"Bug: Config files are using base experiment name instead of config name."
+            )
+            assert name2 == "config_variant_2", (
+                f"Config 2 should have name 'config_variant_2' but got '{name2}'. "
+                f"Bug: Config files are using base experiment name instead of config name."
+            )
+
+            # Verify that Optuna studies use the config names
+            config = Config()
+            plugin1 = OptunaPlugin(config)
+            plugin1.register()
+            plugin1.prepare_trial_repetitions(1)
+
+            experiment1.parameters['__OPTUNA__'] = True
+            plugin1.before_experiment_initialize(config, experiment1)
+
+            study1_name = plugin1.current_study.study_name if plugin1.current_study else None
+
+            config2_instance = Config()
+            plugin2 = OptunaPlugin(config2_instance)
+            plugin2.register()
+            plugin2.prepare_trial_repetitions(1)
+
+            experiment2.parameters['__OPTUNA__'] = True
+            plugin2.before_experiment_initialize(config2_instance, experiment2)
+
+            study2_name = plugin2.current_study.study_name if plugin2.current_study else None
+
+            # Verify that different config files create different studies
+            assert study1_name == "config_variant_1", (
+                f"Study 1 should be named 'config_variant_1' but got '{study1_name}'"
+            )
+            assert study2_name == "config_variant_2", (
+                f"Study 2 should be named 'config_variant_2' but got '{study2_name}'"
+            )
+            assert study1_name != study2_name, (
+                "Different config files should create different Optuna studies, "
+                f"but both created study named '{study1_name}'"
+            )
+
+        finally:
+            # Cleanup
+            if os.path.exists(test_dir):
+                shutil.rmtree(test_dir)
+            Config().reset_state()

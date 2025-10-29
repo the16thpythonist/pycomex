@@ -2190,6 +2190,11 @@ class Experiment(ExperimentBase):
             glob=glob,
         )
 
+        # Override the experiment name with the config's name
+        # This ensures config files create their own Optuna studies instead of sharing
+        # the base experiment's study
+        experiment.metadata["name"] = experiment_config.name
+
         # Include any mixins specified in the config
         if experiment_config.include is not None:
             experiment.include(experiment_config.include)
