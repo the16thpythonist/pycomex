@@ -577,6 +577,84 @@ class TestOptunaMultiRunFeature(unittest.TestCase):
         call_args = self.plugin.current_study.tell.call_args
         self.assertEqual(call_args[0][1], 0.9)
 
+    def test_config_file_support(self):
+        """Test that the plugin works with YAML config files."""
+        import yaml
+
+        # Create a simple base experiment
+        base_experiment_code = """
+from pycomex.functional.experiment import Experiment
+from pycomex.utils import folder_path, file_namespace
+
+PARAM_A: float = 1.0
+PARAM_B: int = 10
+
+experiment = Experiment(
+    base_path=folder_path(__file__),
+    namespace=file_namespace(__file__),
+    glob=globals()
+)
+
+@experiment.hook('__optuna_parameters__')
+def define_search_space(e: Experiment, trial):
+    return {
+        'PARAM_A': trial.suggest_float('PARAM_A', 0.0, 10.0),
+        'PARAM_B': trial.suggest_int('PARAM_B', 1, 20)
+    }
+
+@experiment.hook('__optuna_objective__')
+def extract_objective(e: Experiment) -> float:
+    return e.PARAM_A + e.PARAM_B
+
+@experiment
+def run_experiment(e: Experiment):
+    result = e.PARAM_A + e.PARAM_B
+    e['result'] = result
+
+experiment.run_if_main()
+"""
+
+        # Write base experiment to file
+        base_exp_path = os.path.join(self.test_dir, "base_experiment.py")
+        with open(base_exp_path, "w") as f:
+            f.write(base_experiment_code)
+
+        # Create config file
+        config_data = {
+            "extend": "base_experiment.py",
+            "parameters": {
+                "PARAM_B": 15
+            }
+        }
+        config_path = os.path.join(self.test_dir, "test_config.yml")
+        with open(config_path, "w") as f:
+            yaml.dump(config_data, f)
+
+        # Load experiment from config
+        experiment = Experiment.from_config(config_path=config_path)
+
+        # Verify base parameter was overridden
+        self.assertEqual(experiment.parameters['PARAM_B'], 15)
+
+        # Prepare plugin for single repetition
+        self.plugin.prepare_trial_repetitions(1)
+
+        # Test that the plugin can initialize with config-based experiment
+        experiment.parameters['__OPTUNA__'] = True
+        self.plugin.before_experiment_initialize(self.config, experiment)
+
+        # Verify trial was created
+        self.assertIsNotNone(self.plugin.current_trial)
+        self.assertIsNotNone(self.plugin.current_study)
+
+        # Verify parameters were replaced by trial suggestions
+        trial_param_a = experiment.parameters['PARAM_A']
+        trial_param_b = experiment.parameters['PARAM_B']
+        self.assertGreaterEqual(trial_param_a, 0.0)
+        self.assertLessEqual(trial_param_a, 10.0)
+        self.assertGreaterEqual(trial_param_b, 1)
+        self.assertLessEqual(trial_param_b, 20)
+
 
 if __name__ == '__main__':
     unittest.main()

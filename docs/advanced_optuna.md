@@ -61,6 +61,61 @@ pycomex optuna list
 pycomex optuna info my_experiment
 ```
 
+## Configuration File Support
+
+The Optuna plugin supports both Python experiment modules (`.py`) and YAML configuration files (`.yml`/`.yaml`). This allows you to optimize parameter variations without duplicating code:
+
+**Base experiment with Optuna hooks:**
+
+```python title="training.py"
+from pycomex.functional.experiment import Experiment
+from pycomex.utils import folder_path, file_namespace
+
+LEARNING_RATE: float = 0.001
+BATCH_SIZE: int = 32
+
+experiment = Experiment(
+    base_path=folder_path(__file__),
+    namespace=file_namespace(__file__),
+    glob=globals()
+)
+
+@experiment.hook('__optuna_parameters__')
+def define_search_space(e: Experiment, trial):
+    return {
+        'LEARNING_RATE': trial.suggest_float('LEARNING_RATE', 1e-5, 1e-2, log=True),
+        'BATCH_SIZE': trial.suggest_int('BATCH_SIZE', 16, 128, step=16)
+    }
+
+@experiment.hook('__optuna_objective__')
+def extract_objective(e: Experiment) -> float:
+    return e['results/accuracy']
+
+@experiment
+def run_experiment(e: Experiment):
+    accuracy = train_model(e.LEARNING_RATE, e.BATCH_SIZE)
+    e['results/accuracy'] = accuracy
+
+experiment.run_if_main()
+```
+
+**Config file extending the base:**
+
+```yaml title="training_config.yml"
+extend: training.py
+parameters:
+  NUM_EPOCHS: 50
+  MODEL_NAME: "resnet50"
+```
+
+Run optimization with config file:
+
+```bash
+pycomex optuna run training_config.yml
+```
+
+This combines the benefits of experiment configuration files with Optuna optimization.
+
 ## Understanding the Hooks
 
 ### `__optuna_parameters__` - Define Search Space

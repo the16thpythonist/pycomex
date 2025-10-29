@@ -294,11 +294,13 @@ class OptunaPlugin(Plugin):
         @click.pass_context
         def run_command(ctx, path):
             """
-            Run an experiment module with Optuna optimization.
+            Run an experiment module or config file with Optuna optimization.
 
             This command executes an experiment with parameter values suggested by Optuna's
             optimization algorithm. The experiment must define the __optuna_parameters__ and
             __optuna_objective__ hooks.
+
+            Supports both Python experiment modules (.py) and YAML config files (.yml/.yaml).
 
             If __OPTUNA_REPETITIONS__ is greater than 1, the experiment will be run multiple times
             with the same parameters and the objective values will be averaged.
@@ -307,9 +309,11 @@ class OptunaPlugin(Plugin):
 
                 pycomex optuna run experiment.py
 
+                pycomex optuna run config.yml
+
                 pycomex optuna run experiment.py NUM_EPOCHS=20
 
-                pycomex optuna run experiment.py --__OPTUNA_REPETITIONS__ 5
+                pycomex optuna run config.yml --__OPTUNA_REPETITIONS__ 5
             """
             from pycomex.utils import dynamic_import
 
@@ -318,15 +322,34 @@ class OptunaPlugin(Plugin):
             cli_instance.cons.print("[bold cyan]Running experiment with Optuna optimization...[/bold cyan]")
 
             try:
-                # Import the experiment module
-                module = dynamic_import(path)
-                if not hasattr(module, "__experiment__"):
+                # Determine file type from extension
+                extension = os.path.basename(path).split(".")[-1]
+
+                # Load experiment based on file type
+                experiment: Experiment | None = None
+
+                # YAML config files
+                if extension in ["yml", "yaml"]:
+                    experiment = Experiment.from_config(config_path=path)
+                    is_config_file = True
+
+                # Python modules
+                elif extension in ["py"]:
+                    module = dynamic_import(path)
+                    if not hasattr(module, "__experiment__"):
+                        cli_instance.cons.print(
+                            "[bold red]Error:[/bold red] The given python file does not contain a valid experiment module!"
+                        )
+                        return
+                    experiment = module.__experiment__
+                    is_config_file = False
+
+                else:
                     cli_instance.cons.print(
-                        "[bold red]Error:[/bold red] The given python file does not contain a valid experiment module!"
+                        f"[bold red]Error:[/bold red] Unsupported file type: .{extension}. "
+                        f"Expected .py, .yml, or .yaml"
                     )
                     return
-
-                experiment = module.__experiment__
 
                 # Parse additional parameters from command line
                 # Automatically add --__OPTUNA__ True to enable Optuna mode
@@ -350,10 +373,15 @@ class OptunaPlugin(Plugin):
                     if repetitions > 1:
                         cli_instance.cons.print(f"[dim]Repetition {rep_idx + 1}/{repetitions}[/dim]")
 
-                    # For repetitions after the first, re-import the module to get a fresh experiment instance
+                    # For repetitions after the first, reload experiment to get a fresh instance
                     if rep_idx > 0:
-                        module = dynamic_import(path)
-                        experiment = module.__experiment__
+                        if is_config_file:
+                            # Reload from config file
+                            experiment = Experiment.from_config(config_path=path)
+                        else:
+                            # Re-import Python module
+                            module = dynamic_import(path)
+                            experiment = module.__experiment__
 
                         # Re-apply CLI arguments
                         experiment.arg_parser.parse(extra_args)
