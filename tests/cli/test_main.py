@@ -11,7 +11,7 @@ from pycomex.cli import ExperimentCLI
 from pycomex.testing import ArgumentIsolation
 from pycomex.util import EXAMPLES_PATH
 
-from .util import LOG
+from ..util import LOG
 
 
 def test_construction_works():

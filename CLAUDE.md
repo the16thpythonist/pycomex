@@ -57,11 +57,69 @@ def multiply(a: int, b: int) -> int:
 - `nox -s test` - Run tests using Nox sessions
 
 **Test Organization:**
-- `tests/test_bugs.py` - Test-driven bug reproductions and regression tests. When fixing bugs, create a test case here that reproduces the issue, then verify the fix resolves it. This ensures previously fixed bugs remain fixed.
-- `tests/test_functional_*.py` - Tests for functional experiment system components
-- `tests/test_cli*.py` - Tests for CLI commands and functionality
-- `tests/assets/` - Mock experiments and test fixtures
-- `tests/artifacts/` - A folder where test executions can store persistant artifacts such as generated archives or plots
+
+The test suite uses a **nested directory structure** that mirrors the source code organization:
+
+```
+tests/
+├── cli/                        # CLI tests
+│   ├── test_main.py           # Core CLI functionality
+│   ├── test_archive_modify.py # Archive modification commands
+│   └── test_archive_scan.py   # Archive scanning/statistics
+├── functional/                 # Core functional system tests
+│   ├── test_experiment.py     # Experiment class tests
+│   ├── test_cache.py          # Caching system
+│   ├── test_caching_integration.py
+│   ├── test_mixin.py          # Mixin system
+│   ├── test_parameter.py      # Parameter types (CopiedPath, etc.)
+│   ├── test_reproducibility.py # Reproducibility features
+│   ├── test_utils.py          # Utility functions
+│   └── test_validation.py     # YAML config validation
+├── plugins/                    # Plugin system tests
+│   ├── test_core.py           # Core PluginManager
+│   ├── test_core_cli.py       # Plugin CLI registration
+│   ├── optuna/                # Optuna plugin tests
+│   │   ├── test_plugin.py
+│   │   ├── test_cli.py
+│   │   └── test_report.py
+│   ├── notify/                # Notify plugin tests
+│   │   └── test_notify.py
+│   └── wandb/                 # Weights & Biases plugin tests
+│       └── test_weights_biases.py
+├── regression/                 # Bug regression tests
+│   └── test_bugs.py           # Previously fixed bugs
+├── config/                     # Configuration tests
+│   └── test_config.py
+├── utils/                      # Utility tests
+│   └── test_util.py
+├── assets/                     # Shared test fixtures (mock experiments, etc.)
+└── artifacts/                  # Test output artifacts (archives, plots, etc.)
+```
+
+**Guidelines for Adding Tests:**
+
+1. **Location**: Place tests in the subdirectory that matches what's being tested:
+   - Testing CLI commands → `tests/cli/`
+   - Testing functional features → `tests/functional/`
+   - Testing plugins → `tests/plugins/<plugin_name>/`
+   - Bug reproductions → `tests/regression/test_bugs.py`
+
+2. **Naming**: Follow the pattern `test_<feature>.py` (e.g., `test_cache.py`, `test_mixin.py`)
+
+3. **Imports**: Use relative imports for test utilities:
+   ```python
+   from ..util import ASSETS_PATH, ARTIFACTS_PATH, LOG
+   ```
+
+4. **Asset Paths**: Reference shared fixtures from parent directory:
+   ```python
+   from pathlib import Path
+   assets_dir = Path(__file__).parent.parent / 'assets'
+   ```
+
+5. **Regression Tests**: When fixing bugs, add a test case to `tests/regression/test_bugs.py` that reproduces the issue, then verify the fix resolves it. This ensures previously fixed bugs remain fixed.
+
+6. **Shared Fixtures**: Place mock experiments and test data in `tests/assets/` for use across multiple test files.
 
 ### Building and Publishing
 - `nox -s build` - Build package using Nox (includes testing wheel)

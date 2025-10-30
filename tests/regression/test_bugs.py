@@ -242,7 +242,7 @@ class TestYAMLConfigExperimentCodeFile:
 
         with ConfigIsolation() as config, tempfile.TemporaryDirectory() as temp_dir:
             # Get path to mock_functional_experiment.py
-            assets_dir = os.path.join(os.path.dirname(__file__), 'assets')
+            assets_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'assets')
             base_experiment_path = os.path.join(assets_dir, 'mock_functional_experiment.py')
 
             # Create a YAML config file

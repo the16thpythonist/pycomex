@@ -7,7 +7,7 @@ import yaml
 from pycomex.functional.experiment import Experiment, ExperimentConfig, run_experiment
 from pycomex.testing import ConfigIsolation, ExperimentIsolation
 
-from .util import ASSETS_PATH
+from ..util import ASSETS_PATH
 
 
 def test_run_experiment_works():

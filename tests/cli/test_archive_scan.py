@@ -18,7 +18,7 @@ from pycomex.cli import cli
 from pycomex.functional.experiment import Experiment
 from pycomex.testing import ConfigIsolation, ExperimentIsolation
 
-from .util import LOG
+from ..util import LOG
 
 
 class TestArchiveScanCommand:

@@ -30,7 +30,7 @@ from pycomex.util import (
     resolve_import_path,
 )
 
-from .util import ASSETS_PATH
+from ..util import ASSETS_PATH
 
 
 class TestFinalizeReproducible:

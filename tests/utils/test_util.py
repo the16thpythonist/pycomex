@@ -25,7 +25,7 @@ from pycomex.util import (
     type_string,
 )
 
-from .util import ARTIFACTS_PATH, ASSETS_PATH
+from ..util import ARTIFACTS_PATH, ASSETS_PATH
 
 
 def test_type_string():

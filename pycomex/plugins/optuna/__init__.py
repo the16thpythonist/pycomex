@@ -1,6 +1,8 @@
 """Optuna hyperparameter optimization plugin for PyComex."""
 
 from pycomex.plugins.optuna.main import OptunaPlugin, StudyManager
+from pycomex.plugins.optuna.cli import OptunaCommandsMixin
+from pycomex.plugins.optuna.report import OptunaReportGenerator
 from pycomex.plugins.optuna.display import (
     RichOptunaStudyList,
     RichOptunaStudyInfo,
@@ -10,6 +12,8 @@ from pycomex.plugins.optuna.display import (
 __all__ = [
     "OptunaPlugin",
     "StudyManager",
+    "OptunaCommandsMixin",
+    "OptunaReportGenerator",
     "RichOptunaStudyList",
     "RichOptunaStudyInfo",
     "RichOptunaStudySummary",

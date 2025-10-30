@@ -119,3 +119,4 @@ wandb/
 
 results/
 docs/site/*
+tests/**/artifacts/*

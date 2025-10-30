@@ -19,7 +19,7 @@ from pycomex.functional.experiment import Experiment
 from pycomex.functional.mixin import ExperimentMixin
 from pycomex.testing import ConfigIsolation, ExperimentIsolation
 
-from .util import ASSETS_PATH
+from ..util import ASSETS_PATH
 
 
 class TestExperimentMixin:

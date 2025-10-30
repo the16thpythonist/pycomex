@@ -7,7 +7,7 @@ from pycomex.plugin import Plugin
 from pycomex.testing import ConfigIsolation
 from pycomex.utils import dynamic_import
 
-from .util import ASSETS_PATH
+from ..util import ASSETS_PATH
 
 
 class TestConfig:

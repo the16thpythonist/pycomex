@@ -411,7 +411,7 @@ def my_function():
             results_dir.mkdir()
 
             # Get path to mock experiment
-            assets_dir = Path(__file__).parent / 'assets'
+            assets_dir = Path(__file__).parent.parent / 'assets'
             base_experiment_path = assets_dir / 'mock_functional_experiment.py'
 
             # Create a "broken" archive structure
@@ -487,7 +487,7 @@ def my_function():
             results_dir.mkdir()
 
             # Get path to mock experiment
-            assets_dir = Path(__file__).parent / 'assets'
+            assets_dir = Path(__file__).parent.parent / 'assets'
             base_experiment_path = assets_dir / 'mock_functional_experiment.py'
 
             # Create a "broken" archive
@@ -574,7 +574,7 @@ experiment = Experiment.from_config('experiment_config.yml')
             results_dir.mkdir()
 
             # Get path to mock experiment
-            assets_dir = Path(__file__).parent / 'assets'
+            assets_dir = Path(__file__).parent.parent / 'assets'
             base_experiment_path = assets_dir / 'mock_functional_experiment.py'
 
             # Create a "broken" archive
