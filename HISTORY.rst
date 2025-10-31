@@ -667,3 +667,23 @@ Bug Fixes
 
 - When the `__CACHING__ = False` is set, the cached functions no longer save to the cache, which
   was previously the case.
+
+
+0.26.1 (31.10.2025)
+-------------------
+
+Bug Fixes
+
+- Fixed a display bug in the `optuna info` command
+
+Plugins
+
+- Added the `optuna report` command which can be used to generate some standard plots
+  for an existing optuna study such as optimization history, parameter importance etc.
+- Added some unittests for the optuna report functionality
+
+Testing
+
+- Re-organized the folder structure for the unittests to now have a more clear 
+  separation between tests for the core functionality and tests for the plugins.
+
