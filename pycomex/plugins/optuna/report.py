@@ -18,11 +18,9 @@ try:
         plot_timeline,
     )
     OPTUNA_AVAILABLE = True
-    print(f"DEBUG: Optuna import SUCCESS in report.py")
 except ImportError as e:
     OPTUNA_AVAILABLE = False
     optuna = None
-    print(f"DEBUG: Optuna import FAILED in report.py: {e}")
 
 try:
     import matplotlib

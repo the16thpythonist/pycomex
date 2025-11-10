@@ -101,9 +101,7 @@ class Config(metaclass=Singleton):
                     module = dynamic_import(module_path)
                     self.load_plugin_from_module(name=element_name, module=module)
                 except ImportError as exc:
-                    warnings.warn(
-                        f'Failed to load plugin from module "{module_path}" due to {exc}'
-                    )
+                    pass
 
         # ~ external plugins
         # Iterate over all installed modules/packages in the current Python runtime
@@ -121,9 +119,7 @@ class Config(metaclass=Singleton):
                         continue
 
                 except Exception as exc:
-                    warnings.warn(
-                        f'Failed to load external plugin "{name}" due to {exc}'
-                    )
+                    pass
 
     def load_plugin_from_module(self, name: str, module: object) -> None:
         """

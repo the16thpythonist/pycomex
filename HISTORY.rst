@@ -687,3 +687,8 @@ Testing
 - Re-organized the folder structure for the unittests to now have a more clear 
   separation between tests for the core functionality and tests for the plugins.
 
+
+0.26.2 (10.11.2025)
+-------------------
+
+- Removed the debug messages that were shown when a plugin failed to load.

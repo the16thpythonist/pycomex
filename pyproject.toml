@@ -6,7 +6,7 @@ build-backend = "hatchling.build"
 # Project Metadata
 # ================
 name = "pycomex"
-version = "0.26.1"
+version = "0.26.2"
 description = "Python Computational Experiments"
 readme = "README.rst"
 authors = [
@@ -248,7 +248,7 @@ exclude = [
 # ===============
 
 [tool.bumpversion]
-current_version = "0.26.1"
+current_version = "0.26.2"
 parse = "(?<![=<>])(?P<major>\\d+)\\.(?P<minor>\\d+)\\.(?P<patch>\\d+)"
 serialize = ["{major}.{minor}.{patch}"]
 search = "{current_version}"
