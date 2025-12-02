@@ -692,3 +692,14 @@ Testing
 -------------------
 
 - Removed the debug messages that were shown when a plugin failed to load.
+
+0.27.0 (13.11.2025)
+-------------------
+
+Experiment Features
+
+- Added the `__INCLUDE__` special parameter which allows to specify experiment 
+  mixin modules to be included. This crucially allows to supply mixins via the 
+  command line calling of experiment modules.
+- Added another line to the end of experiment panel which directly links to the 
+  experiment archive folder.
