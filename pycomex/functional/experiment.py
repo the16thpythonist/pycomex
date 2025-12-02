@@ -59,6 +59,41 @@ from pycomex.utils import (
 HELLO: str = ""
 
 
+def parse_include_parameter(value: str | list[str] | None) -> list[str]:
+    """
+    Parse the __INCLUDE__ parameter value into a normalized list of mixin paths.
+
+    This function handles multiple input formats for convenience:
+    - None → [] (empty list)
+    - Single string: "mixin.py" → ["mixin.py"]
+    - Comma-separated string: "mixin1.py,mixin2.py" → ["mixin1.py", "mixin2.py"]
+    - List: ["mixin1.py", "mixin2.py"] → ["mixin1.py", "mixin2.py"] (unchanged)
+
+    :param value: The __INCLUDE__ parameter value from command line or config
+    :return: A list of mixin file paths (may be empty)
+    :raises ValueError: If the value type is not supported
+    """
+    if value is None:
+        return []
+
+    if isinstance(value, str):
+        # Check if it's comma-separated
+        if ',' in value:
+            return [path.strip() for path in value.split(',') if path.strip()]
+        else:
+            return [value]
+
+    elif isinstance(value, list):
+        # Ensure all items are strings
+        return [str(item) for item in value]
+
+    else:
+        raise ValueError(
+            f"Invalid __INCLUDE__ parameter type: {type(value).__name__}. "
+            f"Expected str, list[str], or None."
+        )
+
+
 class ExperimentConfig(BaseModel):
 
     model_config = {"validate_default": True}
@@ -496,6 +531,16 @@ class Experiment(ExperimentBase):
                     "Default: 1 (no repetition)."
                 ),
             },
+            "__INCLUDE__": {
+                "type": "str | list[str]",
+                "description": (
+                    "Mixin file(s) to include when running the experiment. Mixins provide reusable hook "
+                    "implementations. Can be a single file path (string), a list of file paths, or a "
+                    "comma-separated string of paths. Example: 'mixin.py' or ['mixin1.py', 'mixin2.py'] "
+                    "or 'mixin1.py,mixin2.py'. When used with config files, command line mixins are "
+                    "added after config-specified mixins."
+                ),
+            },
         }
         # Then we can also set some default values for these special parameters
         self.parameters.update(
@@ -507,6 +552,7 @@ class Experiment(ExperimentBase):
                 "__CACHING__": True,
                 "__OPTUNA__": False,
                 "__OPTUNA_REPETITIONS__": 1,
+                "__INCLUDE__": None,
             }
         )
 
@@ -610,6 +656,7 @@ class Experiment(ExperimentBase):
         Currently handles:
         - __DEBUG__: Enables debug mode which affects archive naming
         - __CACHING__: Controls whether the cache system loads existing cached results
+        - __INCLUDE__: Includes mixin files into the experiment
 
         :returns: None
         """
@@ -619,6 +666,12 @@ class Experiment(ExperimentBase):
         if "__CACHING__" in self.parameters:
             caching_enabled = bool(self.parameters["__CACHING__"])
             self.cache.set_enabled(caching_enabled)
+
+        if "__INCLUDE__" in self.parameters and self.parameters["__INCLUDE__"] is not None:
+            include_value = self.parameters["__INCLUDE__"]
+            mixin_paths = parse_include_parameter(include_value)
+            if mixin_paths:
+                self.include(mixin_paths)
 
     def update_parameters(self):
         """
@@ -864,6 +917,9 @@ class Experiment(ExperimentBase):
                 content_lines.append(f"[bold cyan]Data Size:[/bold cyan] {size_str}")
         except (OSError, AttributeError):
             pass
+
+        # Add clickable link to archive folder
+        content_lines.append(f"📁 [bold green]Goto Archive:[/bold green] [link=file://{self.path}]{self.path}[/link]")
 
         content = "\n".join(content_lines)
 

@@ -264,6 +264,7 @@ class RunCommandsMixin:
         # Without this call, self.debug won't be updated from self.parameters['__DEBUG__'],
         # causing the experiment to run in the wrong mode even though the parameter value is correct.
         # This matches the pattern used in experiment.run_if_main() which correctly syncs these parameters.
+        # Note: update_parameters_special() also handles __INCLUDE__ for dynamic mixin loading.
         experiment.update_parameters_special()
 
         click.echo("Starting the experiment...")
