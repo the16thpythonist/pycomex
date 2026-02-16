@@ -35,6 +35,10 @@ from pycomex.config import Config
 from pycomex.functional.base import ExperimentBase
 from pycomex.functional.cache import ExperimentCache
 from pycomex.functional.mixin import ExperimentMixin
+# INHERIT system: sentinel and supporting classes for explicit parameter inheritance
+# in sub-experiments. See pycomex/functional/inherit.py for the class hierarchy and
+# the module docstring for a full explanation of the design.
+from pycomex.functional.inherit import InheritBase, Inherit, InheritError, _InheritSentinel, _UNSET
 from pycomex.functional.parameter import ActionableParameterType
 from pycomex.utils import (
     TEMPLATE_ENV,
@@ -680,14 +684,238 @@ class Experiment(ExperimentBase):
         the experiment module and then checking if the variable name is in all caps. If it is, then it is considered
         a parameter and inserted into the parameters dictionary.
 
+        When INHERIT sentinel values are encountered, this method captures the parent's
+        current parameter value and attaches it to the Inherit object for later resolution
+        during initialize().
+
         :returns: None
         """
+        # INHERIT support: snapshot parent values BEFORE _discover_parameters overwrites them.
+        #
+        # This snapshot is the key mechanism that makes INHERIT work. Consider the flow
+        # in Experiment.extend():
+        #
+        #   1. import_from(base_path) → base __init__ runs → self.parameters["PARAM"] = 10
+        #   2. glob.update(child_glob) → self.glob["PARAM"] = INHERIT (sentinel)
+        #   3. update_parameters() runs (this method):
+        #      a. parent_params = {"PARAM": 10, ...}     ← snapshot BEFORE overwrite
+        #      b. _discover_parameters() → self.parameters["PARAM"] = INHERIT  (from glob)
+        #      c. _process_inherited_parameters() → attaches parent_value=10 to the Inherit
+        #
+        # Without the snapshot at step (a), the parent value (10) would be lost after step (b)
+        # because _discover_parameters iterates self.glob and blindly overwrites self.parameters.
+        parent_params = dict(self.parameters)
+
         # Use the base class parameter discovery method
         self._discover_parameters()
+
+        # Post-process: convert INHERIT sentinels and attach parent values.
+        # This must run AFTER _discover_parameters (so we can see which params are INHERIT)
+        # but BEFORE update_parameters_special (which processes __DEBUG__ etc. and would
+        # choke on InheritBase values).
+        self._process_inherited_parameters(parent_params)
 
         # This method will search through the freshly updated parameters dictionary for "special" keys
         # and then use those values to trigger some more fancy updates based on those.
         self.update_parameters_special()
+
+    def _process_inherited_parameters(self, parent_params: dict) -> None:
+        """
+        Post-process parameters after discovery to handle INHERIT sentinels.
+
+        For each parameter that is an ``InheritBase`` instance:
+
+        1. If it is the bare ``INHERIT`` sentinel, convert it to ``Inherit(transform=None)``
+        2. Capture the parent's value from the snapshot taken before ``_discover_parameters()``
+
+        **The import artifact problem:**
+
+        When a sub-experiment module does ``from pycomex import INHERIT``, the name
+        ``INHERIT`` is added to that module's ``globals()`` dict. Since ``INHERIT``
+        is an uppercase name, ``_discover_parameters()`` picks it up as a parameter.
+        This is incorrect — the user didn't intend ``INHERIT`` to be a parameter;
+        they imported it as a tool to mark other parameters.
+
+        This creates a subtle bug in multi-level inheritance chains. Consider::
+
+            # child.py
+            from pycomex import INHERIT
+            PARAM_A = INHERIT(lambda x: x * 2)
+            experiment = Experiment.extend("base.py", ...)
+
+        After the child's ``extend()``:
+
+        - ``self.parameters["PARAM_A"] = Inherit(transform=x*2, parent_value=10)`` ← correct
+        - ``self.parameters["INHERIT"] = Inherit(transform=None, parent_value=_UNSET)`` ← artifact
+        - ``self.glob["INHERIT"] = Inherit(transform=None, parent_value=_UNSET)`` ← same object
+
+        Now when a grandchild extends the child, the grandchild's ``glob.update()``
+        does NOT overwrite ``self.glob["INHERIT"]`` (the grandchild didn't import INHERIT
+        into its own glob, or if it did, it's the same singleton). So after
+        ``_discover_parameters()``, ``self.parameters["INHERIT"]`` is the SAME Inherit
+        object as ``parent_params["INHERIT"]``. If we naively set
+        ``value.parent_value = parent_params["INHERIT"]``, we create a self-referential
+        cycle: ``value.parent_value = value``, causing infinite recursion in ``resolve()``.
+
+        **The identity check fix:**
+
+        We detect this case with ``parent_params[name] is value``: if the parent's
+        snapshot has the exact same object as the current value, the child didn't
+        actually assign a new INHERIT — it's just an inherited import artifact.
+        We remove it from parameters and move on.
+
+        **The _from_sentinel marker:**
+
+        For the *first* extend level (child directly extending base), the import
+        artifact ``INHERIT`` appears as a fresh ``_InheritSentinel`` (the singleton
+        from the import). It gets converted to ``Inherit(transform=None)`` here.
+        But it has ``parent_value=_UNSET`` because the base doesn't have an "INHERIT"
+        parameter. We mark it with ``_from_sentinel=True`` so that
+        ``_resolve_inherited_parameters()`` can tell it apart from user-intentional
+        ``PARAM = INHERIT`` (which also gets ``_from_sentinel=True`` but WILL have
+        a parent value). See ``_resolve_inherited_parameters`` for how this is used.
+
+        :param parent_params: A snapshot of ``self.parameters`` taken before
+            ``_discover_parameters()`` overwrote them with child module values.
+
+        :returns: None
+        """
+        for name, value in list(self.parameters.items()):
+            if isinstance(value, InheritBase):
+                # --- Import artifact detection (multi-level case) ---
+                #
+                # If parent_params[name] is the SAME object as value, this entry
+                # was not overwritten by the child — it's an inherited import artifact.
+                # This happens when:
+                #   - The child imported INHERIT, creating self.parameters["INHERIT"] = Inherit(...)
+                #   - The grandchild's glob.update() didn't overwrite "INHERIT"
+                #   - _discover_parameters re-read the same Inherit object from self.glob
+                #   - parent_params (snapshot) also has the same Inherit object
+                #
+                # Setting value.parent_value = parent_params[name] here would create
+                # value.parent_value = value (self-reference), causing infinite recursion
+                # in resolve(). We remove it instead.
+                if name in parent_params and parent_params[name] is value:
+                    del self.parameters[name]
+                    continue
+
+                # --- Sentinel-to-Inherit conversion ---
+                #
+                # The bare INHERIT sentinel is a singleton and cannot carry per-parameter
+                # state. We replace it with a fresh Inherit(transform=None) instance.
+                #
+                # We set _from_sentinel=True to mark that this Inherit was created from
+                # an explicit user assignment (either "PARAM = INHERIT" or the INHERIT
+                # import artifact at the first extend level). _resolve_inherited_parameters
+                # uses this flag to distinguish user intent from import artifacts:
+                #   - _from_sentinel=True + parent_value=_UNSET → user error (raise InheritError)
+                #   - _from_sentinel=False + parent_value=_UNSET → import artifact (silently remove)
+                if isinstance(value, _InheritSentinel):
+                    value = Inherit(transform=None)
+                    value._from_sentinel = True
+                    self.parameters[name] = value
+                    self.glob[name] = value
+
+                # --- Parent value capture ---
+                #
+                # Attach the parent's value to the Inherit object. This value may itself
+                # be an Inherit object in multi-level chains (e.g., grandchild inheriting
+                # from child which also used INHERIT). The recursive resolve() in Inherit
+                # handles this case.
+                #
+                # If the parameter doesn't exist in parent_params, parent_value stays as
+                # _UNSET. This is correct behavior:
+                #   - For user code: "PARAM = INHERIT" where parent has no PARAM → InheritError
+                #   - For import artifacts: silently removed by _resolve_inherited_parameters
+                if name in parent_params:
+                    value.parent_value = parent_params[name]
+
+    def _resolve_inherited_parameters(self) -> None:
+        """
+        Resolve all INHERIT parameter values to their concrete values.
+
+        This method iterates through all parameters and, for any that are still
+        ``InheritBase`` instances, calls their ``resolve()`` method to compute the
+        final concrete value. The resolved value replaces the ``Inherit`` object in
+        both ``self.parameters`` and ``self.glob``.
+
+        Called at the start of ``initialize()``, ensuring that by the time the
+        experiment archive is created and metadata is saved, all parameter values
+        are concrete. This timing is intentional — lazy resolution allows parent
+        values to be modified between ``extend()`` and ``run()`` (e.g., via CLI
+        overrides or programmatic changes).
+
+        **Import artifact cleanup:**
+
+        Some ``Inherit`` objects in the parameters dict are not real parameters but
+        import artifacts (see ``_process_inherited_parameters`` for details). These
+        are ``Inherit`` objects with ``parent_value=_UNSET`` that were NOT created
+        from an explicit user sentinel assignment.
+
+        We distinguish them using the ``_from_sentinel`` marker:
+
+        - ``_from_sentinel=True``: Created by converting a user's ``PARAM = INHERIT``
+          sentinel. If ``parent_value`` is still ``_UNSET``, the user made an error
+          (the parent doesn't have this parameter), so we let ``resolve()`` raise
+          ``InheritError``.
+
+        - ``_from_sentinel=False`` (or absent): This is an ``Inherit`` object that
+          was inherited from a parent level as an import artifact. It was never
+          intentionally assigned by the user. We silently remove it.
+
+        :raises InheritError: If an INHERIT parameter cannot be resolved (e.g.,
+            the parent doesn't have the parameter, or INHERIT was used outside
+            of an extend() context).
+
+        :returns: None
+        """
+        for name, value in list(self.parameters.items()):
+            if isinstance(value, InheritBase):
+                # --- Import artifact cleanup ---
+                #
+                # ``from pycomex import INHERIT`` in a sub-experiment module causes
+                # the uppercase name ``INHERIT`` to appear in globals, which parameter
+                # discovery picks up as if it were a real parameter. We must remove it.
+                #
+                # There are two cases:
+                #
+                # 1. **First extend level**: The child's ``from pycomex import INHERIT``
+                #    creates ``self.parameters["INHERIT"] = Inherit(parent_value=_UNSET)``.
+                #    The identity check in _process_inherited_parameters can't catch this
+                #    (because the base didn't have "INHERIT" in parent_params).
+                #
+                # 2. **Multi-level (handled by identity check)**: When a grandchild extends
+                #    a child that also imported INHERIT, the identity check in
+                #    _process_inherited_parameters already removes it. But if it somehow
+                #    slips through, the same logic below catches it.
+                #
+                # We detect import artifacts by:
+                #   a. parent_value is _UNSET (no parent had this parameter), AND
+                #   b. Either: the name is literally "INHERIT" (always an import artifact),
+                #      OR: _from_sentinel is False/absent (inherited Inherit object, not
+                #      from an explicit user assignment like ``MY_PARAM = INHERIT``).
+                #
+                # Genuine user errors — e.g. ``MY_PARAM = INHERIT`` where the parent has
+                # no ``MY_PARAM`` — have _from_sentinel=True AND a name != "INHERIT",
+                # so they pass through to resolve() which raises InheritError.
+                if (
+                    isinstance(value, Inherit)
+                    and value.parent_value is _UNSET
+                    and (name == 'INHERIT' or not getattr(value, '_from_sentinel', False))
+                ):
+                    del self.parameters[name]
+                    continue
+
+                # Resolve the Inherit object to its concrete value. For multi-level
+                # chains, resolve() handles recursion internally.
+                try:
+                    resolved = value.resolve()
+                except InheritError as exc:
+                    raise InheritError(
+                        f"Cannot resolve INHERIT for parameter '{name}': {exc}"
+                    ) from exc
+                self.parameters[name] = resolved
+                self.glob[name] = resolved
 
     def update_arg_parser(self) -> None:
         """
@@ -1082,7 +1310,7 @@ class Experiment(ExperimentBase):
         # We dont need to check anything here because by design the testing implementation should always be overriding.
         # In each highest instance in the hierarchy of sub experiments should it be possible to define distinct
         # testing behavior that is not implicitly modified or dependent on the lower levels.
-        self.hook_map["__TESTING__"] = func
+        self.hook_map["__TESTING__"] = [func]
 
         # This requires a bit more explanation because it gets a bit convoluted here. We actually immediately *try* to
         # execute the testing immediately after adding the function at the point where the decoration happens.
@@ -1138,8 +1366,8 @@ class Experiment(ExperimentBase):
         # Only after all these conditions have been checked do we actually execute the testing hook
         # implementation here.
         self.apply_hook("before_testing")
-        func = self.hook_map["__TESTING__"]
-        func(self)
+        for func in self.hook_map["__TESTING__"]:
+            func(self)
 
         self.is_testing = True
 
@@ -1172,6 +1400,21 @@ class Experiment(ExperimentBase):
 
         :returns: None
         """
+        # INHERIT resolution: replace all Inherit objects with concrete values.
+        #
+        # This is the lazy resolution step — INHERIT values have been sitting in
+        # self.parameters as Inherit objects since extend() ran. We resolve them
+        # here (at the start of initialize, before the archive is created) so that:
+        #
+        #   1. Plugins see concrete values in before_experiment_initialize hooks
+        #   2. save_metadata() writes concrete values to experiment_meta.json
+        #   3. Any CLI parameter overrides applied between extend() and run()
+        #      are reflected in the parent values used by INHERIT transforms
+        #
+        # If resolution fails (e.g., INHERIT used for a parameter the parent
+        # doesn't have), InheritError is raised and the experiment doesn't start.
+        self._resolve_inherited_parameters()
+
         # This hook is called at the very beginning of initialize(), after all parameter
         # overrides (including CLI arguments) have been applied. This is the ideal place
         # for plugins to react to parameter values that may have been set via CLI.
@@ -1653,6 +1896,17 @@ class Experiment(ExperimentBase):
         # types. So for all values that are not json encodable we will simply convert them to their string
         # representation.
         for parameter, value in self.parameters.items():
+            # Defensive guard for INHERIT: by the time save_metadata() is called,
+            # all Inherit objects should have been resolved to concrete values by
+            # _resolve_inherited_parameters() in initialize(). If somehow one slips
+            # through (e.g., save_metadata called outside the normal lifecycle), we
+            # fall back to storing its repr as a string rather than crashing on
+            # JSON serialization of the Inherit object.
+            if isinstance(value, InheritBase):
+                self.metadata["parameters"][parameter]["value"] = repr(value)
+                self.metadata["parameters"][parameter]["usable"] = False
+                continue
+
             try:
                 json.dumps(value)  # Check if value is JSON encodable
                 self.metadata["parameters"][parameter]["value"] = value
@@ -1871,6 +2125,26 @@ class Experiment(ExperimentBase):
             if item not in self.parameters:
                 raise KeyError(
                     f'There exists no experiment parameter with the name "{item}"!'
+                )
+
+            # INHERIT guard: if the parameter is still an unresolved Inherit object,
+            # raise a clear error instead of returning the sentinel. Without this guard,
+            # the user would get a confusing Inherit object back from e.g. ``experiment.PARAM``,
+            # which would then cause a cryptic error when used in arithmetic or comparisons.
+            #
+            # This situation arises when a user accesses a parameter BEFORE the experiment
+            # runs (i.e., before initialize() calls _resolve_inherited_parameters). For example:
+            #
+            #   experiment = Experiment.extend("base.py", ..., glob=globals())
+            #   print(experiment.PARAM)  # <-- PARAM is still Inherit, not resolved yet!
+            #
+            # The error message tells the user that resolution happens at experiment start time.
+            if isinstance(self.parameters[item], InheritBase):
+                raise RuntimeError(
+                    f'Parameter "{item}" is an unresolved INHERIT value. '
+                    f'INHERIT parameters are resolved during experiment initialization. '
+                    f'If you need to access this value before the experiment runs, '
+                    f'call experiment._resolve_inherited_parameters() explicitly.'
                 )
 
             # In the special case that the given parameter has been annotated with the ActionableParameterType, we

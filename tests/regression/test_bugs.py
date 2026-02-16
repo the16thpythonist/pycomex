@@ -519,3 +519,62 @@ experiment.run_if_main()
             if os.path.exists(test_dir):
                 shutil.rmtree(test_dir)
             Config().reset_state()
+
+
+class TestExtendWithTestingHookCrash:
+    """
+    Test that Experiment.extend() works when the base experiment uses @experiment.testing.
+
+    BUG DESCRIPTION:
+    ================
+
+    When calling Experiment.extend() on a base experiment that uses the
+    @experiment.testing decorator, it raises:
+        TypeError: object of type 'function' has no len()
+
+    ROOT CAUSE:
+    ----------
+    Experiment.testing() stores the callback as a bare function:
+        self.hook_map["__TESTING__"] = func
+
+    But Experiment.hook() wraps callbacks in a list:
+        self.hook_map[name] = [func]
+
+    read_module_metadata() iterates all hook_map entries and assumes they are lists:
+        for hook, func_list in self.hook_map.items():
+            ...
+            "num": len(func_list),  # TypeError on bare function
+
+    The first read_module_metadata() call (in __init__) succeeds because
+    @experiment.testing hasn't been registered yet. But when a child calls
+    Experiment.extend(), the base module is fully imported first (including
+    @experiment.testing), so read_module_metadata() encounters the bare function.
+
+    FIX:
+    ---
+    Wrap the function in a list in Experiment.testing(), consistent with hook():
+        self.hook_map["__TESTING__"] = [func]
+    """
+
+    def test_extend_with_testing_hook_does_not_crash(self):
+        """
+        Experiment.extend() should not crash when base experiment uses @experiment.testing.
+        """
+        from ..util import ASSETS_PATH
+
+        base_path = os.path.join(ASSETS_PATH, "mock_functional_experiment_with_testing.py")
+
+        with ConfigIsolation() as config, ExperimentIsolation(sys.argv) as iso:
+            experiment = Experiment.extend(
+                experiment_path=base_path,
+                base_path=iso.path,
+                namespace="test_sub",
+                glob=iso.glob,
+            )
+
+            # The extend should succeed and experiment should be usable
+            assert experiment is not None
+            assert "PARAMETER" in experiment.parameters
+
+            # The __TESTING__ hook should be present in hook_map
+            assert "__TESTING__" in experiment.hook_map

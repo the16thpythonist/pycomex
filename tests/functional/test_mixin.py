@@ -340,3 +340,228 @@ def mixin_hook(e):
             assert "_mixin_end_logged" in experiment.data
             assert experiment.data["_mixin_start_logged"] is True
             assert experiment.data["_mixin_end_logged"] is True
+
+
+class TestIncludeParameter:
+    """Test the __INCLUDE__ special parameter functionality."""
+
+    def test_parse_include_parameter_none(self):
+        """
+        parse_include_parameter(None) should return empty list.
+        """
+        from pycomex.functional.experiment import parse_include_parameter
+
+        result = parse_include_parameter(None)
+        assert result == []
+
+    def test_parse_include_parameter_single_string(self):
+        """
+        parse_include_parameter with single string should return list with one element.
+        """
+        from pycomex.functional.experiment import parse_include_parameter
+
+        result = parse_include_parameter("mixin.py")
+        assert result == ["mixin.py"]
+
+    def test_parse_include_parameter_comma_separated(self):
+        """
+        parse_include_parameter with comma-separated string should split into list.
+        """
+        from pycomex.functional.experiment import parse_include_parameter
+
+        result = parse_include_parameter("mixin1.py,mixin2.py,mixin3.py")
+        assert result == ["mixin1.py", "mixin2.py", "mixin3.py"]
+
+    def test_parse_include_parameter_comma_separated_with_spaces(self):
+        """
+        parse_include_parameter should handle spaces around commas.
+        """
+        from pycomex.functional.experiment import parse_include_parameter
+
+        result = parse_include_parameter("mixin1.py, mixin2.py , mixin3.py")
+        assert result == ["mixin1.py", "mixin2.py", "mixin3.py"]
+
+    def test_parse_include_parameter_list(self):
+        """
+        parse_include_parameter with list should return the list as-is.
+        """
+        from pycomex.functional.experiment import parse_include_parameter
+
+        result = parse_include_parameter(["mixin1.py", "mixin2.py"])
+        assert result == ["mixin1.py", "mixin2.py"]
+
+    def test_parse_include_parameter_invalid_type(self):
+        """
+        parse_include_parameter with invalid type should raise ValueError.
+        """
+        from pycomex.functional.experiment import parse_include_parameter
+
+        with pytest.raises(ValueError, match="Invalid __INCLUDE__ parameter type"):
+            parse_include_parameter(123)
+
+    def test_cli_include_single_mixin(self):
+        """
+        CLI --__INCLUDE__ with single mixin should work.
+        """
+        with ConfigIsolation() as config, ExperimentIsolation(sys.argv) as iso:
+            # Create a simple experiment
+            experiment = Experiment(
+                base_path=iso.path,
+                namespace="test_experiment",
+                glob=iso.glob,
+            )
+
+            # Simulate CLI parsing setting __INCLUDE__
+            experiment.parameters["__INCLUDE__"] = os.path.join(ASSETS_PATH, "mock_mixin_simple.py")
+
+            # Process the include parameter (this is what CLI does)
+            from pycomex.functional.experiment import parse_include_parameter
+            if experiment.parameters["__INCLUDE__"] is not None:
+                mixin_paths = parse_include_parameter(experiment.parameters["__INCLUDE__"])
+                experiment.include(mixin_paths)
+
+            # Check that mixin was included
+            assert len(experiment.mixins) == 1
+            assert "test_hook" in experiment.hook_map
+
+    def test_cli_include_list_syntax(self):
+        """
+        CLI --__INCLUDE__=['mixin1.py','mixin2.py'] should work with list syntax.
+        """
+        with ConfigIsolation() as config, ExperimentIsolation(sys.argv) as iso:
+            experiment = Experiment(
+                base_path=iso.path,
+                namespace="test_experiment",
+                glob=iso.glob,
+            )
+
+            # Simulate CLI parsing with list
+            mixin_simple = os.path.join(ASSETS_PATH, "mock_mixin_simple.py")
+            mixin_logging = os.path.join(ASSETS_PATH, "mock_mixin_logging.py")
+            experiment.parameters["__INCLUDE__"] = [mixin_simple, mixin_logging]
+
+            # Process the include parameter
+            from pycomex.functional.experiment import parse_include_parameter
+            if experiment.parameters["__INCLUDE__"] is not None:
+                mixin_paths = parse_include_parameter(experiment.parameters["__INCLUDE__"])
+                experiment.include(mixin_paths)
+
+            # Check that both mixins were included
+            assert len(experiment.mixins) == 2
+
+    def test_cli_include_comma_separated(self):
+        """
+        CLI --__INCLUDE__='mixin1.py,mixin2.py' should work with comma-separated syntax.
+        """
+        with ConfigIsolation() as config, ExperimentIsolation(sys.argv) as iso:
+            experiment = Experiment(
+                base_path=iso.path,
+                namespace="test_experiment",
+                glob=iso.glob,
+            )
+
+            # Simulate CLI parsing with comma-separated string
+            mixin_simple = os.path.join(ASSETS_PATH, "mock_mixin_simple.py")
+            mixin_logging = os.path.join(ASSETS_PATH, "mock_mixin_logging.py")
+            experiment.parameters["__INCLUDE__"] = f"{mixin_simple},{mixin_logging}"
+
+            # Process the include parameter
+            from pycomex.functional.experiment import parse_include_parameter
+            if experiment.parameters["__INCLUDE__"] is not None:
+                mixin_paths = parse_include_parameter(experiment.parameters["__INCLUDE__"])
+                experiment.include(mixin_paths)
+
+            # Check that both mixins were included
+            assert len(experiment.mixins) == 2
+
+    def test_cli_include_runs_mixin_hooks(self):
+        """
+        Integration test: Verify mixins loaded via --__INCLUDE__ actually execute their hooks.
+
+        This test simulates the full workflow:
+        1. Set __INCLUDE__ parameter (as CLI would do)
+        2. Call update_parameters_special() (as CLI does)
+        3. Run the experiment
+        4. Verify mixin hooks actually executed and produced expected side effects
+        """
+        with ConfigIsolation() as config, ExperimentIsolation(sys.argv) as iso:
+            experiment = Experiment(
+                base_path=iso.path,
+                namespace="test_experiment",
+                glob=iso.glob,
+            )
+
+            # Simulate CLI setting --__INCLUDE__='mock_mixin_logging.py'
+            mixin_logging = os.path.join(ASSETS_PATH, "mock_mixin_logging.py")
+            experiment.parameters["__INCLUDE__"] = mixin_logging
+
+            # This is what happens in the CLI after arg parsing
+            experiment.update_parameters_special()
+
+            # Verify mixin was loaded
+            assert len(experiment.mixins) == 1
+            assert "LOG_PREFIX" in experiment.parameters
+            assert "before_run" in experiment.hook_map
+            assert "after_run" in experiment.hook_map
+
+            # Define and run the experiment
+            @experiment
+            def run(e):
+                # The experiment just needs to run - mixin hooks should execute automatically
+                e["test_value"] = 123
+
+            experiment.run()
+
+            # Verify mixin hooks actually executed during the run
+            assert "_mixin_start_logged" in experiment.data
+            assert "_mixin_end_logged" in experiment.data
+            assert experiment.data["_mixin_start_logged"] is True
+            assert experiment.data["_mixin_end_logged"] is True
+
+            # Verify the experiment's own code also ran
+            assert experiment.data["test_value"] == 123
+
+    def test_cli_include_multiple_mixins_execute(self):
+        """
+        Integration test: Verify multiple mixins via --__INCLUDE__ all execute properly.
+
+        Tests comma-separated syntax with actual execution to ensure both:
+        - Mixins are loaded correctly
+        - All mixin hooks execute in the proper order
+        """
+        with ConfigIsolation() as config, ExperimentIsolation(sys.argv) as iso:
+            experiment = Experiment(
+                base_path=iso.path,
+                namespace="test_experiment",
+                glob=iso.glob,
+            )
+
+            # Simulate CLI with comma-separated mixins: --__INCLUDE__='mixin1.py,mixin2.py'
+            mixin_simple = os.path.join(ASSETS_PATH, "mock_mixin_simple.py")
+            mixin_logging = os.path.join(ASSETS_PATH, "mock_mixin_logging.py")
+            experiment.parameters["__INCLUDE__"] = f"{mixin_simple},{mixin_logging}"
+
+            # Process the special parameter
+            experiment.update_parameters_special()
+
+            # Verify both mixins loaded
+            assert len(experiment.mixins) == 2
+            assert "MIXIN_VALUE" in experiment.parameters  # from mock_mixin_simple
+            assert "LOG_PREFIX" in experiment.parameters    # from mock_mixin_logging
+
+            # Define and run experiment
+            @experiment
+            def run(e):
+                # Apply the test_hook from mock_mixin_simple
+                result = e.apply_hook("test_hook")
+                e["hook_result"] = result
+
+            experiment.run()
+
+            # Verify mock_mixin_simple hook executed
+            assert "_mixin_executed" in experiment.data
+            assert experiment.data["_mixin_executed"] is True
+
+            # Verify mock_mixin_logging hooks executed
+            assert "_mixin_start_logged" in experiment.data
+            assert "_mixin_end_logged" in experiment.data

@@ -701,5 +701,45 @@ Experiment Features
 - Added the `__INCLUDE__` special parameter which allows to specify experiment 
   mixin modules to be included. This crucially allows to supply mixins via the 
   command line calling of experiment modules.
-- Added another line to the end of experiment panel which directly links to the 
+- Added another line to the end of experiment panel which directly links to the
   experiment archive folder.
+
+0.28.0 (11.02.2026)
+-------------------
+
+Experiment Features
+
+- Added the ``INHERIT`` sentinel value for explicit parameter inheritance in sub-experiments.
+  When extending a parent experiment with ``Experiment.extend()``, sub-experiments can now use
+  ``INHERIT`` to explicitly reference the parent's parameter value, optionally applying a
+  transformation function. This enables patterns like doubling a learning rate
+  (``LEARNING_RATE = INHERIT(lambda x: x * 2)``) or extending a list parameter
+  (``DATA_PATHS = INHERIT(lambda x: x + ["/extra/path"])``). ``INHERIT`` works across
+  arbitrary levels of experiment inheritance and resolves lazily at experiment start time,
+  correctly interacting with CLI overrides and other late parameter modifications.
+- Added the ``pycomex.functional.inherit`` module containing the ``INHERIT`` singleton,
+  ``Inherit`` value class, ``InheritBase`` base class, and ``InheritError`` exception.
+- Added architecture decision record ``docs/architecture_decisions/06_inherit_parameter_sentinel.md``.
+
+Bug Fixes
+
+- Fixed a bug where ``Experiment.extend()`` would crash with
+  ``TypeError: object of type 'function' has no len()`` when the base experiment uses
+  the ``@experiment.testing`` decorator. The root cause was that ``Experiment.testing()``
+  stored the callback as a bare function in ``hook_map``, while ``read_module_metadata()``
+  assumed all ``hook_map`` entries are lists. Fixed by wrapping the testing callback in a
+  list, consistent with ``Experiment.hook()``.
+
+0.28.1 (12.02.2026)
+-------------------
+
+Bug Fixes
+
+- Fixed a bug where ``from pycomex import INHERIT`` in a sub-experiment would cause an
+  ``InheritError`` at runtime. The ``INHERIT`` name is uppercase, so parameter discovery
+  treated it as a real parameter. The import artifact cleanup failed to catch this case
+  because the ``_from_sentinel`` marker was set to ``True`` during sentinel-to-Inherit
+  conversion, making the cleanup logic treat it as a genuine user assignment. Fixed by
+  explicitly checking for the parameter name ``"INHERIT"``, which is always an import
+  artifact.
+- ``InheritError`` messages now include the name of the parameter that failed to resolve.

@@ -16,6 +16,7 @@ nav:
   - Philosophy: philosophy.md
   - Basics:
       - Hooks: basics_hooks.md
+      - Parameter Inheritance: basics_inherit.md
       - Configuration Files: basics_config.md
       - Mixins: basics_mixins.md
       - Special Parameters: basics_special_parameters.md

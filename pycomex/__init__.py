@@ -5,6 +5,7 @@ __email__ = "jonseb1998@gmail.com"
 __version__ = "0.9.5"
 
 from pycomex.functional.experiment import Experiment, get_experiment
+from pycomex.functional.inherit import INHERIT
 from pycomex.utils import (
     folder_path,
     file_namespace,

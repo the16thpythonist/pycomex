@@ -120,7 +120,7 @@ class MockExperiment:
 
     def testing(self, func: Callable) -> Callable:
         """Mock testing decorator."""
-        self.hook_map["__TESTING__"] = func
+        self.hook_map["__TESTING__"] = [func]
         return func
 
     def analysis(self, func, *args, **kwargs):
