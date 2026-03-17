@@ -16,7 +16,7 @@ PYTHON_VERSIONS = ["3.8", "3.9", "3.10", "3.11", "3.12"]
 
 
 @nox.session(python=PYTHON_VERSIONS)
-def test(session: nox.Session) -> None:
+def tests(session: nox.Session) -> None:
     """Run the test suite across multiple Python versions."""
     session.install(".[test]")
     session.run("pytest", "tests/", "-v")

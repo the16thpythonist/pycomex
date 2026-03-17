@@ -37,6 +37,8 @@ import os
 import sys
 import tempfile
 
+import pytest
+
 from pycomex.functional.experiment import Experiment
 from pycomex.testing import ConfigIsolation, ExperimentIsolation
 
@@ -578,3 +580,227 @@ class TestExtendWithTestingHookCrash:
 
             # The __TESTING__ hook should be present in hook_map
             assert "__TESTING__" in experiment.hook_map
+
+
+class TestInheritTransformSilentlyRemovedInDirectExperiment:
+    """
+    Test that INHERIT(fn) in a direct (non-extended) experiment raises InheritError
+    instead of silently removing the parameter.
+
+    BUG DESCRIPTION:
+    ================
+
+    When a direct experiment (not created via Experiment.extend()) uses
+    ``PARAM = INHERIT(lambda x: x * 2)``, the parameter is silently removed
+    during ``_resolve_inherited_parameters()`` instead of raising ``InheritError``.
+    The user then gets an opaque ``KeyError`` when accessing the parameter, with
+    no indication that the issue is caused by using INHERIT without a parent.
+
+    ROOT CAUSE:
+    ----------
+    ``INHERIT(fn)`` calls ``_InheritSentinel.__call__(fn)``, which returns an
+    ``Inherit`` instance directly. In ``_process_inherited_parameters()``, the
+    ``isinstance(value, _InheritSentinel)`` check is ``False`` for this object
+    (it's an ``Inherit``, not a ``_InheritSentinel``), so the ``_from_sentinel``
+    marker is never set on it.
+
+    Later in ``_resolve_inherited_parameters()``, the artifact cleanup condition:
+
+        name == 'INHERIT' or not getattr(value, '_from_sentinel', False)
+
+    evaluates to ``True`` because ``_from_sentinel`` was never set (defaults to
+    ``False``). This causes the parameter to be treated as an import artifact and
+    silently deleted, even though it was an intentional user assignment.
+
+    EXPECTED BEHAVIOR:
+    -----------------
+    Using ``INHERIT(fn)`` in a direct experiment should raise ``InheritError``
+    explaining that no parent value was captured, just like bare ``INHERIT`` does
+    for missing parent parameters.
+    """
+
+    def test_inherit_with_transform_in_direct_experiment_should_raise(self):
+        """
+        PARAM = INHERIT(fn) in a direct experiment should raise InheritError,
+        not silently remove the parameter.
+        """
+        from pycomex.functional.inherit import INHERIT, InheritError
+
+        with ConfigIsolation() as config, ExperimentIsolation(sys.argv) as iso:
+            iso.glob["PARAM_A"] = INHERIT(lambda x: x * 2)
+
+            experiment = Experiment(
+                base_path=iso.path,
+                namespace="test_inherit_direct",
+                glob=iso.glob,
+            )
+
+            @experiment
+            def run(e):
+                pass
+
+            with pytest.raises(InheritError):
+                experiment.run()
+
+    def test_inherit_with_transform_in_direct_experiment_parameter_not_silently_removed(self):
+        """
+        Before resolution, PARAM_A should still be present in parameters as an
+        Inherit object — it must not be silently deleted during processing.
+        """
+        from pycomex.functional.inherit import INHERIT, Inherit
+
+        with ConfigIsolation() as config, ExperimentIsolation(sys.argv) as iso:
+            iso.glob["PARAM_A"] = INHERIT(lambda x: x * 2)
+
+            experiment = Experiment(
+                base_path=iso.path,
+                namespace="test_inherit_direct_present",
+                glob=iso.glob,
+            )
+
+            @experiment
+            def run(e):
+                pass
+
+            # Before running, the parameter should still exist (not yet resolved/removed)
+            assert "PARAM_A" in experiment.parameters
+            assert isinstance(experiment.parameters["PARAM_A"], Inherit)
+
+
+class TestInheritArtifactInMultiLevelChain:
+    """
+    Test that the INHERIT import artifact is correctly cleaned up in multi-level
+    inheritance chains using real .py files.
+
+    BUG DESCRIPTION:
+    ================
+
+    When a 3-level experiment chain (Base -> Middle -> Grandchild) is used and
+    both the middle and grandchild experiments do ``from pycomex import INHERIT``,
+    the ``INHERIT`` import artifact in the grandchild causes an ``InheritError``
+    at runtime, even though no user parameter is broken.
+
+    ROOT CAUSE:
+    ----------
+    The artifact cleanup in ``_resolve_inherited_parameters()`` only catches
+    artifacts where ``parent_value is _UNSET``. But in a multi-level chain:
+
+    1. Middle's ``_process_inherited_parameters()`` creates an artifact
+       ``INHERIT: Inherit(parent_value=_UNSET, _from_sentinel=True)`` in
+       ``self.parameters``. This artifact would normally be cleaned up when
+       middle runs, but middle is only *imported* (not run) when grandchild
+       extends it.
+
+    2. When grandchild extends middle, grandchild's ``update_parameters()``
+       snapshots ``parent_params`` which includes the middle's unresolved
+       ``Inherit(parent_value=_UNSET)`` artifact.
+
+    3. Grandchild also imports INHERIT, so ``_discover_parameters`` picks up
+       ``INHERIT: _InheritSentinel`` from grandchild's glob.
+
+    4. ``_process_inherited_parameters`` converts the sentinel to
+       ``Inherit(_from_sentinel=True)`` and sets its ``parent_value`` to the
+       middle's artifact: ``Inherit(parent_value=_UNSET)``.
+
+    5. Now the grandchild's ``INHERIT`` artifact has
+       ``parent_value = Inherit(parent_value=_UNSET)`` — which is NOT ``_UNSET``
+       itself, just an object that *contains* ``_UNSET``.
+
+    6. The artifact cleanup condition ``value.parent_value is _UNSET`` evaluates
+       to ``False``, so the artifact is NOT removed.
+
+    7. ``resolve()`` is called, which recursively resolves the inner ``Inherit``
+       whose ``parent_value`` is ``_UNSET`` → raises ``InheritError``.
+
+    IMPORTANT: This bug only manifests with real ``.py`` files because
+    ``ExperimentIsolation`` does not simulate the ``INHERIT`` import artifact
+    in ``globals()``. The existing ``test_multi_level_inherit`` in
+    ``test_inherit.py`` passes because ``iso.glob`` never contains ``INHERIT``.
+
+    EXPECTED BEHAVIOR:
+    -----------------
+    The ``INHERIT`` import artifact should be silently removed at every level,
+    regardless of how many levels deep the inheritance chain goes.
+    """
+
+    def test_multi_level_inherit_with_real_files(self):
+        """
+        Base(PARAM_A=10) -> Middle(PARAM_A=INHERIT(x*2)) -> Grandchild(PARAM_A=INHERIT)
+        should resolve Grandchild's PARAM_A to 20, without the INHERIT import artifact
+        causing an InheritError.
+        """
+        from pycomex.functional.inherit import InheritError
+
+        base_path = os.path.join(
+            os.path.dirname(os.path.dirname(__file__)),
+            "assets",
+            "mock_inherit_base_experiment.py",
+        )
+
+        with tempfile.TemporaryDirectory() as td:
+            # Middle experiment: extends base, uses INHERIT with transform
+            middle_path = os.path.join(td, "middle_experiment.py")
+            with open(middle_path, "w") as f:
+                f.write(
+                    f"""
+from pycomex.functional.experiment import Experiment
+from pycomex import INHERIT
+from pycomex.utils import file_namespace, folder_path
+
+PARAM_A = INHERIT(lambda x: x * 2)
+
+experiment = Experiment.extend(
+    experiment_path="{base_path}",
+    base_path=folder_path(__file__),
+    namespace=file_namespace(__file__),
+    glob=globals(),
+)
+
+@experiment
+def run(e):
+    pass
+
+experiment.run_if_main()
+"""
+                )
+
+            # Grandchild: extends middle, uses bare INHERIT
+            grandchild_path = os.path.join(td, "grandchild_experiment.py")
+            with open(grandchild_path, "w") as f:
+                f.write(
+                    f"""
+from pycomex.functional.experiment import Experiment
+from pycomex import INHERIT
+from pycomex.utils import file_namespace, folder_path
+
+PARAM_A = INHERIT
+
+experiment = Experiment.extend(
+    experiment_path="{middle_path}",
+    base_path=folder_path(__file__),
+    namespace=file_namespace(__file__),
+    glob=globals(),
+)
+
+@experiment
+def run(e):
+    pass
+
+experiment.run_if_main()
+"""
+                )
+
+            # Import grandchild to get the experiment object, then run it
+            from pycomex.utils import dynamic_import
+
+            with ConfigIsolation():
+                module = dynamic_import(grandchild_path)
+                experiment = module.experiment
+
+                # This should NOT raise InheritError — the INHERIT import
+                # artifact should be silently cleaned up, and PARAM_A should
+                # resolve correctly through the chain.
+                experiment.run()
+
+                assert experiment.parameters["PARAM_A"] == 20  # 10 * 2
+                assert "INHERIT" not in experiment.parameters

@@ -121,10 +121,13 @@ class Inherit(InheritBase):
 
     :param transform: An optional callable that takes the parent value and
         returns the derived value. If ``None``, the parent value is used as-is.
+    :param name: The parameter name this instance is bound to. Set during
+        ``_process_inherited_parameters()`` and used in error messages.
     """
 
-    def __init__(self, transform: t.Optional[t.Callable] = None):
+    def __init__(self, transform: t.Optional[t.Callable] = None, name: t.Optional[str] = None):
         self.transform = transform
+        self.name: t.Optional[str] = name
         self.parent_value: t.Any = _UNSET
 
     def resolve(self) -> t.Any:
@@ -152,8 +155,9 @@ class Inherit(InheritBase):
         :returns: The concrete resolved value.
         """
         if self.parent_value is _UNSET:
+            param_hint = f" for parameter '{self.name}'" if self.name else ""
             raise InheritError(
-                "Cannot resolve INHERIT: no parent value was captured. "
+                f"Cannot resolve INHERIT{param_hint}: no parent value was captured. "
                 "This parameter may not exist in the parent experiment, or "
                 "INHERIT was used in a direct experiment (not via extend())."
             )

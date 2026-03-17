@@ -811,7 +811,7 @@ class Experiment(ExperimentBase):
                 #   - _from_sentinel=True + parent_value=_UNSET → user error (raise InheritError)
                 #   - _from_sentinel=False + parent_value=_UNSET → import artifact (silently remove)
                 if isinstance(value, _InheritSentinel):
-                    value = Inherit(transform=None)
+                    value = Inherit(transform=None, name=name)
                     value._from_sentinel = True
                     self.parameters[name] = value
                     self.glob[name] = value
@@ -827,8 +827,20 @@ class Experiment(ExperimentBase):
                 # _UNSET. This is correct behavior:
                 #   - For user code: "PARAM = INHERIT" where parent has no PARAM → InheritError
                 #   - For import artifacts: silently removed by _resolve_inherited_parameters
+                value.name = name
                 if name in parent_params:
                     value.parent_value = parent_params[name]
+
+                # --- Mark user-intentional Inherit objects ---
+                #
+                # Inherit objects created via INHERIT(fn) (i.e., _InheritSentinel.__call__)
+                # bypass the sentinel-to-Inherit conversion above, so _from_sentinel is
+                # never set on them. We must mark them here so that
+                # _resolve_inherited_parameters can distinguish user-intentional parameters
+                # from import artifacts. Without this, INHERIT(fn) in a direct experiment
+                # would be silently removed instead of raising InheritError.
+                if not hasattr(value, '_from_sentinel'):
+                    value._from_sentinel = True
 
     def _resolve_inherited_parameters(self) -> None:
         """
@@ -877,31 +889,31 @@ class Experiment(ExperimentBase):
                 # the uppercase name ``INHERIT`` to appear in globals, which parameter
                 # discovery picks up as if it were a real parameter. We must remove it.
                 #
-                # There are two cases:
+                # A parameter literally named "INHERIT" is always an import artifact —
+                # no user would intentionally name a parameter "INHERIT". We remove it
+                # unconditionally, regardless of parent_value or _from_sentinel state.
+                # This is critical for multi-level chains where the artifact's
+                # parent_value may point to another level's artifact (not _UNSET),
+                # which would escape the _UNSET-based check below.
+                if name == 'INHERIT':
+                    del self.parameters[name]
+                    if name in self.glob:
+                        del self.glob[name]
+                    continue
+
+                # For non-INHERIT names: detect Inherit objects that are inherited
+                # artifacts rather than user-intentional assignments. These are
+                # Inherit objects with parent_value=_UNSET that lack the
+                # _from_sentinel marker (which is set on all user-created Inherit
+                # objects, both from bare ``PARAM = INHERIT`` and ``PARAM = INHERIT(fn)``).
                 #
-                # 1. **First extend level**: The child's ``from pycomex import INHERIT``
-                #    creates ``self.parameters["INHERIT"] = Inherit(parent_value=_UNSET)``.
-                #    The identity check in _process_inherited_parameters can't catch this
-                #    (because the base didn't have "INHERIT" in parent_params).
-                #
-                # 2. **Multi-level (handled by identity check)**: When a grandchild extends
-                #    a child that also imported INHERIT, the identity check in
-                #    _process_inherited_parameters already removes it. But if it somehow
-                #    slips through, the same logic below catches it.
-                #
-                # We detect import artifacts by:
-                #   a. parent_value is _UNSET (no parent had this parameter), AND
-                #   b. Either: the name is literally "INHERIT" (always an import artifact),
-                #      OR: _from_sentinel is False/absent (inherited Inherit object, not
-                #      from an explicit user assignment like ``MY_PARAM = INHERIT``).
-                #
-                # Genuine user errors — e.g. ``MY_PARAM = INHERIT`` where the parent has
-                # no ``MY_PARAM`` — have _from_sentinel=True AND a name != "INHERIT",
-                # so they pass through to resolve() which raises InheritError.
+                # Genuine user errors — e.g. ``MY_PARAM = INHERIT`` where the parent
+                # has no ``MY_PARAM`` — have _from_sentinel=True, so they pass through
+                # to resolve() which raises InheritError.
                 if (
                     isinstance(value, Inherit)
                     and value.parent_value is _UNSET
-                    and (name == 'INHERIT' or not getattr(value, '_from_sentinel', False))
+                    and not getattr(value, '_from_sentinel', False)
                 ):
                     del self.parameters[name]
                     continue
