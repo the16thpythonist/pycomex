@@ -10,7 +10,6 @@ nox.options.default_venv_backend = "uv"
 
 
 
-
 # Supported Python versions for testing
 PYTHON_VERSIONS = ["3.8", "3.9", "3.10", "3.11", "3.12"]
 
@@ -105,7 +104,7 @@ def changelog(session: nox.Session) -> None:
     with open("pycomex/VERSION") as file:
         version = file.read().strip()
     
-    with open("HISTORY.rst") as file:
+    with open("CHANGELOG.md") as file:
         content = file.read()
         if version not in content:
             raise ValueError(f"No changelog entry found for version {version}")

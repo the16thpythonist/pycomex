@@ -1,5 +1,58 @@
 # Changelog
 
+## 0.29.0 (2026-07-21)
+
+### Experiment Features
+
+- Added support for distributed (multi-process) execution, so that PyComex experiments can
+  be used with PyTorch `DistributedDataParallel` (DDP) launched via `torchrun`. When the
+  same experiment module is executed once per worker process, PyComex now detects the
+  distributed context from the `RANK` / `WORLD_SIZE` environment variables and ensures that
+  only the primary process (global rank 0) creates the archive and its side effects (folder,
+  log file, metadata, tracked-element plots, notifications). The remaining worker processes
+  still run the full experiment body -- they participate in the gradient synchronization --
+  but all of their archival operations (`commit_*`, `track`, `save_*`, `open` ...) become
+  silent no-ops, so a distributed run produces exactly one archive instead of `WORLD_SIZE`
+  duplicates.
+- Experiments now expose `e.rank`, `e.world_size`, `e.is_primary` and `e.is_distributed`
+  so that user code can gate its own side effects, for example
+  `if e.is_primary: torch.save(model.state_dict(), ...)`. On worker processes the console
+  output is prefixed with `[rank N]`.
+- The behavior is automatic (`ddp="auto"`, the new default) and requires no code changes
+  for DDP to work. It can be forced off with `ddp=False` on the `Experiment` decorator for
+  the rare case that `RANK` / `WORLD_SIZE` are present for unrelated reasons.
+- Added the `pycomex.functional.distributed` module (`DistributedContext`,
+  `detect_distributed_context`, `primary_only`). It is intentionally dependency-free and
+  never imports `torch`.
+- The built-in `notify` and `plot_track` plugins are now primary-only. Making the `wandb`
+  and `optuna` plugins fully DDP-aware is left for a follow-up.
+
+### Bug Fixes
+
+- Fixed a race condition where launching many experiments of the same namespace
+  near-simultaneously (for example via `joblib` or `multiprocessing`) could crash with
+  `FileExistsError`. `Experiment.prepare_path()` created the namespace directories with a
+  non-atomic check-then-create pattern (`if not os.path.exists(): os.mkdir()`), which is
+  subject to a time-of-check-to-time-of-use race: concurrent processes would all see the
+  folder as missing and then all attempt to create it, so all but the first crashed. The
+  namespace directories are now created with `os.makedirs(..., exist_ok=True)`, and the
+  archive folder itself is created atomically with a retry-on-collision loop, so that every
+  concurrent run is guaranteed its own unique archive folder.
+- Fixed a latent bug in `Experiment.format_full_name()` where the `date_time` default
+  argument was `datetime.datetime.now()`. A default argument value is evaluated only once
+  when the function is defined, which froze the timestamp at import time and caused every
+  experiment within a process to share the same timestamp. The default is now `None` and is
+  resolved to the current time on each call.
+
+### Changes
+
+- The auto-generated archive folder name format changed from `{date}__{time}__{id}` to
+  `{date}__{time}__{pid}__{id}`. The time component now includes seconds (`%H_%M_%S`) and a
+  new `p<pid>` process-id segment is added so that experiments launched in parallel receive
+  distinct names at the source (for example `21_07_2026__12_43_28__p905315__gfQu`). This is
+  a user-visible change: any external tooling that parses archive folder names should
+  account for the additional segment.
+
 ## 0.28.2 (2026-03-17)
 
 ### Bug Fixes

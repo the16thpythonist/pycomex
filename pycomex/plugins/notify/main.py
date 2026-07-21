@@ -58,6 +58,12 @@ class NotifyPlugin(Plugin):
         This method will send a desktop notification to the user that the experiment is done and that the
         results are ready.
         """
+        # In a distributed run only the primary process (rank 0) owns the archive, so only
+        # it should emit a notification - otherwise the user would receive one notification
+        # per worker process.
+        if not experiment.is_primary:
+            return
+
         # We'll wrap this in a try-except because we dont want to do this
 
         if experiment.__NOTIFY__:

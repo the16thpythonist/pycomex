@@ -34,6 +34,10 @@ from uv import find_uv_bin
 from pycomex.config import Config
 from pycomex.functional.base import ExperimentBase
 from pycomex.functional.cache import ExperimentCache
+from pycomex.functional.distributed import (
+    detect_distributed_context,
+    primary_only,
+)
 from pycomex.functional.mixin import ExperimentMixin
 # INHERIT system: sentinel and supporting classes for explicit parameter inheritance
 # in sub-experiments. See pycomex/functional/inherit.py for the class hierarchy and
@@ -405,9 +409,10 @@ class Experiment(ExperimentBase):
         namespace: str,
         glob: dict,
         debug: bool = False,
-        name_format: str = "{date}__{time}__{id}",
+        name_format: str = "{date}__{time}__{pid}__{id}",
         notify: bool = True,
         console_width: int = 120,
+        ddp: bool | str = "auto",
     ) -> None:
 
         # Initialize base class (sets up glob, parameters, hook_map)
@@ -419,6 +424,20 @@ class Experiment(ExperimentBase):
         self.name_format = name_format
         self.notify = notify
         self.console_width = console_width
+
+        # --- distributed (DDP) context ---
+        # When the experiment is launched via a distributed launcher such as torchrun,
+        # the same module runs once per worker process. We detect this from the RANK /
+        # WORLD_SIZE environment variables (see pycomex.functional.distributed). Only the
+        # primary process (global rank 0) creates the archive and its side effects; the
+        # worker processes still run the experiment body but suppress all archival I/O.
+        # The default ``ddp="auto"`` is a no-op for ordinary single-process runs.
+        self.ddp = ddp
+        self.dist = detect_distributed_context(ddp)
+        self.rank = self.dist.rank
+        self.world_size = self.dist.world_size
+        self.is_primary = self.dist.is_primary
+        self.is_distributed = self.dist.is_distributed
 
         # 26.06.24
         # The config object is a singleton object which is used to store all the configuration information
@@ -438,6 +457,13 @@ class Experiment(ExperimentBase):
         #     markup=True,
         #     rich_tracebacks=True
         # )
+        # On worker (non-primary) processes we prefix every console line with the rank so
+        # that the interleaved output of the different distributed processes remains
+        # attributable. The primary process keeps the unchanged, unprefixed output.
+        if not self.is_primary:
+            stream_handler.setFormatter(
+                logging.Formatter(f"[rank {self.rank}] %(message)s")
+            )
         self.logger = logging.Logger(name="experiment", level=logging.DEBUG)
         self.logger.addHandler(stream_handler)
 
@@ -1388,6 +1414,7 @@ class Experiment(ExperimentBase):
     def analysis(self, func, *args, **kwargs):
         self.analyses.append(func)
 
+    @primary_only
     def execute_analyses(self):
         for func in self.analyses:
             func(self)
@@ -1434,6 +1461,27 @@ class Experiment(ExperimentBase):
             "before_experiment_initialize",
             experiment=self,
         )
+
+        # Only the primary process (global rank 0) creates the archive and its side
+        # effects. In a distributed run (e.g. PyTorch DDP launched via torchrun) the
+        # worker processes still execute the experiment body but must not produce any
+        # archival artifacts, otherwise every run would create WORLD_SIZE duplicate
+        # archives. For an ordinary single-process run is_primary is always True.
+        if self.is_primary:
+            self._initialize_primary()
+        else:
+            self._initialize_worker()
+
+    def _initialize_primary(self) -> None:
+        """
+        Perform the full archive initialization for the primary process.
+
+        This creates the archive folder, sets up the persistent log file, copies the
+        source code and writes the initial metadata. This is exactly the behavior of a
+        normal, non-distributed experiment run.
+
+        :returns: None
+        """
         # ~ creating archive
         self.prepare_path()
 
@@ -1456,6 +1504,13 @@ class Experiment(ExperimentBase):
         self.metadata["start_time"] = time.time()
         self.metadata["duration"] = 0
         self.metadata["description"] = self.glob["__doc__"]
+        # If this is a distributed run, note it in the metadata so that the archive
+        # self-documents that it was produced by the primary process of a larger group.
+        if self.is_distributed:
+            self.metadata["distributed"] = {
+                "world_size": self.world_size,
+                "rank": self.rank,
+            }
         self.save_metadata()
 
         # ~ creating the analysis module
@@ -1468,6 +1523,33 @@ class Experiment(ExperimentBase):
         with console.capture() as capture:
             console.print(start_panel)
         self.log_lines(capture.get().split('\n'))
+
+    def _initialize_worker(self) -> None:
+        """
+        Perform the minimal initialization for a non-primary (worker) process of a
+        distributed run.
+
+        A worker participates in the actual computation and therefore has to run the
+        experiment body, but it must not create any archival artifacts. This method
+        deliberately skips the archive folder creation, the log file and all ``save_*``
+        calls; it only initializes the in-memory metadata and emits a single log line.
+        ``self.path`` stays ``None`` which, together with the ``@primary_only`` decorated
+        persistence methods, guarantees that no files are written by the worker.
+
+        :returns: None
+        """
+        self.path = None
+        self.track_path = None
+
+        self.metadata["status"] = "running"
+        self.metadata["start_time"] = time.time()
+        self.metadata["duration"] = 0
+        self.metadata["description"] = self.glob["__doc__"]
+
+        self.log(
+            f"distributed worker process (rank {self.rank} of {self.world_size}) started "
+            f"- archival is disabled, only the primary process (rank 0) writes an archive"
+        )
 
     def finalize(self) -> None:
         """
@@ -1491,6 +1573,21 @@ class Experiment(ExperimentBase):
         else:
             self.metadata["status"] = "done"
 
+        # Only the primary process writes the final archive. Worker processes just surface
+        # a possible error to the console (the error itself is re-raised by execute()).
+        if self.is_primary:
+            self._finalize_primary()
+        else:
+            self._finalize_worker()
+
+    def _finalize_primary(self) -> None:
+        """
+        Perform the full finalization for the primary process: save the final metadata and
+        data, log the end conditions and optionally package reproducibility information.
+        This is the behavior of a normal, non-distributed experiment run.
+
+        :returns: None
+        """
         # ~ saving all the data
         self.save_metadata()
         self.save_data()
@@ -1513,6 +1610,23 @@ class Experiment(ExperimentBase):
         # into the experiment archive folder.
         if self.parameters["__REPRODUCIBLE__"]:
             self.finalize_reproducible()
+
+    def _finalize_worker(self) -> None:
+        """
+        Perform the minimal finalization for a non-primary (worker) process. No archive is
+        written; a possible error is surfaced to the console and a short completion line is
+        logged.
+
+        :returns: None
+        """
+        if self.error:
+            template = TEMPLATE_ENV.get_template("functional_experiment_error.out.j2")
+            self.log_lines(template.render({"experiment": self}).split("\n"))
+        else:
+            self.log(
+                f"distributed worker process (rank {self.rank}) finished the experiment "
+                f"body"
+            )
 
     def finalize_reproducible(self) -> None:
         """
@@ -1824,14 +1938,16 @@ class Experiment(ExperimentBase):
                 f"directory! Please make sure the file points to a valid folder."
             )
 
-        # Then we can iterate through all the components of the namespace and recursively create those
-        # directories if they not already exist.
-        namespace_list = self.namespace.split("/")
-        current_path = self.base_path
-        for name in namespace_list:
-            current_path = os.path.join(current_path, name)
-            if not os.path.exists(current_path):
-                os.mkdir(current_path)
+        # Then we create the nested namespace directories.
+        # We use os.makedirs with exist_ok=True here rather than a check-then-create
+        # loop on purpose: the latter is subject to a time-of-check-to-time-of-use
+        # (TOCTOU) race. When many experiments of the *same* namespace are launched
+        # near-simultaneously (e.g. via joblib / multiprocessing) they would all see the
+        # namespace folder as missing and then all try to create it, so all but the first
+        # would crash with a FileExistsError. makedirs(exist_ok=True) tolerates the folder
+        # already existing and is therefore safe under concurrent creation.
+        current_path = os.path.join(self.base_path, *self.namespace.split("/"))
+        os.makedirs(current_path, exist_ok=True)
 
         # 08.11.23
         # Now at this point we can be sure that the base path exists and we can create the specific
@@ -1845,54 +1961,94 @@ class Experiment(ExperimentBase):
         #   string to make it unique.
 
         if self.debug:
+            # In debug mode we always (re)use a fixed "debug" folder, wiping any previous
+            # contents so that development runs start from a clean slate.
             self.name = "debug"
+            self.path = os.path.join(current_path, self.name)
+            if os.path.exists(self.path):
+                shutil.rmtree(self.path)
+            os.mkdir(self.path)
 
-        elif self.name is None:
-            # This method will format the full name of the experiment which includes not only the
-            # name of the experiment but also the date and time information about the starting
-            # time.
-            self.name = self.format_full_name()
+        elif self.name is not None:
+            # An explicit name was requested for the experiment, so we use exactly that.
+            self.path = os.path.join(current_path, self.name)
+            os.mkdir(self.path)
 
-            if "__PREFIX__" in self.parameters and self.parameters["__PREFIX__"]:
-                prefix = self.parameters["__PREFIX__"]
-                self.name = f"{prefix}__{self.name}"
+        else:
+            # The name is auto generated. Creating the folder with os.mkdir is atomic:
+            # exactly one process can create a given path and any concurrently starting
+            # experiment that happened to compute the same name will raise FileExistsError.
+            # In that case we simply generate a fresh name and try again until we have
+            # claimed a unique archive folder of our own. This makes concurrent launches
+            # safe and guarantees that every run receives its own distinct folder.
+            max_attempts = 1000
+            for _ in range(max_attempts):
+                # format_full_name includes the datetime (down to the second), the process
+                # id and a random string, so a fresh call practically always yields a new
+                # name; the retry below is a correctness guarantee for the rare collision.
+                name = self.format_full_name()
 
-        # Now that we have decided on the name we can assemble the full path
-        self.path = os.path.join(current_path, self.name)
+                if "__PREFIX__" in self.parameters and self.parameters["__PREFIX__"]:
+                    prefix = self.parameters["__PREFIX__"]
+                    name = f"{prefix}__{name}"
 
-        # If the experiment is in "debug" mode that means that we actually want to get rid of the previous
-        # archive folder with the same name, it one exists
-        if self.debug and os.path.exists(self.path):
-            shutil.rmtree(self.path)
+                path = os.path.join(current_path, name)
+                try:
+                    os.mkdir(path)
+                except FileExistsError:
+                    continue
 
-        # And then finally in any case we create a new and clean folder
-        os.mkdir(self.path)
+                self.name = name
+                self.path = path
+                break
+            else:
+                raise FileExistsError(
+                    f'Could not create a unique archive folder for the experiment under '
+                    f'"{current_path}" after {max_attempts} attempts. This is unexpected '
+                    f"and likely indicates a problem with the file system or the name "
+                    f"format."
+                )
 
     def format_full_name(
-        self, date_time: datetime.datetime = datetime.datetime.now()
+        self, date_time: datetime.datetime | None = None
     ) -> str:
         """
-        Given a datetime object ``data_time``, this function will format the "full" experiment name
+        Given a datetime object ``date_time``, this function will format the "full" experiment name
         which does not only include the name of the experiment but also the time and date specificied
-        by the datetime as well as a random ID string.
+        by the datetime, the process id as well as a random ID string.
 
-        This full name is therefore guaranteed to be unique for each experiment execution.
+        The combination of the timestamp (down to the second), the process id and a random string
+        makes the resulting name virtually unique across concurrently launched experiments. This is
+        important because experiments are frequently started in parallel (e.g. via joblib or
+        multiprocessing) and would otherwise be prone to archive folder name collisions.
+
+        Note on the ``date_time`` default: it deliberately defaults to ``None`` (and is resolved to
+        ``datetime.datetime.now()`` inside the method) rather than using ``datetime.datetime.now()``
+        directly as the default value. A default argument value is evaluated exactly once when the
+        function is defined, which would freeze the timestamp at import time and cause every
+        experiment within a process to share the very same timestamp.
 
         :param date_time: the datetime object which specifies the time and date that should be included
-            in the experiment name. Default is now()
+            in the experiment name. Defaults to ``None`` which is resolved to the current time.
 
         :returns: the string name
         """
+        if date_time is None:
+            date_time = datetime.datetime.now()
+
         date_string = date_time.strftime("%d_%m_%Y")
-        time_string = date_time.strftime("%H_%M")
+        time_string = date_time.strftime("%H_%M_%S")
+        pid_string = f"p{os.getpid()}"
         id_string = random_string(length=4)
         name = self.name_format.format(
             date=date_string,
             time=time_string,
+            pid=pid_string,
             id=id_string,
         )
         return name
 
+    @primary_only
     def save_metadata(self) -> None:
         """
         This method will store the metadata of the experiment object into a JSON file in the archive folder.
@@ -1934,6 +2090,7 @@ class Experiment(ExperimentBase):
             content = json.dumps(self.metadata, indent=4, sort_keys=True)
             file.write(content)
 
+    @primary_only
     def save_data(self) -> None:
         """
         Saves the internal ``self.data`` dictionary with all the experiment data into a JSON file in the
@@ -1960,6 +2117,7 @@ class Experiment(ExperimentBase):
             content = json.dumps(data, cls=CustomJsonEncoder)
             file.write(content)
 
+    @primary_only
     def save_code(self) -> None:
         """
         Save the experiment code to the archive folder.
@@ -2004,6 +2162,7 @@ class Experiment(ExperimentBase):
             source_path = self.glob["__file__"]
             shutil.copy(source_path, destination_path)
 
+    @primary_only
     def save_dependencies(self) -> None:
         # Save experiment dependencies (base experiments from extend())
         for path in self.dependencies:
@@ -2018,6 +2177,7 @@ class Experiment(ExperimentBase):
             destination_path = os.path.join(self.path, file_name)
             shutil.copy(mixin_path, destination_path)
 
+    @primary_only
     def save_config(self) -> None:
         """
         Save the YAML configuration file to the archive folder if this experiment
@@ -2034,6 +2194,7 @@ class Experiment(ExperimentBase):
             destination_path = self.config_path
             shutil.copy(config_path, destination_path)
 
+    @primary_only
     def save_analysis(self) -> None:
         with open(self.analysis_path, mode="w") as file:
             template = TEMPLATE_ENV.get_template("functional_analysis.py.j2")
@@ -2231,10 +2392,19 @@ class Experiment(ExperimentBase):
     def open(self, file_name: str, *args, **kwargs):
         """
         This is an alternative file context for the default python ``open`` implementation.
+
+        On a non-primary (worker) process of a distributed run there is no archive folder,
+        so this returns a handle to ``os.devnull`` instead of a file within the archive.
+        This keeps user code that writes files (``with e.open(...) as f: ...``) working
+        while silently discarding the output on the worker processes.
         """
+        if not self.is_primary:
+            return open(os.devnull, *args, **kwargs)
+
         path = os.path.join(self.path, file_name)
         return open(path, *args, **kwargs)
 
+    @primary_only
     def commit_fig(
         self,
         file_name: str,
@@ -2256,6 +2426,7 @@ class Experiment(ExperimentBase):
             figure=fig,
         )
 
+    @primary_only
     def commit_json(
         self,
         file_name: str,
@@ -2286,6 +2457,7 @@ class Experiment(ExperimentBase):
             content=content,
         )
 
+    @primary_only
     def commit_raw(self, file_name: str, content: str) -> None:
         """
         Given the name ``file_name`` for a file and the string ``content``, this method will save the
@@ -2307,6 +2479,7 @@ class Experiment(ExperimentBase):
             content=content,
         )
 
+    @primary_only
     def track(self, name: str, value: float | plt.Figure) -> None:
         """
         This method can be used to track a specific value within the experiment object. This is useful for example
@@ -2350,6 +2523,7 @@ class Experiment(ExperimentBase):
             value=value,
         )
 
+    @primary_only
     def track_many(self, data: dict[str, float]) -> None:
         """
         This method can be used to track multiple values at once. The data should be a dictionary where the keys

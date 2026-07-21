@@ -804,3 +804,141 @@ experiment.run_if_main()
 
                 assert experiment.parameters["PARAM_A"] == 20  # 10 * 2
                 assert "INHERIT" not in experiment.parameters
+
+
+# ---------------------------------------------------------------------------
+# Parallel archive folder name collision
+# ---------------------------------------------------------------------------
+
+
+def _create_archive_worker(
+    base_path: str, namespace: str, index: int, queue, barrier
+) -> None:
+    """
+    Worker executed inside a *forked* child process. It constructs an ``Experiment``
+    and creates its archive folder via ``prepare_path()``, then reports the result
+    (the created path or the exception) back through the ``queue``.
+
+    This function is deliberately defined at module level so that it is available in
+    the forked children and behaves identically across all of them.
+
+    The ``barrier`` is used to release all workers into the folder creation at the exact
+    same moment. This turns the probabilistic production race (many jobs launched a few
+    milliseconds apart) into a deterministic, reliably reproducible one for the test.
+
+    :param base_path: The (already existing) base path for the experiment archive.
+    :param namespace: The namespace (sub folder) under which the archive is created.
+    :param index: The index of this worker, only used for reporting.
+    :param queue: A multiprocessing queue to report the result back to the parent.
+    :param barrier: A multiprocessing barrier that synchronizes all workers so that they
+        attempt to create their archive folder simultaneously.
+
+    :returns: None
+    """
+    from pycomex.functional.experiment import Experiment
+
+    try:
+        experiment = Experiment(
+            base_path=base_path,
+            namespace=namespace,
+            # A minimal glob is enough to construct the experiment; __file__ just has
+            # to point at a readable python module for read_module_metadata().
+            glob={"__file__": __file__, "__doc__": None},
+            debug=False,
+        )
+        # Do all the (non-racy) setup work first, then line every worker up on the
+        # barrier so the actual folder creation happens at the same instant everywhere.
+        barrier.wait()
+        # prepare_path() is the method that assembles the archive folder name and
+        # actually creates the folder on the file system via os.mkdir().
+        experiment.prepare_path()
+        queue.put((index, "ok", experiment.path))
+    except Exception as exc:
+        queue.put((index, "error", f"{type(exc).__name__}: {exc}"))
+
+
+class TestParallelArchiveFolderRace:
+    """
+    Regression test for the archive folder creation race that occurs when many
+    experiments of the *same* namespace are launched near-simultaneously via parallel
+    worker processes (e.g. ``joblib`` / ``multiprocessing``).
+
+    BUG DESCRIPTION:
+    ================
+
+    ``Experiment.prepare_path()`` creates the nested namespace directories with an
+    unguarded check-then-create pattern::
+
+        for name in namespace_list:
+            current_path = os.path.join(current_path, name)
+            if not os.path.exists(current_path):
+                os.mkdir(current_path)
+
+    This is a classic time-of-check-to-time-of-use (TOCTOU) race. When N processes for
+    the same namespace start at the same time and the namespace folder does not exist
+    yet, *all* of them evaluate ``not os.path.exists(current_path)`` to ``True``, then
+    *all* of them call ``os.mkdir`` on the identical namespace path. The first process
+    wins and every other process crashes with ``FileExistsError``.
+
+    The final archive folder creation ``os.mkdir(self.path)`` is likewise unguarded, so
+    in the (rarer) event that two runs also generate the same leaf folder name they race
+    there as well.
+
+    EXPECTED BEHAVIOUR (what this test asserts):
+    -------------------------------------------
+    Each of the N parallel runs must receive its own distinct archive folder and none
+    of them must crash. Until the bug is fixed this test is EXPECTED TO FAIL - which is
+    exactly what confirms the bug is present.
+    """
+
+    def test_parallel_forked_experiments_get_unique_archive_folders(self, tmp_path):
+        """
+        Launching many experiments of the same namespace in parallel processes must
+        yield one unique archive folder per run without any ``FileExistsError``.
+        """
+        import multiprocessing as mp
+
+        num_processes = 16
+        namespace = "parallel_race"
+        base_path = str(tmp_path)
+
+        # NOTE: the namespace folder is deliberately NOT pre-created here. All workers
+        # race to create it concurrently, which is what triggers the TOCTOU bug.
+
+        # Explicitly use the "fork" start method for a deterministic, fast reproduction
+        # of the concurrent-launch scenario.
+        ctx = mp.get_context("fork")
+        queue = ctx.Queue()
+        # The barrier releases all workers into prepare_path() at the same instant,
+        # deterministically exposing the TOCTOU race on the namespace directory.
+        barrier = ctx.Barrier(num_processes)
+        processes = [
+            ctx.Process(
+                target=_create_archive_worker,
+                args=(base_path, namespace, i, queue, barrier),
+            )
+            for i in range(num_processes)
+        ]
+
+        for process in processes:
+            process.start()
+
+        # Drain the queue BEFORE joining to avoid a deadlock on a full pipe.
+        results = [queue.get() for _ in range(num_processes)]
+
+        for process in processes:
+            process.join()
+
+        errors = [r for r in results if r[1] == "error"]
+        created_paths = [r[2] for r in results if r[1] == "ok"]
+        unique_paths = set(created_paths)
+
+        assert not errors, (
+            f"{len(errors)}/{num_processes} parallel forked runs crashed while creating "
+            f"their archive folder (expected none). Sample errors: {errors[:5]}"
+        )
+        assert len(unique_paths) == num_processes, (
+            f"Expected {num_processes} unique archive folders but only got "
+            f"{len(unique_paths)}. Parallel forked runs collided on the same folder "
+            f"name(s): {sorted(unique_paths)}"
+        )

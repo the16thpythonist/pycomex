@@ -44,6 +44,12 @@ class PlotTrackedElementsPlugin(Plugin):
         - Numeric quantities will be plotted as a line plot.
         - Image paths will be stitched together into a video.
         """
+        # In a distributed run only the primary process (rank 0) owns the archive folder,
+        # so the tracked-element visualizations are only produced there. Worker processes
+        # have no tracked data and no archive folder to write into.
+        if not experiment.is_primary:
+            return
+
         # We'll wrap this in a try-except because we dont want to do this
 
         tracked_keys: list[str] = experiment.metadata["__track__"]
